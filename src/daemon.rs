@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::layout::{LayoutAction, LayoutManager};
 use crate::sway::{SwayCommand, SwayEvent};
 use crate::types::{AgentId, AgentIPCMessage, AgentStatus, AgentWindow, ProjectId};
 use anyhow::Result;
@@ -26,11 +27,12 @@ impl DaemonState {
         }
     }
 
-    pub fn register_agent(&mut self, agent_id: AgentId, project_id: ProjectId, pid: u32, app_id: String) {
+    pub fn register_agent(&mut self, agent_id: AgentId, project_id: ProjectId, pid: u32, app_id: String, parent_id: Option<AgentId>) {
         let mark = format!("mark_{}", agent_id.0.replace('-', "_"));
         let agent = AgentWindow {
             id: agent_id.clone(),
             project: project_id,
+            parent_id,
             container_id: None,
             app_id,
             mark,
@@ -125,18 +127,20 @@ pub async fn run_daemon_loops(
     sway_cmd_tx: mpsc::Sender<SwayCommand>,
 ) -> Result<()> {
     let mut state = DaemonState::new(config);
+    let layout_manager = LayoutManager::new();
 
     while let Some(event) = event_rx.recv().await {
         match event {
             DaemonEvent::AgentIPC(msg) => {
                 match msg {
                     AgentIPCMessage::Register { id: _, params } => {
-                        println!("[daemon] Registering agent: {}", params.agent_id.0);
+                        println!("[daemon] Registering agent: {} (parent: {:?})", params.agent_id.0, params.parent_agent_id);
                         state.register_agent(
                             params.agent_id.clone(),
                             params.project_id.clone(),
                             params.pid,
                             params.app_id.clone(),
+                            params.parent_agent_id.clone(),
                         );
                     }
                     AgentIPCMessage::UpdateStatus { params } => {
@@ -162,17 +166,14 @@ pub async fn run_daemon_loops(
                             }
                         }
                     }
-                    AgentIPCMessage::Heartbeat { params } => {
-                        println!("[daemon] Heartbeat from {}", params.agent_id.0);
-                    }
                 }
             }
             DaemonEvent::Sway(sway_event) => {
                 match sway_event {
-                    SwayEvent::WindowCreated { con_id, app_id } => {
+                    SwayEvent::WindowCreated { con_id, app_id, pid } => {
                         if app_id.starts_with("agent.") {
-                            // Find the agent matching the app_id
-                            if let Some((_, agent)) = state
+                            // Find the agent matching the app_id, set container_id, and extract details
+                            let agent_info = if let Some((_, agent)) = state
                                 .agents
                                 .iter_mut()
                                 .find(|(_, a)| a.app_id == app_id)
@@ -180,27 +181,82 @@ pub async fn run_daemon_loops(
                                 agent.container_id = Some(con_id);
                                 state.con_to_agent.insert(con_id, agent.id.clone());
 
+                                // Perform dynamic process tree auditing if parent_id is missing
+                                if agent.parent_id.is_none() {
+                                    if let Some(con_pid) = pid {
+                                        if let Some(ancestor_id) = find_registered_parent_ancestor(con_pid as u32, &state.pid_to_agent) {
+                                            println!(
+                                                "[daemon] Auto-detected parent agent {} for child {} via process tree auditing (PID={})",
+                                                ancestor_id.0, agent.id.0, con_pid
+                                            );
+                                            agent.parent_id = Some(ancestor_id);
+                                        }
+                                    }
+                                }
+
+                                Some((
+                                    agent.id.clone(),
+                                    agent.mark.clone(),
+                                    agent.project.0.clone(),
+                                    agent.parent_id.clone(),
+                                ))
+                            } else {
+                                None
+                            };
+
+                            if let Some((agent_id, _agent_mark, project_name, parent_id)) = agent_info {
                                 println!(
                                     "[daemon] Sway window created for agent {}: con_id={}",
-                                    agent.id.0, con_id
+                                    agent_id.0, con_id
                                 );
 
-                                // Mark container
-                                let _ = sway_cmd_tx
-                                    .send(SwayCommand::MarkWindow {
-                                        con_id,
-                                        mark: agent.mark.clone(),
-                                    })
-                                    .await;
+                                // Delegate layout setup to LayoutManager
+                                let action = LayoutAction::WindowCreated {
+                                    con_id,
+                                    app_id: app_id.clone(),
+                                    project_id: ProjectId(project_name.clone()),
+                                };
+                                for cmd in layout_manager.compute_commands(action, &state) {
+                                    let _ = sway_cmd_tx.send(cmd).await;
+                                }
 
-                                // Move to designated workspace
-                                let target_ws = format!("proj:{}", agent.project.0);
-                                let _ = sway_cmd_tx
-                                    .send(SwayCommand::MoveToWorkspace {
-                                        con_id,
-                                        workspace: target_ws,
-                                    })
-                                    .await;
+                                // Layout routing logic for child subagents
+                                if let Some(ref p_id) = parent_id {
+                                    let has_siblings = state.agents.values().any(|a| {
+                                        a.parent_id.as_ref() == Some(p_id) && a.id != agent_id && a.container_id.is_some()
+                                    });
+
+                                    if !has_siblings {
+                                        // First child: focus parent and split horizontally
+                                        if let Some(parent_agent) = state.agents.get(p_id) {
+                                            let parent_mark = parent_agent.mark.clone();
+                                            let _ = sway_cmd_tx
+                                                .send(SwayCommand::SplitHorizontal { parent_mark })
+                                                .await;
+                                            
+                                            // Mark this first child container as the child group anchor
+                                            let children_mark = format!("mark_children_{}", p_id.0.replace('-', "_"));
+                                            let _ = sway_cmd_tx
+                                                .send(SwayCommand::MarkWindow {
+                                                    con_id,
+                                                    mark: children_mark.clone(),
+                                                })
+                                                .await;
+                                            let _ = sway_cmd_tx
+                                                .send(SwayCommand::SetLayoutTabbed { mark: children_mark })
+                                                .await;
+                                        }
+                                    } else {
+                                        // Subsequent child: move into the children anchor container
+                                        let children_mark = format!("mark_children_{}", p_id.0.replace('-', "_"));
+                                        let _ = sway_cmd_tx
+                                            .send(SwayCommand::MoveToContainer {
+                                                con_id,
+                                                target_mark: children_mark,
+                                            })
+                                            .await;
+                                    }
+                                }
                             }
                         }
                     }
@@ -218,4 +274,40 @@ pub async fn run_daemon_loops(
     }
 
     Ok(())
+}
+
+fn get_parent_pid(pid: u32) -> Option<u32> {
+    let stat_path = format!("/proc/{}/stat", pid);
+    if let Ok(contents) = std::fs::read_to_string(stat_path) {
+        if let Some(r_paren) = contents.rfind(')') {
+            let rest = &contents[r_paren + 1..];
+            let fields: Vec<&str> = rest.split_whitespace().collect();
+            if fields.len() >= 2 {
+                if let Ok(ppid) = fields[1].parse::<u32>() {
+                    return Some(ppid);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn find_registered_parent_ancestor(
+    start_pid: u32,
+    pid_to_agent: &HashMap<u32, AgentId>,
+) -> Option<AgentId> {
+    let mut current_pid = start_pid;
+    let mut depth = 0;
+    while current_pid > 1 && depth < 32 {
+        if let Some(ppid) = get_parent_pid(current_pid) {
+            if let Some(agent_id) = pid_to_agent.get(&ppid) {
+                return Some(agent_id.clone());
+            }
+            current_pid = ppid;
+            depth += 1;
+        } else {
+            break;
+        }
+    }
+    None
 }
