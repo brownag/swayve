@@ -38,6 +38,8 @@ pub enum Commands {
         command: Option<String>,
         #[arg(long, short)]
         prompt: Option<String>,
+        #[arg(long)]
+        parent: Option<String>,
     },
     /// Toggle visibility of the Orchestrator panel
     Panel {
@@ -48,6 +50,11 @@ pub enum Commands {
     Status {
         #[arg(long)]
         json: bool,
+    },
+    /// Focus navigation commands
+    Focus {
+        #[arg(long)]
+        cycle: bool,
     },
 }
 
@@ -106,6 +113,7 @@ pub async fn run_cli() -> Result<()> {
             project,
             command,
             prompt,
+            parent,
         } => {
             let base_command = command.unwrap_or_else(|| agent.clone());
             let actual_command = if let Some(ref p) = prompt {
@@ -139,7 +147,7 @@ pub async fn run_cli() -> Result<()> {
                         project_id: ProjectId(project.clone()),
                         pid: std::process::id(),
                         app_id: app_id.clone(),
-                        capabilities: None,
+                        parent_agent_id: parent.map(AgentId),
                     },
                 };
                 let payload = serde_json::to_string(&reg_msg)? + "\n";
@@ -151,11 +159,20 @@ pub async fn run_cli() -> Result<()> {
             // Template terminal command
             let mut term_args = Vec::new();
             for arg in &config.terminal.args {
-                let replaced = arg
-                    .replace("{app_id}", &app_id)
-                    .replace("{title}", &title)
-                    .replace("{command}", &actual_command);
-                term_args.push(replaced);
+                if arg == "{command}" {
+                    if let Some(split_cmds) = shlex::split(&actual_command) {
+                        for sub_arg in split_cmds {
+                            term_args.push(sub_arg);
+                        }
+                    } else {
+                        term_args.push(actual_command.clone());
+                    }
+                } else {
+                    let replaced = arg
+                        .replace("{app_id}", &app_id)
+                        .replace("{title}", &title);
+                    term_args.push(replaced);
+                }
             }
 
             println!(
@@ -279,6 +296,51 @@ pub async fn run_cli() -> Result<()> {
                     for (app_id, title) in agents {
                         println!(" - App ID: {} | Window: {}", app_id, title);
                     }
+                }
+            }
+        }
+
+        Commands::Focus { cycle } => {
+            if cycle {
+                if dry_run {
+                    println!("[focus] [DRY-RUN] Would cycle focus.");
+                    return Ok(());
+                }
+                if env::var("SWAYSOCK").is_err() {
+                    anyhow::bail!("Sway is not running.");
+                }
+
+                let mut conn = Connection::new().await?;
+                let tree = conn.get_tree().await?;
+
+                fn collect_agents_focus(node: &swayipc_async::Node, agents: &mut Vec<(i64, bool)>) {
+                    if let Some(app_id) = &node.app_id {
+                        if app_id.starts_with("agent.") {
+                            agents.push((node.id, node.focused));
+                        }
+                    }
+                    for child in &node.nodes {
+                        collect_agents_focus(child, agents);
+                    }
+                    for child in &node.floating_nodes {
+                        collect_agents_focus(child, agents);
+                    }
+                }
+
+                let mut agents = Vec::new();
+                collect_agents_focus(&tree, &mut agents);
+
+                if agents.is_empty() {
+                    println!("No active agent windows found to focus.");
+                } else {
+                    let focused_idx = agents.iter().position(|&(_, focused)| focused);
+                    let next_idx = match focused_idx {
+                        Some(idx) => (idx + 1) % agents.len(),
+                        None => 0,
+                    };
+                    let (target_id, _) = agents[next_idx];
+                    conn.run_command(&format!("[con_id=\"{}\"] focus", target_id)).await?;
+                    println!("[focus] Focused container {}", target_id);
                 }
             }
         }
