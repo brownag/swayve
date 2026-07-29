@@ -51,18 +51,13 @@ impl Default for Config {
 }
 
 pub fn load_config() -> Config {
-    let mut config_path = PathBuf::new();
-    if let Some(home) = std::env::var_os("HOME") {
-        config_path.push(home);
-        config_path.push(".config");
-        config_path.push("swayve");
-        config_path.push("config.toml");
-    }
-
-    if config_path.exists() {
-        if let Ok(content) = fs::read_to_string(&config_path) {
-            if let Ok(parsed) = toml::from_str::<Config>(&content) {
-                return parsed;
+    if let Some(home) = std::env::var("HOME").ok() {
+        let path = PathBuf::from(format!("{}/.config/swayve/config.toml", home));
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(parsed) = toml::from_str::<Config>(&content) {
+                    return parsed;
+                }
             }
         }
     }
