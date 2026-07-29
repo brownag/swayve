@@ -11,6 +11,9 @@ pub enum SwayCommand {
     FocusWindow { mark: String },
     MoveToWorkspace { con_id: i64, workspace: String },
     ApplyLayout { workspace: String, layout: String },
+    SplitHorizontal { parent_mark: String },
+    MoveToContainer { con_id: i64, target_mark: String },
+    SetLayoutTabbed { mark: String },
 }
 
 pub struct SwayManager {
@@ -53,6 +56,15 @@ impl SwayManager {
                 SwayCommand::ApplyLayout { workspace, layout } => {
                     format!("[workspace=\"{}\"] layout {}", workspace, layout)
                 }
+                SwayCommand::SplitHorizontal { parent_mark } => {
+                    format!("[con_mark=\"{}\"] focus, split horizontal", parent_mark)
+                }
+                SwayCommand::MoveToContainer { con_id, target_mark } => {
+                    format!("[con_id=\"{}\"] move container to mark \"{}\"", con_id, target_mark)
+                }
+                SwayCommand::SetLayoutTabbed { mark } => {
+                    format!("[con_mark=\"{}\"] layout tabbed", mark)
+                }
             };
 
             if let Some(conn) = &mut connection {
@@ -71,7 +83,7 @@ impl SwayManager {
 
 #[derive(Debug, Clone)]
 pub enum SwayEvent {
-    WindowCreated { con_id: i64, app_id: String },
+    WindowCreated { con_id: i64, app_id: String, pid: Option<i32> },
     WindowDestroyed { con_id: i64 },
 }
 
@@ -104,8 +116,9 @@ pub async fn run_event_listener(
                 WindowChange::New => {
                     let con_id = win_event.container.id;
                     let app_id = win_event.container.app_id.clone().unwrap_or_default();
+                    let pid = win_event.container.pid;
                     let _ = event_tx
-                        .send(SwayEvent::WindowCreated { con_id, app_id })
+                        .send(SwayEvent::WindowCreated { con_id, app_id, pid })
                         .await;
                 }
                 WindowChange::Close => {
