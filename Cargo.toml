@@ -12,4 +12,6 @@ clap = { version = "4.4", features = ["derive"] }
 toml = "0.8"
 anyhow = "1.0"
 futures-lite = "2.0"
+shlex = "1.3"
+
 
