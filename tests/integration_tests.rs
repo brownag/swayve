@@ -1,6 +1,6 @@
 use swayve::config::Config;
 use swayve::daemon::{run_daemon_loops, start_daemon_ipc, DaemonEvent};
-use swayve::sway::SwayCommand;
+use swayve::sway::{SwayCommand, SwayEvent};
 use swayve::types::{AgentId, AgentIPCMessage, AgentStatus, ProjectId, RegisterParams, UpdateStatusParams};
 use std::path::Path;
 use std::time::Duration;
@@ -46,7 +46,7 @@ async fn test_daemon_registration_and_status() {
             project_id: ProjectId("test-proj".to_string()),
             pid: 12345,
             app_id: "agent.pi.test-agent".to_string(),
-            capabilities: None,
+            parent_agent_id: None,
         },
     };
     let payload = serde_json::to_string(&register_msg).unwrap() + "\n";
@@ -57,9 +57,6 @@ async fn test_daemon_registration_and_status() {
         params: UpdateStatusParams {
             agent_id: AgentId("test-agent".to_string()),
             status: AgentStatus::AwaitingHumanInput,
-            progress: Some(0.5),
-            current_task: Some("Test task".to_string()),
-            attention_reason: Some("input".to_string()),
         },
     };
     let payload2 = serde_json::to_string(&status_msg).unwrap() + "\n";
@@ -93,6 +90,250 @@ async fn test_daemon_registration_and_status() {
     }
 
     // Clean up
+    listener_handle.abort();
+    daemon_handle.abort();
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+}
+
+#[tokio::test]
+async fn test_subagent_layout_routing() {
+    let socket_path = "/tmp/swayve_test_sub.sock";
+    let path = Path::new(socket_path);
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+
+    let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
+    let (sway_cmd_tx, mut sway_cmd_rx) = mpsc::channel::<SwayCommand>(32);
+
+    let socket_path_str = socket_path.to_string();
+    let event_tx_listener = event_tx.clone();
+    let listener_handle = tokio::spawn(async move {
+        start_daemon_ipc(&socket_path_str, event_tx_listener).await
+    });
+
+    let config = Config::default();
+    let daemon_handle = tokio::spawn(async move {
+        run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect");
+
+    // 1. Register Parent
+    let reg_parent = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: AgentId("parent-1".to_string()),
+            agent_type: "pi".to_string(),
+            project_id: ProjectId("proj-x".to_string()),
+            pid: 123,
+            app_id: "agent.pi.parent-1".to_string(),
+            parent_agent_id: None,
+        },
+    };
+    stream.write_all((serde_json::to_string(&reg_parent).unwrap() + "\n").as_bytes()).await.unwrap();
+
+    // 2. Register Child 1
+    let reg_child1 = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: AgentId("child-1".to_string()),
+            agent_type: "pi".to_string(),
+            project_id: ProjectId("proj-x".to_string()),
+            pid: 124,
+            app_id: "agent.pi.child-1".to_string(),
+            parent_agent_id: Some(AgentId("parent-1".to_string())),
+        },
+    };
+    stream.write_all((serde_json::to_string(&reg_child1).unwrap() + "\n").as_bytes()).await.unwrap();
+    stream.flush().await.unwrap();
+
+    // Allow time for daemon socket task to process registration messages
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Simulate window creation events in daemon loop
+    let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated { con_id: 1000, app_id: "agent.pi.parent-1".to_string(), pid: None })).await;
+    let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated { con_id: 1001, app_id: "agent.pi.child-1".to_string(), pid: None })).await;
+
+    // Check SwayCommands for Child 1 (should focus parent and split, mark children container, and set layout to tabbed)
+    let mut split_received = false;
+    let mut mark_children_received = false;
+    let mut layout_tabbed_received = false;
+
+    // Expecting:
+    // MarkWindow for parent, MoveToWorkspace for parent, MarkWindow for child1, MoveToWorkspace for child1
+    // And layout routing: SplitHorizontal, MarkWindow (for children group), SetLayoutTabbed
+    for _ in 0..7 {
+        if let Ok(Some(cmd)) = timeout(Duration::from_millis(500), sway_cmd_rx.recv()).await {
+            match cmd {
+                SwayCommand::SplitHorizontal { parent_mark } => {
+                    assert_eq!(parent_mark, "mark_parent_1");
+                    split_received = true;
+                }
+                SwayCommand::MarkWindow { con_id, mark } => {
+                    if mark == "mark_children_parent_1" {
+                        assert_eq!(con_id, 1001);
+                        mark_children_received = true;
+                    }
+                }
+                SwayCommand::SetLayoutTabbed { mark } => {
+                    if mark == "mark_children_parent_1" {
+                        layout_tabbed_received = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    assert!(split_received, "SplitHorizontal not received");
+    assert!(mark_children_received, "MarkWindow for child container not received");
+    assert!(layout_tabbed_received, "SetLayoutTabbed not received");
+
+    // 3. Register Child 2
+    let reg_child2 = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: AgentId("child-2".to_string()),
+            agent_type: "pi".to_string(),
+            project_id: ProjectId("proj-x".to_string()),
+            pid: 125,
+            app_id: "agent.pi.child-2".to_string(),
+            parent_agent_id: Some(AgentId("parent-1".to_string())),
+        },
+    };
+    stream.write_all((serde_json::to_string(&reg_child2).unwrap() + "\n").as_bytes()).await.unwrap();
+    stream.flush().await.unwrap();
+
+    // Allow time for daemon socket task to process registration message
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Window creation for child 2
+    let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated { con_id: 1002, app_id: "agent.pi.child-2".to_string(), pid: None })).await;
+
+    // Expecting MoveToContainer command for child 2
+    let mut move_to_container_received = false;
+    for _ in 0..5 {
+        if let Ok(Some(cmd)) = timeout(Duration::from_millis(500), sway_cmd_rx.recv()).await {
+            if let SwayCommand::MoveToContainer { con_id, target_mark } = cmd {
+                if con_id == 1002 && target_mark == "mark_children_parent_1" {
+                    move_to_container_received = true;
+                }
+            }
+        }
+    }
+    assert!(move_to_container_received, "MoveToContainer not received for child-2");
+
+    listener_handle.abort();
+    daemon_handle.abort();
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+}
+
+fn get_test_ppid() -> u32 {
+    let stat = std::fs::read_to_string("/proc/self/stat").unwrap();
+    let r_paren = stat.rfind(')').unwrap();
+    let rest = &stat[r_paren + 1..];
+    let fields: Vec<&str> = rest.split_whitespace().collect();
+    fields[1].parse::<u32>().unwrap()
+}
+
+#[tokio::test]
+async fn test_dynamic_process_tree_auditing() {
+    let socket_path = "/tmp/swayve_test_audit.sock";
+    let path = Path::new(socket_path);
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+
+    let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
+    let (sway_cmd_tx, mut sway_cmd_rx) = mpsc::channel::<SwayCommand>(32);
+
+    let socket_path_str = socket_path.to_string();
+    let event_tx_listener = event_tx.clone();
+    let listener_handle = tokio::spawn(async move {
+        start_daemon_ipc(&socket_path_str, event_tx_listener).await
+    });
+
+    let config = Config::default();
+    let daemon_handle = tokio::spawn(async move {
+        run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect");
+
+    // Get current test process parent PPID
+    let test_ppid = get_test_ppid();
+
+    // 1. Register Parent with cargo's PID (the parent of our test process)
+    let reg_parent = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: AgentId("parent-audit".to_string()),
+            agent_type: "pi".to_string(),
+            project_id: ProjectId("proj-y".to_string()),
+            pid: test_ppid,
+            app_id: "agent.pi.parent-audit".to_string(),
+            parent_agent_id: None,
+        },
+    };
+    stream.write_all((serde_json::to_string(&reg_parent).unwrap() + "\n").as_bytes()).await.unwrap();
+
+    // 2. Register Child (with parent_agent_id = None so that it relies on dynamic process tree audit)
+    let reg_child = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: AgentId("child-audit".to_string()),
+            agent_type: "pi".to_string(),
+            project_id: ProjectId("proj-y".to_string()),
+            pid: std::process::id(), // Test process PID
+            app_id: "agent.pi.child-audit".to_string(),
+            parent_agent_id: None,
+        },
+    };
+    stream.write_all((serde_json::to_string(&reg_child).unwrap() + "\n").as_bytes()).await.unwrap();
+    stream.flush().await.unwrap();
+
+    // Allow time for daemon socket task to process registration messages
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Window creation for parent
+    let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated { con_id: 2000, app_id: "agent.pi.parent-audit".to_string(), pid: Some(test_ppid as i32) })).await;
+    // Window creation for child (pass child PID = std::process::id())
+    let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated { con_id: 2001, app_id: "agent.pi.child-audit".to_string(), pid: Some(std::process::id() as i32) })).await;
+
+    // Expecting parent split, and tab layout on child
+    let mut split_received = false;
+    let mut mark_children_received = false;
+
+    for _ in 0..7 {
+        if let Ok(Some(cmd)) = timeout(Duration::from_millis(500), sway_cmd_rx.recv()).await {
+            match cmd {
+                SwayCommand::SplitHorizontal { parent_mark } => {
+                    if parent_mark == "mark_parent_audit" {
+                        split_received = true;
+                    }
+                }
+                SwayCommand::MarkWindow { con_id, mark } => {
+                    if mark == "mark_children_parent_audit" && con_id == 2001 {
+                        mark_children_received = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    assert!(split_received, "SplitHorizontal not received for parent-audit");
+    assert!(mark_children_received, "MarkWindow for child-audit not received");
+
     listener_handle.abort();
     daemon_handle.abort();
     if path.exists() {
