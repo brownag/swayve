@@ -2,9 +2,12 @@
 
 ## Quick Start
 
-- **Build**: `cargo build`
-- **Run**: `cargo run`
-- **Test**: `cargo test`
+- **Build**: `make build` (or `cargo build`)
+- **Run**: `make run` (or `cargo run`)
+- **Test**: `make test` (or `cargo test`)
+- **Daemon**: `make daemon` (starts live daemon) or `make daemon-dry` (starts dry-run mock daemon)
+- **Reload**: `make reload` (reloads Sway configuration)
+
 
 ## Find Things
 
