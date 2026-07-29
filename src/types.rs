@@ -21,6 +21,7 @@ pub enum AgentStatus {
 pub struct AgentWindow {
     pub id: AgentId,
     pub project: ProjectId,
+    pub parent_id: Option<AgentId>,
     pub container_id: Option<i64>,
     pub app_id: String,
     pub mark: String,
@@ -40,10 +41,6 @@ pub enum AgentIPCMessage {
     UpdateStatus {
         params: UpdateStatusParams,
     },
-    #[serde(rename = "agent.heartbeat")]
-    Heartbeat {
-        params: HeartbeatParams,
-    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,7 +50,7 @@ pub struct RegisterParams {
     pub project_id: ProjectId,
     pub pid: u32,
     pub app_id: String,
-    pub capabilities: Option<Vec<String>>,
+    pub parent_agent_id: Option<AgentId>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,13 +58,4 @@ pub struct UpdateStatusParams {
     pub agent_id: AgentId,
     #[serde(alias = "state")]
     pub status: AgentStatus,
-    pub progress: Option<f64>,
-    pub current_task: Option<String>,
-    pub attention_reason: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HeartbeatParams {
-    pub agent_id: AgentId,
-    pub timestamp: u64,
 }
