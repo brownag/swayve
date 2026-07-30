@@ -90,6 +90,9 @@ for_window [app_id="agent.orchestrator"] {
 # Quick-jump to the next agent requiring attention
 bindsym $mod+Shift+a exec swaymsg '[con_mark="needs_attention"] focus'
 
+# Step through agent windows in hierarchy order (each parent, then its children)
+bindsym $mod+a exec swayve focus --cycle
+
 # Toggle HUD/Orchestrator Panel overlay
 bindsym $mod+Shift+o exec swayve panel toggle
 
