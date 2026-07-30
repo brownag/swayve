@@ -32,7 +32,7 @@
 
 ### Wave 3 (In Progress)
 - **Task 3.1**: ✅ Completed — Extract AgentRegistry trait, impl on DaemonState, update layout.rs imports
-- **Task 3.2**: Pending — Add daemon config section with max_ancestry_depth and process_tree_audit_enabled
+- **Task 3.2**: ✅ Completed — Add daemon config section with max_ancestry_depth and process_tree_audit_enabled
 - **Task 3.3**: Pending — Test end-to-end parent agent flow; wire CLI focus into daemon
 
 ## Task 3.1 Report
@@ -50,3 +50,17 @@
 **Build**: `cargo check` passes ✅
 
 **Deviation**: Minor cleanup — added `use std::collections::HashMap;` at top of trait definition in types.rs (clean import organization)
+
+## Task 3.2 Report
+
+**Status**: Completed
+
+**Files Changed**:
+- `src/config.rs` (lines 27-42): Added `DaemonConfig` struct with `max_ancestry_depth` (default 32) and `process_tree_audit_enabled` (default true); (lines 44-50): Implemented `Default` for `DaemonConfig`; (line 8): Added `daemon` field to `Config` struct; (line 50): Updated `Config::default()` to initialize daemon field
+- `src/daemon.rs` (line 264): Removed hardcoded `const MAX_ANCESTRY_DEPTH`; (line 266): Updated `find_registered_parent_ancestor()` signature to accept `max_depth: usize` parameter; (line 272): Updated loop condition to use `max_depth` parameter; (lines 191-201): Added guard `state.config.daemon.process_tree_audit_enabled` and passed `state.config.daemon.max_ancestry_depth` to function call; (lines 287-319): Added unit test module with 2 tests
+
+**Test Results**: All 8 tests pass (2 new + 3 existing layout + 3 integration) ✅
+
+**Build**: `cargo check` passes ✅
+
+**Deviations**: None — executed 12-step plan as specified
