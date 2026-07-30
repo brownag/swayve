@@ -38,6 +38,12 @@ pub struct AgentWindow {
     pub status: AgentStatus,
 }
 
+use std::collections::HashMap;
+
+pub trait AgentRegistry {
+    fn agents(&self) -> &HashMap<AgentId, AgentWindow>;
+}
+
 /// Incoming IPC events from sub-agents
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "snake_case")]

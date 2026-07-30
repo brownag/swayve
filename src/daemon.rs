@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::layout::{LayoutAction, LayoutManager};
 use crate::sway::{SwayCommand, SwayEvent};
-use crate::types::{AgentId, AgentIPCMessage, AgentStatus, AgentWindow, ProjectId};
+use crate::types::{AgentId, AgentIPCMessage, AgentRegistry, AgentStatus, AgentWindow, ProjectId};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::path::Path;
@@ -60,6 +60,12 @@ impl DaemonState {
             AgentStatus::Completed => self.config.border_colors.completed.clone(),
             AgentStatus::Failed(_) => self.config.border_colors.failed.clone(),
         }
+    }
+}
+
+impl AgentRegistry for DaemonState {
+    fn agents(&self) -> &HashMap<AgentId, AgentWindow> {
+        &self.agents
     }
 }
 

@@ -1,6 +1,5 @@
-use crate::daemon::DaemonState;
 use crate::sway::SwayCommand;
-use crate::types::{AgentId, ProjectId};
+use crate::types::{AgentId, AgentRegistry, ProjectId};
 
 #[derive(Debug, Clone)]
 pub enum LayoutAction {
@@ -22,7 +21,7 @@ impl LayoutManager {
     pub fn compute_commands(
         &self,
         action: LayoutAction,
-        state: &DaemonState,
+        state: &dyn AgentRegistry,
     ) -> Vec<SwayCommand> {
         let mut commands = Vec::new();
         match action {
@@ -33,7 +32,7 @@ impl LayoutManager {
                 parent_id,
             } => {
                 // We still need to find the agent to get the mark
-                if let Some(agent) = state.agents.values().find(|a| a.app_id == app_id) {
+                if let Some(agent) = state.agents().values().find(|a| a.app_id == app_id) {
                     // --- Basic Setup ---
                     commands.push(SwayCommand::MarkWindow {
                         con_id,
@@ -49,13 +48,13 @@ impl LayoutManager {
                         let children_mark = p_id.to_children_mark();
 
                         // 2. Determine if it's the first child or a subsequent child
-                        let has_siblings = state.agents.values().any(|a| {
+                        let has_siblings = state.agents().values().any(|a| {
                             a.parent_id.as_ref() == Some(&p_id) && a.id != agent.id && a.container_id.is_some()
                         });
 
                         if !has_siblings {
                             // First child
-                            if let Some(parent_agent) = state.agents.get(&p_id) {
+                            if let Some(parent_agent) = state.agents().get(&p_id) {
                                 commands.push(SwayCommand::SplitHorizontal {
                                     parent_mark: parent_agent.mark.clone(),
                                 });
@@ -84,6 +83,7 @@ impl LayoutManager {
 mod tests {
     use super::*;
     use crate::config::Config;
+    use crate::daemon::DaemonState;
     use crate::types::{AgentId, ProjectId};
 
     #[test]

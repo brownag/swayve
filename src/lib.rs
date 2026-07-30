@@ -4,3 +4,5 @@ pub mod daemon;
 pub mod layout;
 pub mod sway;
 pub mod types;
+
+pub use crate::types::AgentRegistry;
