@@ -215,47 +215,10 @@ pub async fn run_daemon_loops(
                                     con_id,
                                     app_id: app_id.clone(),
                                     project_id: ProjectId(project_name.clone()),
+                                    parent_id: parent_id.clone(),
                                 };
                                 for cmd in layout_manager.compute_commands(action, &state) {
                                     let _ = sway_cmd_tx.send(cmd).await;
-                                }
-
-                                // Layout routing logic for child subagents
-                                if let Some(ref p_id) = parent_id {
-                                    let has_siblings = state.agents.values().any(|a| {
-                                        a.parent_id.as_ref() == Some(p_id) && a.id != agent_id && a.container_id.is_some()
-                                    });
-
-                                    if !has_siblings {
-                                        // First child: focus parent and split horizontally
-                                        if let Some(parent_agent) = state.agents.get(p_id) {
-                                            let parent_mark = parent_agent.mark.clone();
-                                            let _ = sway_cmd_tx
-                                                .send(SwayCommand::SplitHorizontal { parent_mark })
-                                                .await;
-                                            
-                                            // Mark this first child container as the child group anchor
-                                            let children_mark = format!("mark_children_{}", p_id.0.replace('-', "_"));
-                                            let _ = sway_cmd_tx
-                                                .send(SwayCommand::MarkWindow {
-                                                    con_id,
-                                                    mark: children_mark.clone(),
-                                                })
-                                                .await;
-                                            let _ = sway_cmd_tx
-                                                .send(SwayCommand::SetLayoutTabbed { mark: children_mark })
-                                                .await;
-                                        }
-                                    } else {
-                                        // Subsequent child: move into the children anchor container
-                                        let children_mark = format!("mark_children_{}", p_id.0.replace('-', "_"));
-                                        let _ = sway_cmd_tx
-                                            .send(SwayCommand::MoveToContainer {
-                                                con_id,
-                                                target_mark: children_mark,
-                                            })
-                                            .await;
-                                    }
                                 }
                             }
                         }

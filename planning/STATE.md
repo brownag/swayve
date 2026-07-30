@@ -7,16 +7,13 @@
 
 ## Wave Board
 
-### Wave 1: Core Infrastructure & Basic Orchestration
-- [x] **Task 1.1**: Define Layout Domain & Module (`src/layout.rs`)
-- [x] **Task 1.2**: Refactor Daemon Loop (Basic Setup) (`src/daemon.rs`)
-- [x] **Task 1.3**: Add Unit Tests for `LayoutManager` (`src/layout.rs`)
+### Wave 1: Core Infrastructure & Basic Orchestration (COMPLETED)
 
-### Wave 2: Hierarchical Orchestration
-- [ ] **Task 2.1**: Implement Hierarchical Layout Logic in `LayoutManager`
-- [ ] **Task 2.2**: Integrate Hierarchical Logic into `DaemonState`
+### Wave 2: Hierarchical Orchestration (COMPLETED)
 
 ## Task Reports
-- **Task 1.1**: Implemented `LayoutAction`, `LayoutManager`, and unit tests.
+- **Task 1.1**: Implemented `LayoutAction`, `LayoutManager` and unit tests.
 - **Task 1.2**: Refactored `run_daemon_loops` to delegate basic setup to `LayoutManager`.
 - **Task 1.3**: Verified unit tests in `src/layout.rs`.
+- **Task 2.1**: Implemented hierarchical logic (splitting/tabbing) in `LayoutManager`.
+- **Task 2.2**: Integrated hierarchical logic into `src/daemon.rs`.
