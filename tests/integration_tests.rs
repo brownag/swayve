@@ -457,6 +457,92 @@ async fn test_cli_parent_flag_to_layout() {
 }
 
 #[tokio::test]
+async fn test_focus_survives_parent_destruction() {
+    let socket_path = "/tmp/swayve_test_focus_orphan.sock";
+    let path = Path::new(socket_path);
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+
+    let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
+    let (sway_cmd_tx, mut sway_cmd_rx) = mpsc::channel::<SwayCommand>(32);
+
+    let socket_path_str = socket_path.to_string();
+    let event_tx_listener = event_tx.clone();
+    let listener_handle = tokio::spawn(async move {
+        start_daemon_ipc(&socket_path_str, event_tx_listener).await
+    });
+
+    let config = Config::default();
+    let daemon_handle = tokio::spawn(async move {
+        run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect");
+
+    let agents = [
+        ("parent-doomed", None),
+        ("child-x", Some("parent-doomed")),
+        ("child-y", Some("parent-doomed")),
+    ];
+    for (idx, (agent_id, parent)) in agents.iter().enumerate() {
+        let reg = AgentIPCMessage::Register {
+            id: None,
+            params: RegisterParams {
+                agent_id: AgentId(agent_id.to_string()),
+                agent_type: "pi".to_string(),
+                project_id: ProjectId("proj-orphan".to_string()),
+                pid: 400 + idx as u32,
+                app_id: format!("agent.pi.{}", agent_id),
+                parent_agent_id: parent.map(|p| AgentId(p.to_string())),
+            },
+        };
+        stream.write_all((serde_json::to_string(&reg).unwrap() + "\n").as_bytes()).await.unwrap();
+    }
+    stream.flush().await.unwrap();
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    for (idx, (agent_id, _)) in agents.iter().enumerate() {
+        let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated {
+            con_id: 5000 + idx as i64,
+            app_id: format!("agent.pi.{}", agent_id),
+            pid: None,
+        })).await;
+    }
+
+    // The parent's window dies; its children are left behind
+    let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowDestroyed { con_id: 5000 })).await;
+
+    while recv_command(&mut sway_cmd_rx, 300).await.is_some() {}
+
+    // Focus must still move, and only ever onto the surviving children
+    for _ in 0..2 {
+        let payload = serde_json::to_string(&AgentIPCMessage::Focus).unwrap() + "\n";
+        stream.write_all(payload.as_bytes()).await.unwrap();
+    }
+    stream.flush().await.unwrap();
+
+    let mut focused = Vec::new();
+    for _ in 0..2 {
+        match recv_command(&mut sway_cmd_rx, 500).await {
+            Some(SwayCommand::FocusWindow { mark }) => focused.push(mark),
+            other => panic!("focus stopped working after the parent died: got {:?}", other),
+        }
+    }
+
+    assert_eq!(focused, vec!["mark_child_x", "mark_child_y"]);
+
+    listener_handle.abort();
+    daemon_handle.abort();
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+}
+
+#[tokio::test]
 async fn test_cli_focus_with_hierarchy() {
     let socket_path = "/tmp/swayve_test_focus_hierarchy.sock";
     let path = Path::new(socket_path);

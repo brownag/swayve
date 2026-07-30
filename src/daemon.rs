@@ -212,10 +212,12 @@ pub async fn run_daemon_loops(
                                     );
 
                                     delegate_to_layout(
-                                        con_id,
-                                        app_id.clone(),
-                                        project_id,
-                                        parent_id,
+                                        LayoutAction::WindowCreated {
+                                            con_id,
+                                            app_id: app_id.clone(),
+                                            project_id,
+                                            parent_id,
+                                        },
                                         &layout_manager,
                                         &state,
                                         &sway_cmd_tx,
@@ -228,9 +230,24 @@ pub async fn run_daemon_loops(
                     SwayEvent::WindowDestroyed { con_id } => {
                         if let Some(agent_id) = state.con_to_agent.remove(&con_id) {
                             println!("[daemon] Sway window destroyed for agent: {}", agent_id.0);
-                            if let Some(_agent) = state.agents.remove(&agent_id) {
+                            let parent_id =
+                                state.agents.get(&agent_id).and_then(|a| a.parent_id.clone());
+
+                            if state.agents.remove(&agent_id).is_some() {
                                 state.pid_to_agent.retain(|_, id| id != &agent_id);
                             }
+                            promote_orphans(&mut state, &agent_id);
+
+                            delegate_to_layout(
+                                LayoutAction::WindowDestroyed {
+                                    agent_id: agent_id.clone(),
+                                    parent_id,
+                                },
+                                &layout_manager,
+                                &state,
+                                &sway_cmd_tx,
+                            )
+                            .await;
                         }
                     }
                 }
@@ -252,6 +269,17 @@ pub async fn run_daemon_loops(
     }
 
     Ok(())
+}
+
+/// Detach the children of a destroyed agent so they become roots.
+/// Left alone they keep pointing at an id that is no longer registered, and
+/// focus traversal then returns a target that cannot be resolved.
+fn promote_orphans(state: &mut DaemonState, destroyed: &AgentId) {
+    for agent in state.agents.values_mut() {
+        if agent.parent_id.as_ref() == Some(destroyed) {
+            agent.parent_id = None;
+        }
+    }
 }
 
 /// Bind a newly created Sway window to its registered agent.
@@ -290,30 +318,22 @@ fn apply_process_tree_auditing(
     }
 }
 
-/// Hand a window-created action to the LayoutManager and forward its commands to Sway.
+/// Hand a layout action to the LayoutManager and forward its commands to Sway.
 async fn delegate_to_layout(
-    con_id: i64,
-    app_id: String,
-    project_id: ProjectId,
-    parent_id: Option<AgentId>,
+    action: LayoutAction,
     layout_manager: &LayoutManager,
     state: &DaemonState,
     sway_cmd_tx: &mpsc::Sender<SwayCommand>,
 ) {
-    let action = LayoutAction::WindowCreated {
-        con_id,
-        app_id,
-        project_id,
-        parent_id,
-    };
     for cmd in layout_manager.compute_commands(action, state) {
         let _ = sway_cmd_tx.send(cmd).await;
     }
 }
 
-/// Compute the next window to focus by cycling parent -> children -> back to parent.
-/// Only agents with a `container_id` are candidates; they are ordered by `con_id`.
-/// Returns `None` when there is nothing to focus or focus should not move.
+/// Compute the next window to focus, stepping through the agent hierarchy in
+/// pre-order: each root, then its children, then the next root, wrapping at the
+/// end. Only agents with a `container_id` take part, ordered by `con_id`.
+/// Returns `None` when there is nothing to focus or nowhere to move.
 fn next_focus_target(
     agents: &HashMap<AgentId, AgentWindow>,
     last_focused: Option<&AgentId>,
@@ -322,34 +342,31 @@ fn next_focus_target(
         agents.values().filter(|a| a.container_id.is_some()).collect();
     candidates.sort_by_key(|a| a.container_id);
 
-    let first = candidates.first()?;
+    let mut order: Vec<&AgentWindow> = Vec::with_capacity(candidates.len());
+    for root in candidates.iter().copied().filter(|a| a.parent_id.is_none()) {
+        order.push(root);
+        order.extend(
+            candidates
+                .iter()
+                .copied()
+                .filter(|a| a.parent_id.as_ref() == Some(&root.id)),
+        );
+    }
+    // A child whose parent has no window yet belongs to no root above, and would
+    // otherwise drop out of the cycle entirely.
+    let dangling: Vec<&AgentWindow> = candidates
+        .iter()
+        .copied()
+        .filter(|a| !order.iter().any(|o| o.id == a.id))
+        .collect();
+    order.extend(dangling);
 
-    // Nothing focused (or the focused agent is gone / has no window): start at the first.
-    let current = match last_focused.and_then(|id| candidates.iter().find(|a| &a.id == id)) {
-        Some(c) => *c,
-        None => return Some(first.id.clone()),
-    };
-
-    let children_of = |pid: &AgentId| -> Vec<&AgentWindow> {
-        candidates
-            .iter()
-            .copied()
-            .filter(|a| a.parent_id.as_ref() == Some(pid))
-            .collect()
-    };
-
-    match &current.parent_id {
-        // Parent: descend into the first child, or stay put if childless (orphan).
-        None => children_of(&current.id).first().map(|c| c.id.clone()),
-        // Child: next sibling, or wrap back up to the parent.
-        Some(parent_id) => {
-            let siblings = children_of(parent_id);
-            let idx = siblings.iter().position(|s| s.id == current.id)?;
-            match siblings.get(idx + 1) {
-                Some(next) => Some(next.id.clone()),
-                None => Some(parent_id.clone()),
-            }
-        }
+    match last_focused.and_then(|id| order.iter().position(|a| &a.id == id)) {
+        // Somewhere in the cycle: step forward, or stay put when alone.
+        Some(_) if order.len() < 2 => None,
+        Some(idx) => Some(order[(idx + 1) % order.len()].id.clone()),
+        // Nothing focused, or the focused agent is gone: start at the top.
+        None => order.first().map(|a| a.id.clone()),
     }
 }
 
@@ -482,9 +499,53 @@ mod tests {
         assert_eq!(next_focus_target(&agents, Some(&child_a)), Some(child_b.clone()));
         assert_eq!(next_focus_target(&agents, Some(&child_b)), Some(parent.clone()));
 
-        // A childless root has nowhere to go
+        // A lone agent has nowhere to go
         let orphan = registry(vec![mock_agent("orphan", None, Some(1))]);
         let orphan_id = AgentId("orphan".to_string());
         assert_eq!(next_focus_target(&orphan, Some(&orphan_id)), None);
+        // ...but an unfocused lone agent is still worth focusing
+        assert_eq!(next_focus_target(&orphan, None), Some(orphan_id));
+    }
+
+    #[test]
+    fn test_promote_orphans() {
+        let mut state = DaemonState::new(Config::default());
+        let parent = AgentId("parent".to_string());
+        let child = AgentId("child".to_string());
+        state.register_agent(parent.clone(), ProjectId("p".to_string()), 1, "agent.parent".to_string(), None);
+        state.register_agent(child.clone(), ProjectId("p".to_string()), 2, "agent.child".to_string(), Some(parent.clone()));
+
+        // The parent's window dies and it leaves the registry
+        state.agents.remove(&parent);
+        promote_orphans(&mut state, &parent);
+
+        // The child must not be left pointing at an agent that no longer exists
+        assert_eq!(state.agents[&child].parent_id, None);
+    }
+
+    #[test]
+    fn test_focus_cycles_between_roots() {
+        // Unrelated agents with no hierarchy: the ordinary case
+        let flat = registry(vec![
+            mock_agent("solo_1", None, Some(1)),
+            mock_agent("solo_2", None, Some(2)),
+        ]);
+        let solo_1 = AgentId("solo_1".to_string());
+        let solo_2 = AgentId("solo_2".to_string());
+        assert_eq!(next_focus_target(&flat, Some(&solo_1)), Some(solo_2.clone()));
+        assert_eq!(next_focus_target(&flat, Some(&solo_2)), Some(solo_1.clone()));
+
+        // A root's subtree is traversed before moving on to the next root
+        let mixed = registry(vec![
+            mock_agent("root_a", None, Some(1)),
+            mock_agent("kid", Some("root_a"), Some(2)),
+            mock_agent("root_b", None, Some(3)),
+        ]);
+        let root_a = AgentId("root_a".to_string());
+        let kid = AgentId("kid".to_string());
+        let root_b = AgentId("root_b".to_string());
+        assert_eq!(next_focus_target(&mixed, Some(&root_a)), Some(kid.clone()));
+        assert_eq!(next_focus_target(&mixed, Some(&kid)), Some(root_b.clone()));
+        assert_eq!(next_focus_target(&mixed, Some(&root_b)), Some(root_a.clone()));
     }
 }
