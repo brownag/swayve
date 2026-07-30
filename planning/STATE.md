@@ -26,7 +26,7 @@
 
 ### Wave 4: Hierarchical Focus & CLI-Daemon Coordination
 - [x] **Task 4.1**: Implement Hierarchical Focus Algorithm
-- [ ] **Task 4.2**: Refactor WindowCreated Handler into Private Sub-Helpers
+- [x] **Task 4.2**: Refactor WindowCreated Handler into Private Sub-Helpers
 - [ ] **Task 4.3**: Wire CLI Focus Command to Daemon via Socket IPC
 - [ ] **Task 4.4**: Integration Test for CLI→Daemon→Sway Focus Flow
 
@@ -43,7 +43,7 @@
 
 ### Wave 4 (In Progress)
 - **Task 4.1**: ✅ Completed — Implement hierarchical focus algorithm with sibling cycling
-- **Task 4.2**: Pending — Refactor WindowCreated into private helpers (register, audit, delegate)
+- **Task 4.2**: ✅ Completed — Refactor WindowCreated into private helpers (register, audit, delegate)
 - **Task 4.3**: Pending — Wire CLI focus to daemon via socket IPC
 - **Task 4.4**: Pending — Integration test for CLI→daemon→Sway focus flow
 
@@ -108,3 +108,18 @@
 **Deviations**: Focus state is a `run_daemon_loops` local rather than thread-local or a Sway query — satisfies the "no new DaemonState fields" constraint with less machinery. Algorithm extracted to a pure `next_focus_target(agents, last_focused)` so the test is a plain `#[test]` over a HashMap with no channels or async.
 
 **Gotchas for dependent tasks**: Task 4.3 must send `DaemonEvent::Focus`; nothing triggers it yet. `last_focused` lives in the loop, so it resets on daemon restart — first Focus after restart targets the lowest con_id. Only agents with `container_id.is_some()` are focus candidates.
+
+## Task 4.2 Report
+
+**Status**: Completed
+
+**Files Changed**:
+- `src/daemon.rs` (lines 181–219): WindowCreated arm reduced from ~50 lines to a three-call sequence; (lines 263–318): Added private `register_agent_window()`, `apply_process_tree_auditing()`, and `delegate_to_layout()`
+
+**Test Results**: 10 tests pass (6 unit + 4 integration), run serially ✅
+- `cargo test -- --test-threads=1` — 0 failed; `test_dynamic_process_tree_auditing` covers the audit path
+- `cargo check` — no warnings
+
+**Deviations**: `register_agent_window()` returns `Option<AgentId>` rather than the spec's 4-tuple. The spec's version snapshots `parent_id` before auditing runs, so an auto-detected parent would never reach the LayoutManager on that event — a behavior regression. The handler now re-reads `project`/`parent_id` from state after auditing, matching the original ordering. The `process_tree_audit_enabled` check stays at the call site since the helper takes no Config.
+
+**Gotchas for dependent tasks**: `apply_process_tree_auditing()` returns a bool that the caller currently ignores; it is there for future logging. The post-audit re-read is load-bearing — do not collapse it back into `register_agent_window()`.

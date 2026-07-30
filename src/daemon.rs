@@ -180,53 +180,41 @@ pub async fn run_daemon_loops(
                 match sway_event {
                     SwayEvent::WindowCreated { con_id, app_id, pid } => {
                         if app_id.starts_with("agent.") {
-                            // Find the agent matching the app_id, set container_id, and extract details
-                            let agent_info = if let Some((_, agent)) = state
-                                .agents
-                                .iter_mut()
-                                .find(|(_, a)| a.app_id == app_id)
-                            {
-                                agent.container_id = Some(con_id);
-                                state.con_to_agent.insert(con_id, agent.id.clone());
-
-                                // Perform dynamic process tree auditing if parent_id is missing
-                                if agent.parent_id.is_none() && state.config.daemon.process_tree_audit_enabled {
-                                    if let Some(con_pid) = pid {
-                                        if let Some(ancestor_id) = find_registered_parent_ancestor(con_pid as u32, &state.pid_to_agent, state.config.daemon.max_ancestry_depth) {
-                                            println!(
-                                                "[daemon] Auto-detected parent agent {} for child {} via process tree auditing (PID={})",
-                                                ancestor_id.0, agent.id.0, con_pid
-                                            );
-                                            agent.parent_id = Some(ancestor_id);
-                                        }
+                            if let Some(agent_id) = register_agent_window(&app_id, con_id, &mut state) {
+                                if state.config.daemon.process_tree_audit_enabled {
+                                    if let (Some(con_pid), Some(agent)) =
+                                        (pid, state.agents.get_mut(&agent_id))
+                                    {
+                                        apply_process_tree_auditing(
+                                            agent,
+                                            con_pid as u32,
+                                            &state.pid_to_agent,
+                                            state.config.daemon.max_ancestry_depth,
+                                        );
                                     }
                                 }
 
-                                Some((
-                                    agent.id.clone(),
-                                    agent.mark.clone(),
-                                    agent.project.0.clone(),
-                                    agent.parent_id.clone(),
-                                ))
-                            } else {
-                                None
-                            };
+                                // Read parent_id after auditing so an auto-detected
+                                // parent reaches the layout on this same event.
+                                if let Some(agent) = state.agents.get(&agent_id) {
+                                    let project_id = agent.project.clone();
+                                    let parent_id = agent.parent_id.clone();
 
-                            if let Some((agent_id, _agent_mark, project_name, parent_id)) = agent_info {
-                                println!(
-                                    "[daemon] Sway window created for agent {}: con_id={}",
-                                    agent_id.0, con_id
-                                );
+                                    println!(
+                                        "[daemon] Sway window created for agent {}: con_id={}",
+                                        agent_id.0, con_id
+                                    );
 
-                                // Delegate layout setup to LayoutManager
-                                let action = LayoutAction::WindowCreated {
-                                    con_id,
-                                    app_id: app_id.clone(),
-                                    project_id: ProjectId(project_name.clone()),
-                                    parent_id: parent_id.clone(),
-                                };
-                                for cmd in layout_manager.compute_commands(action, &state) {
-                                    let _ = sway_cmd_tx.send(cmd).await;
+                                    delegate_to_layout(
+                                        con_id,
+                                        app_id.clone(),
+                                        project_id,
+                                        parent_id,
+                                        &layout_manager,
+                                        &state,
+                                        &sway_cmd_tx,
+                                    )
+                                    .await;
                                 }
                             }
                         }
@@ -258,6 +246,63 @@ pub async fn run_daemon_loops(
     }
 
     Ok(())
+}
+
+/// Bind a newly created Sway window to its registered agent.
+/// Sets the agent's `container_id` and records the reverse mapping.
+/// Returns the agent's id, or `None` when no agent claims this `app_id`.
+fn register_agent_window(app_id: &str, con_id: i64, state: &mut DaemonState) -> Option<AgentId> {
+    let agent = state.agents.values_mut().find(|a| a.app_id == app_id)?;
+    agent.container_id = Some(con_id);
+    let agent_id = agent.id.clone();
+    state.con_to_agent.insert(con_id, agent_id.clone());
+    Some(agent_id)
+}
+
+/// Fill in a missing `parent_id` by walking the process tree for a registered ancestor.
+/// No-op when the agent already knows its parent. Returns whether a parent was detected.
+fn apply_process_tree_auditing(
+    agent: &mut AgentWindow,
+    con_pid: u32,
+    pid_to_agent: &HashMap<u32, AgentId>,
+    max_depth: usize,
+) -> bool {
+    if agent.parent_id.is_some() {
+        return false;
+    }
+
+    match find_registered_parent_ancestor(con_pid, pid_to_agent, max_depth) {
+        Some(ancestor_id) => {
+            println!(
+                "[daemon] Auto-detected parent agent {} for child {} via process tree auditing (PID={})",
+                ancestor_id.0, agent.id.0, con_pid
+            );
+            agent.parent_id = Some(ancestor_id);
+            true
+        }
+        None => false,
+    }
+}
+
+/// Hand a window-created action to the LayoutManager and forward its commands to Sway.
+async fn delegate_to_layout(
+    con_id: i64,
+    app_id: String,
+    project_id: ProjectId,
+    parent_id: Option<AgentId>,
+    layout_manager: &LayoutManager,
+    state: &DaemonState,
+    sway_cmd_tx: &mpsc::Sender<SwayCommand>,
+) {
+    let action = LayoutAction::WindowCreated {
+        con_id,
+        app_id,
+        project_id,
+        parent_id,
+    };
+    for cmd in layout_manager.compute_commands(action, state) {
+        let _ = sway_cmd_tx.send(cmd).await;
+    }
 }
 
 /// Compute the next window to focus by cycling parent -> children -> back to parent.
