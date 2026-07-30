@@ -28,7 +28,7 @@
 - [x] **Task 4.1**: Implement Hierarchical Focus Algorithm
 - [x] **Task 4.2**: Refactor WindowCreated Handler into Private Sub-Helpers
 - [x] **Task 4.3**: Wire CLI Focus Command to Daemon via Socket IPC
-- [ ] **Task 4.4**: Integration Test for CLI→Daemon→Sway Focus Flow
+- [x] **Task 4.4**: Integration Test for CLI→Daemon→Sway Focus Flow
 
 ## Task Reports
 
@@ -41,11 +41,11 @@
 - **Task 3.2**: ✅ Completed — Add daemon config section with max_ancestry_depth and process_tree_audit_enabled
 - **Task 3.3**: ✅ Completed — Test end-to-end parent agent flow; wire Focus event handler into daemon
 
-### Wave 4 (In Progress)
+### Wave 4 (Completed)
 - **Task 4.1**: ✅ Completed — Implement hierarchical focus algorithm with sibling cycling
 - **Task 4.2**: ✅ Completed — Refactor WindowCreated into private helpers (register, audit, delegate)
 - **Task 4.3**: ✅ Completed — Wire CLI focus to daemon via socket IPC
-- **Task 4.4**: Pending — Integration test for CLI→daemon→Sway focus flow
+- **Task 4.4**: ✅ Completed — Integration test for CLI→daemon→Sway focus flow
 
 ## Task 3.1 Report
 
@@ -139,3 +139,18 @@
 **Deviations**: Added a unit test pinning the wire format to `{"method":"daemon.focus"}`, since that string is now the CLI/daemon contract and nothing else asserts it.
 
 **Gotchas for dependent tasks**: The dry-run branch returns before any socket use, so Task 4.4 must drive `DaemonEvent::Focus` over a real socket (or the event channel) rather than through `--dry-run`. Fallback triggers only on connect failure, not on a daemon that accepts and ignores.
+
+## Task 4.4 Report
+
+**Status**: Completed
+
+**Files Changed**:
+- `tests/integration_tests.rs` (lines 459–553): Added `test_cli_focus_with_hierarchy()` — registers a parent with two children over the socket, gives each a window with ascending con_id, drains the layout commands, then sends four `daemon.focus` messages and asserts the emitted `FocusWindow` marks are parent → child_a → child_b → parent
+
+**Test Results**: 12 tests pass (7 unit + 5 integration), run serially ✅
+- `cargo test --test integration_tests test_cli_focus_with_hierarchy` — 1 passed
+- `cargo test -- --test-threads=1` — 0 failed
+
+**Deviations**: The test drives focus by writing `daemon.focus` to the socket rather than mocking focus state, so it covers the `handle_client` routing added in 4.3 as well as the traversal — closer to the real CLI path than the spec's "mock via test fixtures" suggestion.
+
+**Gotchas for dependent tasks**: The assertion depends on con_id ordering (4000/4001/4002) since ties are not otherwise broken. `FocusWindow` is also emitted by the `AwaitingHumanInput` status path — a future test combining both must disambiguate.

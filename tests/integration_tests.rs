@@ -455,3 +455,98 @@ async fn test_cli_parent_flag_to_layout() {
         let _ = fs::remove_file(path).await;
     }
 }
+
+#[tokio::test]
+async fn test_cli_focus_with_hierarchy() {
+    let socket_path = "/tmp/swayve_test_focus_hierarchy.sock";
+    let path = Path::new(socket_path);
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+
+    let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
+    let (sway_cmd_tx, mut sway_cmd_rx) = mpsc::channel::<SwayCommand>(32);
+
+    let socket_path_str = socket_path.to_string();
+    let event_tx_listener = event_tx.clone();
+    let listener_handle = tokio::spawn(async move {
+        start_daemon_ipc(&socket_path_str, event_tx_listener).await
+    });
+
+    let config = Config::default();
+    let daemon_handle = tokio::spawn(async move {
+        run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect");
+
+    // A parent with two children, registered over the socket like the CLI does
+    let agents = [
+        ("parent-focus", None),
+        ("child-a-focus", Some("parent-focus")),
+        ("child-b-focus", Some("parent-focus")),
+    ];
+    for (idx, (agent_id, parent)) in agents.iter().enumerate() {
+        let reg = AgentIPCMessage::Register {
+            id: None,
+            params: RegisterParams {
+                agent_id: AgentId(agent_id.to_string()),
+                agent_type: "pi".to_string(),
+                project_id: ProjectId("proj-focus".to_string()),
+                pid: 300 + idx as u32,
+                app_id: format!("agent.pi.{}", agent_id),
+                parent_agent_id: parent.map(|p| AgentId(p.to_string())),
+            },
+        };
+        stream.write_all((serde_json::to_string(&reg).unwrap() + "\n").as_bytes()).await.unwrap();
+    }
+    stream.flush().await.unwrap();
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Give each agent a window, ascending con_id so focus order is deterministic
+    for (idx, (agent_id, _)) in agents.iter().enumerate() {
+        let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated {
+            con_id: 4000 + idx as i64,
+            app_id: format!("agent.pi.{}", agent_id),
+            pid: None,
+        })).await;
+    }
+
+    // Discard the layout commands; this test is only about focus
+    while recv_command(&mut sway_cmd_rx, 300).await.is_some() {}
+
+    // Four focus requests over the socket, exercising the daemon.focus route
+    for _ in 0..4 {
+        let payload = serde_json::to_string(&AgentIPCMessage::Focus).unwrap() + "\n";
+        stream.write_all(payload.as_bytes()).await.unwrap();
+    }
+    stream.flush().await.unwrap();
+
+    let mut focused = Vec::new();
+    for _ in 0..4 {
+        match recv_command(&mut sway_cmd_rx, 500).await {
+            Some(SwayCommand::FocusWindow { mark }) => focused.push(mark),
+            other => panic!("expected FocusWindow, got {:?}", other),
+        }
+    }
+
+    // Parent descends to its first child, cycles siblings, then wraps back to the parent
+    assert_eq!(
+        focused,
+        vec![
+            "mark_parent_focus",
+            "mark_child_a_focus",
+            "mark_child_b_focus",
+            "mark_parent_focus",
+        ]
+    );
+
+    listener_handle.abort();
+    daemon_handle.abort();
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+}
