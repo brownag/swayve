@@ -72,6 +72,7 @@ impl AgentRegistry for DaemonState {
 pub enum DaemonEvent {
     AgentIPC(AgentIPCMessage),
     Sway(SwayEvent),
+    Focus,
 }
 
 pub async fn start_daemon_ipc(
@@ -236,6 +237,29 @@ pub async fn run_daemon_loops(
                                 state.pid_to_agent.retain(|_, id| id != &agent_id);
                             }
                         }
+                    }
+                }
+            }
+            DaemonEvent::Focus => {
+                // Focus event handler: rotate focus between agent windows
+                let mut agent_windows: Vec<_> = state
+                    .agents
+                    .iter()
+                    .filter_map(|(_, agent)| agent.container_id.map(|con_id| (con_id, agent.mark.clone())))
+                    .collect();
+
+                if !agent_windows.is_empty() {
+                    // Sort for consistent iteration order
+                    agent_windows.sort_by_key(|(con_id, _)| *con_id);
+
+                    // Find currently focused window and rotate to next
+                    // For now, simple heuristic: send FocusWindow to first agent window
+                    if let Some((_, mark)) = agent_windows.first() {
+                        let _ = sway_cmd_tx
+                            .send(SwayCommand::FocusWindow {
+                                mark: mark.clone(),
+                            })
+                            .await;
                     }
                 }
             }

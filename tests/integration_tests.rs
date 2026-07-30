@@ -344,3 +344,114 @@ async fn test_dynamic_process_tree_auditing() {
         let _ = fs::remove_file(path).await;
     }
 }
+
+#[tokio::test]
+async fn test_cli_parent_flag_to_layout() {
+    let socket_path = "/tmp/swayve_test_parent_cli.sock";
+    let path = Path::new(socket_path);
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+
+    let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
+    let (sway_cmd_tx, mut sway_cmd_rx) = mpsc::channel::<SwayCommand>(32);
+
+    let socket_path_str = socket_path.to_string();
+    let event_tx_listener = event_tx.clone();
+    let listener_handle = tokio::spawn(async move {
+        start_daemon_ipc(&socket_path_str, event_tx_listener).await
+    });
+
+    let config = Config::default();
+    let daemon_handle = tokio::spawn(async move {
+        run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect");
+
+    // Step 2: Register parent agent via socket
+    let reg_parent = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: AgentId("parent-cli".to_string()),
+            agent_type: "pi".to_string(),
+            project_id: ProjectId("proj-cli".to_string()),
+            pid: 200,
+            app_id: "agent.pi.parent-cli".to_string(),
+            parent_agent_id: None,
+        },
+    };
+    stream.write_all((serde_json::to_string(&reg_parent).unwrap() + "\n").as_bytes()).await.unwrap();
+
+    // Step 3: Register child agent via socket with parent_agent_id
+    let reg_child = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: AgentId("child-cli".to_string()),
+            agent_type: "pi".to_string(),
+            project_id: ProjectId("proj-cli".to_string()),
+            pid: 201,
+            app_id: "agent.pi.child-cli".to_string(),
+            parent_agent_id: Some(AgentId("parent-cli".to_string())),
+        },
+    };
+    stream.write_all((serde_json::to_string(&reg_child).unwrap() + "\n").as_bytes()).await.unwrap();
+    stream.flush().await.unwrap();
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Step 4: Send synthetic window-created event for parent
+    let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated {
+        con_id: 3000,
+        app_id: "agent.pi.parent-cli".to_string(),
+        pid: None,
+    })).await;
+
+    // Step 5: Send synthetic window-created event for child
+    let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated {
+        con_id: 3001,
+        app_id: "agent.pi.child-cli".to_string(),
+        pid: None,
+    })).await;
+
+    // Step 6: Verify LayoutManager hierarchy commands
+    let mut split_received = false;
+    let mut mark_children_received = false;
+    let mut layout_tabbed_received = false;
+
+    for _ in 0..7 {
+        if let Some(cmd) = recv_command(&mut sway_cmd_rx, 500).await {
+            match cmd {
+                SwayCommand::SplitHorizontal { parent_mark } => {
+                    if parent_mark == "mark_parent_cli" {
+                        split_received = true;
+                    }
+                }
+                SwayCommand::MarkWindow { con_id, mark } => {
+                    if mark == "mark_children_parent_cli" && con_id == 3001 {
+                        mark_children_received = true;
+                    }
+                }
+                SwayCommand::SetLayoutTabbed { mark } => {
+                    if mark == "mark_children_parent_cli" {
+                        layout_tabbed_received = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    assert!(split_received, "SplitHorizontal not received for parent-cli");
+    assert!(mark_children_received, "MarkWindow for child-cli not received");
+    assert!(layout_tabbed_received, "SetLayoutTabbed not received for children container");
+
+    // Step 7: Clean up
+    listener_handle.abort();
+    daemon_handle.abort();
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+}
