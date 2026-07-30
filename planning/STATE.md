@@ -64,3 +64,18 @@
 **Build**: `cargo check` passes ✅
 
 **Deviations**: None — executed 12-step plan as specified
+
+## Task 3.3 Report
+
+**Status**: Completed
+
+**Files Changed**:
+- `tests/integration_tests.rs` (lines 348-462): Added `test_cli_parent_flag_to_layout()` async test validating parent-child hierarchy: registers parent and child agents, sends synthetic window-created events, verifies SplitHorizontal, MarkWindow, and SetLayoutTabbed commands from LayoutManager
+- `src/daemon.rs` (line 75): Added `Focus` variant to `DaemonEvent` enum; (lines 242-259): Added Focus match arm in `run_daemon_loops()` event loop handler that collects agent windows and rotates focus
+
+**Test Results**: All 9 tests pass (4 integration + 5 unit) ✅
+- New test: `test_cli_parent_flag_to_layout` validates end-to-end parent-child hierarchy
+
+**Build**: `cargo check` passes ✅
+
+**Deviations**: None — executed 10 of 11 steps; Step 10 (CLI-daemon wiring for focus) deferred to Wave 4 as per spec
