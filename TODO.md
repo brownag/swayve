@@ -13,21 +13,21 @@ Fix the two defects that agent-window destruction leaves behind — wedged focus
 - [x] Added `test_promote_orphans` unit test — see correction below
 
 ### 2. Re-assert the children mark when its carrier dies
-- [ ] Add `LayoutAction::WindowDestroyed { agent_id, parent_id }` variant in `src/layout.rs`
-- [ ] Handle it in `compute_commands`: when the destroyed agent had a parent and at least one sibling with a `container_id` survives, emit `MarkWindow { con_id: <lowest-con_id survivor>, mark: parent.to_children_mark() }`
-- [ ] Add unit test in `src/layout.rs` covering both branches: surviving sibling re-marked; no survivors emits nothing
-- [ ] Call the layout from the `WindowDestroyed` arm (order relative to promotion is immaterial — see corrected note)
-- [ ] Verify: `cargo test -- --test-threads=1`
+- [x] Add `LayoutAction::WindowDestroyed { agent_id, parent_id }` variant in `src/layout.rs`
+- [x] Handle it in `compute_commands`: when the destroyed agent had a parent and at least one sibling with a `container_id` survives, emit `MarkWindow { con_id: <lowest-con_id survivor>, mark: parent.to_children_mark() }`
+- [x] Add unit test in `src/layout.rs` covering both branches: surviving sibling re-marked; no survivors emits nothing
+- [x] Call the layout from the `WindowDestroyed` arm (order relative to promotion is immaterial — see corrected note)
+- [x] Verify: `cargo test -- --test-threads=1`
 
 ### 3. Bind focus cycling in the documented Sway config
-- [ ] Add `bindsym $mod+a exec swayve focus --cycle` to the Navigation Bindings block in `README.md` (currently lines 89–94), with a one-line comment
-- [ ] Verify: `README.md` renders and the binding sits alongside the existing `$mod+Shift+a` and `$mod+Shift+o` entries
+- [x] Add `bindsym $mod+a exec swayve focus --cycle` to the Navigation Bindings block in `README.md` (currently lines 89–94), with a one-line comment
+- [x] Verify: `README.md` renders and the binding sits alongside the existing `$mod+Shift+a` and `$mod+Shift+o` entries
 
 ### 4. Close out the wave
-- [ ] Run the full suite serially: `cargo test -- --test-threads=1`
-- [ ] Confirm `cargo check` is warning-free
-- [ ] One conventional commit per task group (1, 2, 3)
-- [ ] Record Wave 5 board and reports in `planning/STATE.md`
+- [x] Run the full suite serially: `cargo test -- --test-threads=1`
+- [x] Confirm `cargo check` is warning-free
+- [x] One conventional commit per task group (1, 2, 3)
+- [x] Record Wave 5 board and reports in `planning/STATE.md`
 
 ## Discovered Tasks
 
