@@ -306,45 +306,67 @@ pub async fn run_cli() -> Result<()> {
                     println!("[focus] [DRY-RUN] Would cycle focus.");
                     return Ok(());
                 }
-                if env::var("SWAYSOCK").is_err() {
-                    anyhow::bail!("Sway is not running.");
-                }
 
-                let mut conn = Connection::new().await?;
-                let tree = conn.get_tree().await?;
-
-                fn collect_agents_focus(node: &swayipc_async::Node, agents: &mut Vec<(i64, bool)>) {
-                    if let Some(app_id) = &node.app_id {
-                        if app_id.starts_with("agent.") {
-                            agents.push((node.id, node.focused));
-                        }
+                // The daemon owns the agent hierarchy, so ask it to pick the next
+                // window. Without it, fall back to a flat cycle over the Sway tree.
+                match UnixStream::connect(socket_path).await {
+                    Ok(mut stream) => {
+                        let payload = serde_json::to_string(&AgentIPCMessage::Focus)? + "\n";
+                        stream.write_all(payload.as_bytes()).await?;
+                        println!("[focus] Requested focus cycle from daemon.");
                     }
-                    for child in &node.nodes {
-                        collect_agents_focus(child, agents);
+                    Err(_) => {
+                        println!("[focus] Daemon unreachable. Cycling focus directly.");
+                        focus_cycle_standalone().await?;
                     }
-                    for child in &node.floating_nodes {
-                        collect_agents_focus(child, agents);
-                    }
-                }
-
-                let mut agents = Vec::new();
-                collect_agents_focus(&tree, &mut agents);
-
-                if agents.is_empty() {
-                    println!("No active agent windows found to focus.");
-                } else {
-                    let focused_idx = agents.iter().position(|&(_, focused)| focused);
-                    let next_idx = match focused_idx {
-                        Some(idx) => (idx + 1) % agents.len(),
-                        None => 0,
-                    };
-                    let (target_id, _) = agents[next_idx];
-                    conn.run_command(&format!("[con_id=\"{}\"] focus", target_id)).await?;
-                    println!("[focus] Focused container {}", target_id);
                 }
             }
         }
     }
+
+    Ok(())
+}
+
+/// Cycle focus across agent windows by talking to Sway directly, ignoring hierarchy.
+/// Used only when the daemon is not reachable.
+async fn focus_cycle_standalone() -> Result<()> {
+    if env::var("SWAYSOCK").is_err() {
+        anyhow::bail!("Sway is not running.");
+    }
+
+    let mut conn = Connection::new().await?;
+    let tree = conn.get_tree().await?;
+
+    fn collect_agents_focus(node: &swayipc_async::Node, agents: &mut Vec<(i64, bool)>) {
+        if let Some(app_id) = &node.app_id {
+            if app_id.starts_with("agent.") {
+                agents.push((node.id, node.focused));
+            }
+        }
+        for child in &node.nodes {
+            collect_agents_focus(child, agents);
+        }
+        for child in &node.floating_nodes {
+            collect_agents_focus(child, agents);
+        }
+    }
+
+    let mut agents = Vec::new();
+    collect_agents_focus(&tree, &mut agents);
+
+    if agents.is_empty() {
+        println!("No active agent windows found to focus.");
+        return Ok(());
+    }
+
+    let focused_idx = agents.iter().position(|&(_, focused)| focused);
+    let next_idx = match focused_idx {
+        Some(idx) => (idx + 1) % agents.len(),
+        None => 0,
+    };
+    let (target_id, _) = agents[next_idx];
+    conn.run_command(&format!("[con_id=\"{}\"] focus", target_id)).await?;
+    println!("[focus] Focused container {}", target_id);
 
     Ok(())
 }

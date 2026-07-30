@@ -114,6 +114,10 @@ async fn handle_client(stream: UnixStream, event_tx: mpsc::Sender<DaemonEvent>) 
         }
 
         match serde_json::from_str::<AgentIPCMessage>(&line) {
+            // Focus is a daemon-level request, not agent bookkeeping.
+            Ok(AgentIPCMessage::Focus) => {
+                let _ = event_tx.send(DaemonEvent::Focus).await;
+            }
             Ok(msg) => {
                 let _ = event_tx.send(DaemonEvent::AgentIPC(msg)).await;
             }
@@ -174,6 +178,8 @@ pub async fn run_daemon_loops(
                             }
                         }
                     }
+                    // Routed to DaemonEvent::Focus by handle_client; never arrives here.
+                    AgentIPCMessage::Focus => {}
                 }
             }
             DaemonEvent::Sway(sway_event) => {
@@ -415,6 +421,17 @@ mod tests {
         // Verify the config is set correctly
         assert!(!config.daemon.process_tree_audit_enabled);
         assert_eq!(config.daemon.max_ancestry_depth, 32);
+    }
+
+    #[test]
+    fn test_focus_ipc_roundtrip() {
+        // The CLI writes this line; handle_client must route it to DaemonEvent::Focus.
+        let wire = serde_json::to_string(&AgentIPCMessage::Focus).unwrap();
+        assert_eq!(wire, r#"{"method":"daemon.focus"}"#);
+        assert!(matches!(
+            serde_json::from_str::<AgentIPCMessage>(&wire).unwrap(),
+            AgentIPCMessage::Focus
+        ));
     }
 
     fn mock_agent(id: &str, parent: Option<&str>, con_id: Option<i64>) -> AgentWindow {

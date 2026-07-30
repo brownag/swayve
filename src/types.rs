@@ -57,6 +57,9 @@ pub enum AgentIPCMessage {
     UpdateStatus {
         params: UpdateStatusParams,
     },
+    /// Ask the daemon to advance focus to the next window in the agent hierarchy.
+    #[serde(rename = "daemon.focus")]
+    Focus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

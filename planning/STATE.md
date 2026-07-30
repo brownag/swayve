@@ -27,7 +27,7 @@
 ### Wave 4: Hierarchical Focus & CLI-Daemon Coordination
 - [x] **Task 4.1**: Implement Hierarchical Focus Algorithm
 - [x] **Task 4.2**: Refactor WindowCreated Handler into Private Sub-Helpers
-- [ ] **Task 4.3**: Wire CLI Focus Command to Daemon via Socket IPC
+- [x] **Task 4.3**: Wire CLI Focus Command to Daemon via Socket IPC
 - [ ] **Task 4.4**: Integration Test for CLI→Daemon→Sway Focus Flow
 
 ## Task Reports
@@ -44,7 +44,7 @@
 ### Wave 4 (In Progress)
 - **Task 4.1**: ✅ Completed — Implement hierarchical focus algorithm with sibling cycling
 - **Task 4.2**: ✅ Completed — Refactor WindowCreated into private helpers (register, audit, delegate)
-- **Task 4.3**: Pending — Wire CLI focus to daemon via socket IPC
+- **Task 4.3**: ✅ Completed — Wire CLI focus to daemon via socket IPC
 - **Task 4.4**: Pending — Integration test for CLI→daemon→Sway focus flow
 
 ## Task 3.1 Report
@@ -123,3 +123,19 @@
 **Deviations**: `register_agent_window()` returns `Option<AgentId>` rather than the spec's 4-tuple. The spec's version snapshots `parent_id` before auditing runs, so an auto-detected parent would never reach the LayoutManager on that event — a behavior regression. The handler now re-reads `project`/`parent_id` from state after auditing, matching the original ordering. The `process_tree_audit_enabled` check stays at the call site since the helper takes no Config.
 
 **Gotchas for dependent tasks**: `apply_process_tree_auditing()` returns a bool that the caller currently ignores; it is there for future logging. The post-audit re-read is load-bearing — do not collapse it back into `register_agent_window()`.
+
+## Task 4.3 Report
+
+**Status**: Completed
+
+**Files Changed**:
+- `src/types.rs` (lines 61–63): Added unit variant `AgentIPCMessage::Focus` tagged `daemon.focus`
+- `src/daemon.rs` (lines 118–121): `handle_client()` routes `Focus` to `DaemonEvent::Focus` instead of wrapping it as agent bookkeeping; (line 180): Added no-op `AgentIPCMessage::Focus` arm to keep the inner match exhaustive; (lines 380–390): Added `test_focus_ipc_roundtrip`
+- `src/cli.rs` (lines 303–324): `Commands::Focus` now sends the IPC message to the daemon, falling back to direct Sway on connect failure; (lines 331–372): Extracted the previous inline logic into `focus_cycle_standalone()`
+
+**Test Results**: 11 tests pass (7 unit + 4 integration), run serially ✅
+- `cargo check` — no warnings
+
+**Deviations**: Added a unit test pinning the wire format to `{"method":"daemon.focus"}`, since that string is now the CLI/daemon contract and nothing else asserts it.
+
+**Gotchas for dependent tasks**: The dry-run branch returns before any socket use, so Task 4.4 must drive `DaemonEvent::Focus` over a real socket (or the event channel) rather than through `--dry-run`. Fallback triggers only on connect failure, not on a daemon that accepts and ignores.
