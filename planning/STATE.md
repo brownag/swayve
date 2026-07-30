@@ -41,6 +41,12 @@
 - **Task 3.2**: ✅ Completed — Add daemon config section with max_ancestry_depth and process_tree_audit_enabled
 - **Task 3.3**: ✅ Completed — Test end-to-end parent agent flow; wire Focus event handler into daemon
 
+### Wave 5: Destruction Handling & Focus Reachability
+- [x] **Task 1**: Promote orphaned children on parent destruction
+- [x] **Task 1b**: Advance between root-level agents in `next_focus_target` (discovered mid-execution)
+- [x] **Task 2**: Re-assert the children mark when its carrier dies
+- [x] **Task 3**: Bind focus cycling in the documented Sway config
+
 ### Wave 4 (Completed)
 - **Task 4.1**: ✅ Completed — Implement hierarchical focus algorithm with sibling cycling
 - **Task 4.2**: ✅ Completed — Refactor WindowCreated into private helpers (register, audit, delegate)
@@ -154,3 +160,26 @@
 **Deviations**: The test drives focus by writing `daemon.focus` to the socket rather than mocking focus state, so it covers the `handle_client` routing added in 4.3 as well as the traversal — closer to the real CLI path than the spec's "mock via test fixtures" suggestion.
 
 **Gotchas for dependent tasks**: The assertion depends on con_id ordering (4000/4001/4002) since ties are not otherwise broken. `FocusWindow` is also emitted by the `AwaitingHumanInput` status path — a future test combining both must disambiguate.
+
+## Wave 5 Report
+
+**Status**: Completed. Planned with `plan-first` (see `TODO.md`), not wave-orchestration — worker spawns were blocked by the account spend limit.
+
+**Commits**: `1fc4e57` focus traversal + orphan promotion, `08ad0b6` children-mark rehoming, `ce448f3` README keybinding
+
+**Files Changed**:
+- `src/daemon.rs`: Rewrote `next_focus_target()` as a pre-order walk (roots, each followed by its children, wrapping); added `promote_orphans()` and called it from the `WindowDestroyed` arm; that arm now also dispatches a layout action; `delegate_to_layout()` reduced from 7 params to 4 by taking a `LayoutAction`
+- `src/layout.rs`: Added `LayoutAction::WindowDestroyed`; `compute_commands` re-marks the lowest-con_id surviving sibling with the parent's children mark
+- `tests/integration_tests.rs`: Added `test_focus_survives_parent_destruction`
+- `README.md`: Added `bindsym $mod+a exec swayve focus --cycle`
+
+**Test Results**: 17 pass (11 unit + 6 integration), serial. `cargo check` warning-free.
+
+**Corrections made to the plan during execution**:
+- The planned tasks 1/2 ordering constraint was a phantom — task 2 reads the destroyed agent's own `parent_id`, promotion clears its *children's*. Independent.
+- `test_focus_survives_parent_destruction` passes with `promote_orphans` disabled; 1b's dangling-child fallback alone fixes that symptom. Added `test_promote_orphans` to cover the helper directly.
+
+**Gotchas for future work**:
+- Wave 4 shipped focus cycling that could not cycle a flat workspace; the Wave 4 test only built one parent with children and so went green. Prefer a flat-workspace case in any focus test.
+- `mark --add` moving a mark between containers is still unverified on a live compositor — the layout test pins the emitted command, not Sway's reaction.
+- `last_focused` remains a loop local: it resets on daemon restart and desyncs if you focus by mouse or a plain sway binding.
