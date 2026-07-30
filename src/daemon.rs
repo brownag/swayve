@@ -135,6 +135,7 @@ pub async fn run_daemon_loops(
 ) -> Result<()> {
     let mut state = DaemonState::new(config);
     let layout_manager = LayoutManager::new();
+    let mut last_focused: Option<AgentId> = None;
 
     while let Some(event) = event_rx.recv().await {
         match event {
@@ -241,25 +242,15 @@ pub async fn run_daemon_loops(
                 }
             }
             DaemonEvent::Focus => {
-                // Focus event handler: rotate focus between agent windows
-                let mut agent_windows: Vec<_> = state
-                    .agents
-                    .iter()
-                    .filter_map(|(_, agent)| agent.container_id.map(|con_id| (con_id, agent.mark.clone())))
-                    .collect();
-
-                if !agent_windows.is_empty() {
-                    // Sort for consistent iteration order
-                    agent_windows.sort_by_key(|(con_id, _)| *con_id);
-
-                    // Find currently focused window and rotate to next
-                    // For now, simple heuristic: send FocusWindow to first agent window
-                    if let Some((_, mark)) = agent_windows.first() {
+                // Focus event handler: hierarchical sibling cycling
+                if let Some(target) = next_focus_target(&state.agents, last_focused.as_ref()) {
+                    if let Some(agent) = state.agents.get(&target) {
                         let _ = sway_cmd_tx
                             .send(SwayCommand::FocusWindow {
-                                mark: mark.clone(),
+                                mark: agent.mark.clone(),
                             })
                             .await;
+                        last_focused = Some(target);
                     }
                 }
             }
@@ -267,6 +258,48 @@ pub async fn run_daemon_loops(
     }
 
     Ok(())
+}
+
+/// Compute the next window to focus by cycling parent -> children -> back to parent.
+/// Only agents with a `container_id` are candidates; they are ordered by `con_id`.
+/// Returns `None` when there is nothing to focus or focus should not move.
+fn next_focus_target(
+    agents: &HashMap<AgentId, AgentWindow>,
+    last_focused: Option<&AgentId>,
+) -> Option<AgentId> {
+    let mut candidates: Vec<&AgentWindow> =
+        agents.values().filter(|a| a.container_id.is_some()).collect();
+    candidates.sort_by_key(|a| a.container_id);
+
+    let first = candidates.first()?;
+
+    // Nothing focused (or the focused agent is gone / has no window): start at the first.
+    let current = match last_focused.and_then(|id| candidates.iter().find(|a| &a.id == id)) {
+        Some(c) => *c,
+        None => return Some(first.id.clone()),
+    };
+
+    let children_of = |pid: &AgentId| -> Vec<&AgentWindow> {
+        candidates
+            .iter()
+            .copied()
+            .filter(|a| a.parent_id.as_ref() == Some(pid))
+            .collect()
+    };
+
+    match &current.parent_id {
+        // Parent: descend into the first child, or stay put if childless (orphan).
+        None => children_of(&current.id).first().map(|c| c.id.clone()),
+        // Child: next sibling, or wrap back up to the parent.
+        Some(parent_id) => {
+            let siblings = children_of(parent_id);
+            let idx = siblings.iter().position(|s| s.id == current.id)?;
+            match siblings.get(idx + 1) {
+                Some(next) => Some(next.id.clone()),
+                None => Some(parent_id.clone()),
+            }
+        }
+    }
 }
 
 fn get_parent_pid(pid: u32) -> Option<u32> {
@@ -337,5 +370,59 @@ mod tests {
         // Verify the config is set correctly
         assert!(!config.daemon.process_tree_audit_enabled);
         assert_eq!(config.daemon.max_ancestry_depth, 32);
+    }
+
+    fn mock_agent(id: &str, parent: Option<&str>, con_id: Option<i64>) -> AgentWindow {
+        let agent_id = AgentId(id.to_string());
+        AgentWindow {
+            mark: agent_id.to_mark(),
+            id: agent_id,
+            project: ProjectId("proj".to_string()),
+            parent_id: parent.map(|p| AgentId(p.to_string())),
+            container_id: con_id,
+            app_id: format!("agent.{}", id),
+            status: AgentStatus::Idle,
+        }
+    }
+
+    fn registry(agents: Vec<AgentWindow>) -> HashMap<AgentId, AgentWindow> {
+        agents.into_iter().map(|a| (a.id.clone(), a)).collect()
+    }
+
+    #[test]
+    fn test_hierarchical_focus() {
+        // Empty registry: nothing to focus
+        assert_eq!(next_focus_target(&HashMap::new(), None), None);
+
+        // Agents without a container_id are not focus candidates
+        let unmapped = registry(vec![mock_agent("solo", None, None)]);
+        assert_eq!(next_focus_target(&unmapped, None), None);
+
+        // A parent with two children, ordered by con_id
+        let agents = registry(vec![
+            mock_agent("parent", None, Some(1)),
+            mock_agent("child_a", Some("parent"), Some(2)),
+            mock_agent("child_b", Some("parent"), Some(3)),
+        ]);
+        let parent = AgentId("parent".to_string());
+        let child_a = AgentId("child_a".to_string());
+        let child_b = AgentId("child_b".to_string());
+
+        // Nothing focused yet: start at the lowest con_id
+        assert_eq!(next_focus_target(&agents, None), Some(parent.clone()));
+
+        // A stale focus target that is no longer registered falls back to the first
+        let stale = AgentId("gone".to_string());
+        assert_eq!(next_focus_target(&agents, Some(&stale)), Some(parent.clone()));
+
+        // Parent descends into its first child, then cycles siblings, then wraps to parent
+        assert_eq!(next_focus_target(&agents, Some(&parent)), Some(child_a.clone()));
+        assert_eq!(next_focus_target(&agents, Some(&child_a)), Some(child_b.clone()));
+        assert_eq!(next_focus_target(&agents, Some(&child_b)), Some(parent.clone()));
+
+        // A childless root has nowhere to go
+        let orphan = registry(vec![mock_agent("orphan", None, Some(1))]);
+        let orphan_id = AgentId("orphan".to_string());
+        assert_eq!(next_focus_target(&orphan, Some(&orphan_id)), None);
     }
 }
