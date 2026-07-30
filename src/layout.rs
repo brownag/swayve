@@ -46,7 +46,7 @@ impl LayoutManager {
 
                     // --- Hierarchical Logic ---
                     if let Some(p_id) = parent_id {
-                        let children_mark = format!("mark_children_{}", p_id.0.replace('-', "_"));
+                        let children_mark = p_id.to_children_mark();
 
                         // 2. Determine if it's the first child or a subsequent child
                         let has_siblings = state.agents.values().any(|a| {
