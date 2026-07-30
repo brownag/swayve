@@ -6,6 +6,8 @@ use std::path::PathBuf;
 pub struct Config {
     pub border_colors: BorderColorsConfig,
     pub terminal: TerminalConfig,
+    #[serde(default)]
+    pub daemon: DaemonConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,6 +24,31 @@ pub struct BorderColorsConfig {
 pub struct TerminalConfig {
     pub default_emulator: String,
     pub args: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DaemonConfig {
+    #[serde(default = "default_max_ancestry_depth")]
+    pub max_ancestry_depth: usize,
+    #[serde(default = "default_process_tree_audit_enabled")]
+    pub process_tree_audit_enabled: bool,
+}
+
+fn default_max_ancestry_depth() -> usize {
+    32
+}
+
+fn default_process_tree_audit_enabled() -> bool {
+    true
+}
+
+impl Default for DaemonConfig {
+    fn default() -> Self {
+        Self {
+            max_ancestry_depth: 32,
+            process_tree_audit_enabled: true,
+        }
+    }
 }
 
 impl Default for Config {
@@ -46,6 +73,7 @@ impl Default for Config {
                     "{command}".to_string(),
                 ],
             },
+            daemon: DaemonConfig::default(),
         }
     }
 }

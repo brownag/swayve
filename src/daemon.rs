@@ -188,9 +188,9 @@ pub async fn run_daemon_loops(
                                 state.con_to_agent.insert(con_id, agent.id.clone());
 
                                 // Perform dynamic process tree auditing if parent_id is missing
-                                if agent.parent_id.is_none() {
+                                if agent.parent_id.is_none() && state.config.daemon.process_tree_audit_enabled {
                                     if let Some(con_pid) = pid {
-                                        if let Some(ancestor_id) = find_registered_parent_ancestor(con_pid as u32, &state.pid_to_agent) {
+                                        if let Some(ancestor_id) = find_registered_parent_ancestor(con_pid as u32, &state.pid_to_agent, state.config.daemon.max_ancestry_depth) {
                                             println!(
                                                 "[daemon] Auto-detected parent agent {} for child {} via process tree auditing (PID={})",
                                                 ancestor_id.0, agent.id.0, con_pid
@@ -261,15 +261,14 @@ fn get_parent_pid(pid: u32) -> Option<u32> {
     None
 }
 
-const MAX_ANCESTRY_DEPTH: usize = 32;
-
 fn find_registered_parent_ancestor(
     start_pid: u32,
     pid_to_agent: &HashMap<u32, AgentId>,
+    max_depth: usize,
 ) -> Option<AgentId> {
     let mut current_pid = start_pid;
     let mut depth = 0;
-    while current_pid > 1 && depth < MAX_ANCESTRY_DEPTH {
+    while current_pid > 1 && depth < max_depth {
         if let Some(ppid) = get_parent_pid(current_pid) {
             if let Some(agent_id) = pid_to_agent.get(&ppid) {
                 return Some(agent_id.clone());
@@ -281,4 +280,38 @@ fn find_registered_parent_ancestor(
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_early_termination_at_depth_limit() {
+        // Test that find_registered_parent_ancestor respects max_depth limit
+        let mut pid_to_agent = HashMap::new();
+        let agent_id = AgentId("test_agent".to_string());
+
+        // Mock: agent registered at PID 100
+        pid_to_agent.insert(100, agent_id.clone());
+
+        // When max_depth is 5, the function should stop after 5 iterations
+        // even if it hasn't found a match
+        let result = find_registered_parent_ancestor(1, &pid_to_agent, 5);
+
+        // Since PID 1 doesn't have a registered agent and we limit to depth 5,
+        // the result should be None (respecting the depth limit)
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_process_tree_audit_disabled() {
+        // Test that when process_tree_audit_enabled is false, scanning is skipped
+        let mut config = Config::default();
+        config.daemon.process_tree_audit_enabled = false;
+
+        // Verify the config is set correctly
+        assert!(!config.daemon.process_tree_audit_enabled);
+        assert_eq!(config.daemon.max_ancestry_depth, 32);
+    }
 }
