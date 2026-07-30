@@ -3,6 +3,16 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AgentId(pub String);
 
+impl AgentId {
+    pub fn to_mark(&self) -> String {
+        format!("mark_{}", self.0.replace('-', "_"))
+    }
+
+    pub fn to_children_mark(&self) -> String {
+        format!("mark_children_{}", self.0.replace('-', "_"))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectId(pub String);
 

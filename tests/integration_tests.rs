@@ -10,6 +10,10 @@ use tokio::net::UnixStream;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
+async fn recv_command(rx: &mut mpsc::Receiver<SwayCommand>, timeout_ms: u64) -> Option<SwayCommand> {
+    timeout(Duration::from_millis(timeout_ms), rx.recv()).await.ok().flatten()
+}
+
 #[tokio::test]
 async fn test_daemon_registration_and_status() {
     let socket_path = "/tmp/swayve_test.sock";
@@ -168,7 +172,7 @@ async fn test_subagent_layout_routing() {
     // MarkWindow for parent, MoveToWorkspace for parent, MarkWindow for child1, MoveToWorkspace for child1
     // And layout routing: SplitHorizontal, MarkWindow (for children group), SetLayoutTabbed
     for _ in 0..7 {
-        if let Ok(Some(cmd)) = timeout(Duration::from_millis(500), sway_cmd_rx.recv()).await {
+        if let Some(cmd) = recv_command(&mut sway_cmd_rx, 500).await {
             match cmd {
                 SwayCommand::SplitHorizontal { parent_mark } => {
                     assert_eq!(parent_mark, "mark_parent_1");
@@ -218,7 +222,7 @@ async fn test_subagent_layout_routing() {
     // Expecting MoveToContainer command for child 2
     let mut move_to_container_received = false;
     for _ in 0..5 {
-        if let Ok(Some(cmd)) = timeout(Duration::from_millis(500), sway_cmd_rx.recv()).await {
+        if let Some(cmd) = recv_command(&mut sway_cmd_rx, 500).await {
             if let SwayCommand::MoveToContainer { con_id, target_mark } = cmd {
                 if con_id == 1002 && target_mark == "mark_children_parent_1" {
                     move_to_container_received = true;
@@ -314,7 +318,7 @@ async fn test_dynamic_process_tree_auditing() {
     let mut mark_children_received = false;
 
     for _ in 0..7 {
-        if let Ok(Some(cmd)) = timeout(Duration::from_millis(500), sway_cmd_rx.recv()).await {
+        if let Some(cmd) = recv_command(&mut sway_cmd_rx, 500).await {
             match cmd {
                 SwayCommand::SplitHorizontal { parent_mark } => {
                     if parent_mark == "mark_parent_audit" {

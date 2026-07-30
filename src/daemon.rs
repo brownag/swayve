@@ -28,7 +28,7 @@ impl DaemonState {
     }
 
     pub fn register_agent(&mut self, agent_id: AgentId, project_id: ProjectId, pid: u32, app_id: String, parent_id: Option<AgentId>) {
-        let mark = format!("mark_{}", agent_id.0.replace('-', "_"));
+        let mark = agent_id.to_mark();
         let agent = AgentWindow {
             id: agent_id.clone(),
             project: project_id,
@@ -255,13 +255,15 @@ fn get_parent_pid(pid: u32) -> Option<u32> {
     None
 }
 
+const MAX_ANCESTRY_DEPTH: usize = 32;
+
 fn find_registered_parent_ancestor(
     start_pid: u32,
     pid_to_agent: &HashMap<u32, AgentId>,
 ) -> Option<AgentId> {
     let mut current_pid = start_pid;
     let mut depth = 0;
-    while current_pid > 1 && depth < 32 {
+    while current_pid > 1 && depth < MAX_ANCESTRY_DEPTH {
         if let Some(ppid) = get_parent_pid(current_pid) {
             if let Some(agent_id) = pid_to_agent.get(&ppid) {
                 return Some(agent_id.clone());
