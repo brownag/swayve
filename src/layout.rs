@@ -9,6 +9,10 @@ pub enum LayoutAction {
         project_id: ProjectId,
         parent_id: Option<AgentId>,
     },
+    WindowDestroyed {
+        agent_id: AgentId,
+        parent_id: Option<AgentId>,
+    },
 }
 
 pub struct LayoutManager;
@@ -71,6 +75,33 @@ impl LayoutManager {
                                 target_mark: children_mark,
                             });
                         }
+                    }
+                }
+            }
+            LayoutAction::WindowDestroyed {
+                agent_id,
+                parent_id,
+            } => {
+                // The children mark lives on the first child's container, so it dies
+                // with that window. Any later sibling would then be moved to a mark
+                // that no longer exists, so hand the mark to a surviving sibling.
+                if let Some(p_id) = parent_id {
+                    let mut survivors: Vec<_> = state
+                        .agents()
+                        .values()
+                        .filter(|a| {
+                            a.parent_id.as_ref() == Some(&p_id)
+                                && a.id != agent_id
+                                && a.container_id.is_some()
+                        })
+                        .collect();
+                    survivors.sort_by_key(|a| a.container_id);
+
+                    if let Some(heir) = survivors.first() {
+                        commands.push(SwayCommand::MarkWindow {
+                            con_id: heir.container_id.expect("filtered on container_id"),
+                            mark: p_id.to_children_mark(),
+                        });
                     }
                 }
             }
@@ -265,5 +296,74 @@ mod tests {
         assert!(commands.iter().any(|c| matches!(c, SwayCommand::MoveToContainer { .. })));
         assert!(commands.iter().any(|c| matches!(c, SwayCommand::MarkWindow { con_id: 42, .. })));
         assert!(commands.iter().any(|c| matches!(c, SwayCommand::MoveToWorkspace { .. })));
+    }
+
+    /// A parent with `children` registered beneath it, each already given a window.
+    fn state_with_children(children: &[(&str, i64)]) -> (DaemonState, AgentId) {
+        let mut state = DaemonState::new(Config::default());
+        let parent_id = AgentId("parent".to_string());
+        let project = ProjectId("proj".to_string());
+        state.register_agent(parent_id.clone(), project.clone(), 1, "agent.parent".to_string(), None);
+
+        for (idx, (name, con_id)) in children.iter().enumerate() {
+            let child = AgentId(name.to_string());
+            state.register_agent(
+                child.clone(),
+                project.clone(),
+                10 + idx as u32,
+                format!("agent.{}", name),
+                Some(parent_id.clone()),
+            );
+            state.agents.get_mut(&child).unwrap().container_id = Some(*con_id);
+        }
+        (state, parent_id)
+    }
+
+    #[test]
+    fn test_window_destroyed_rehomes_children_mark() {
+        // The first child carries mark_children_parent; when it dies the mark must
+        // move to a survivor, or later siblings get moved to a mark that is gone.
+        let (state, parent_id) = state_with_children(&[("first", 100), ("second", 200)]);
+
+        let lm = LayoutManager::new();
+        let commands = lm.compute_commands(
+            LayoutAction::WindowDestroyed {
+                agent_id: AgentId("first".to_string()),
+                parent_id: Some(parent_id),
+            },
+            &state,
+        );
+
+        assert_eq!(commands.len(), 1);
+        assert!(matches!(
+            &commands[0],
+            SwayCommand::MarkWindow { con_id: 200, mark } if mark == "mark_children_parent"
+        ));
+    }
+
+    #[test]
+    fn test_window_destroyed_without_survivors_is_silent() {
+        // Last child of the parent: nothing left to carry the mark
+        let (state, parent_id) = state_with_children(&[("only", 100)]);
+
+        let lm = LayoutManager::new();
+        let commands = lm.compute_commands(
+            LayoutAction::WindowDestroyed {
+                agent_id: AgentId("only".to_string()),
+                parent_id: Some(parent_id),
+            },
+            &state,
+        );
+        assert!(commands.is_empty());
+
+        // A root agent has no children container to maintain either
+        let commands = lm.compute_commands(
+            LayoutAction::WindowDestroyed {
+                agent_id: AgentId("parent".to_string()),
+                parent_id: None,
+            },
+            &state,
+        );
+        assert!(commands.is_empty());
     }
 }
