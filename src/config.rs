@@ -40,6 +40,8 @@ pub struct DaemonConfig {
     pub max_ancestry_depth: usize,
     #[serde(default = "default_process_tree_audit_enabled")]
     pub process_tree_audit_enabled: bool,
+    #[serde(default = "default_auto_monitor")]
+    pub auto_monitor: bool,
 }
 
 fn default_max_ancestry_depth() -> usize {
@@ -50,11 +52,16 @@ fn default_process_tree_audit_enabled() -> bool {
     true
 }
 
+fn default_auto_monitor() -> bool {
+    false
+}
+
 impl Default for DaemonConfig {
     fn default() -> Self {
         Self {
             max_ancestry_depth: 32,
             process_tree_audit_enabled: true,
+            auto_monitor: false,
         }
     }
 }
@@ -137,6 +144,31 @@ mod tests {
             config.hooks.on_agent_status_change,
             Some("echo status".to_string())
         );
+    }
+
+    #[test]
+    fn test_daemon_auto_monitor_config_parsing() {
+        let config_default = Config::default();
+        assert!(!config_default.daemon.auto_monitor);
+
+        let toml_str = r##"
+            [border_colors]
+            idle = "#111111"
+            thinking = "#222222"
+            executing_tool = "#333333"
+            awaiting_human_input = "#444444"
+            completed = "#555555"
+            failed = "#666666"
+
+            [terminal]
+            default_emulator = "foot"
+            args = ["-e", "{command}"]
+
+            [daemon]
+            auto_monitor = true
+        "##;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert!(config.daemon.auto_monitor);
     }
 }
 

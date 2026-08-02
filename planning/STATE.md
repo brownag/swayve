@@ -57,7 +57,7 @@
 
 ### Wave 11: Hook System, Log Redirection, and Auto-Monitoring
 - [x] **Task 11.1**: Add hook config, log redirection, and hook execution
-- [ ] **Task 11.2**: Auto-spawn log-tail monitoring windows for subagents
+- [x] **Task 11.2**: Auto-spawn log-tail monitoring windows for subagents
 - [ ] **Task 11.3**: Integration tests for hooks and auto-monitoring
 
 ## Task Reports
@@ -75,3 +75,13 @@
 - **Verification**: `cargo check` passed; `cargo test` passed (22/22 tests passed: 15 unit tests, 7 integration tests).
 - **Deviations**: None
 - **Gotchas for dependent tasks**: Log redirection creates files in `/tmp/swayve/logs/<agent_id>.log` which Task 11.2 can tail directly.
+
+### 11.2
+- **Status**: Completed
+- **Files changed**:
+  - `src/config.rs` (L40-60, L150-168): Added `auto_monitor: bool` field to `DaemonConfig` and config parsing unit test.
+  - `src/daemon.rs` (L30-80, L265-310, L690-720): Added `spawn_monitor_terminal`, checked `auto_monitor` upon subagent registration & process audit, routed `agent.monitor.` windows to layout, and added unit tests.
+  - `src/layout.rs` (L35-55, L385-425): Updated `LayoutManager` to group `agent.monitor.` windows side-by-side with target subagent windows, and added unit test.
+- **Verification**: `cargo test` passed (25/25 tests passed: 18 unit tests, 7 integration tests).
+- **Deviations**: None
+- **Gotchas for dependent tasks**: Task 11.3 can test auto-monitoring by enabling `auto_monitor = true` in config and verifying monitor window layout.

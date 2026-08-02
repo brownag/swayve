@@ -35,8 +35,23 @@ impl LayoutManager {
                 project_id,
                 parent_id,
             } => {
-                // We still need to find the agent to get the mark
-                if let Some(agent) = state.agents().values().find(|a| a.app_id == app_id) {
+                if app_id.starts_with("agent.monitor.") {
+                    let target_id_str = &app_id["agent.monitor.".len()..];
+                    let target_id = AgentId(target_id_str.to_string());
+                    if let Some(target_agent) = state.agents().get(&target_id) {
+                        commands.push(SwayCommand::MoveToWorkspace {
+                            con_id,
+                            workspace: format!("proj:{}", project_id.0),
+                        });
+                        commands.push(SwayCommand::SplitHorizontal {
+                            parent_mark: target_agent.mark.clone(),
+                        });
+                        commands.push(SwayCommand::MoveToContainer {
+                            con_id,
+                            target_mark: target_agent.mark.clone(),
+                        });
+                    }
+                } else if let Some(agent) = state.agents().values().find(|a| a.app_id == app_id) {
                     // --- Basic Setup ---
                     commands.push(SwayCommand::MarkWindow {
                         con_id,
@@ -365,5 +380,46 @@ mod tests {
             &state,
         );
         assert!(commands.is_empty());
+    }
+
+    #[test]
+    fn test_window_created_monitor() {
+        let config = Config::default();
+        let mut state = DaemonState::new(config);
+
+        let sub_id = AgentId("sub-1".to_string());
+        let project_id = ProjectId("test-proj".to_string());
+
+        state.register_agent(
+            sub_id.clone(),
+            project_id.clone(),
+            100,
+            "agent.sub.1".to_string(),
+            None,
+        );
+
+        let lm = LayoutManager::new();
+        let action = LayoutAction::WindowCreated {
+            con_id: 99,
+            app_id: "agent.monitor.sub-1".to_string(),
+            project_id: project_id.clone(),
+            parent_id: None,
+        };
+
+        let commands = lm.compute_commands(action, &state);
+
+        assert_eq!(commands.len(), 3);
+        assert!(matches!(
+            &commands[0],
+            SwayCommand::MoveToWorkspace { con_id: 99, workspace } if workspace == "proj:test-proj"
+        ));
+        assert!(matches!(
+            &commands[1],
+            SwayCommand::SplitHorizontal { parent_mark } if parent_mark == &sub_id.to_mark()
+        ));
+        assert!(matches!(
+            &commands[2],
+            SwayCommand::MoveToContainer { con_id: 99, target_mark } if target_mark == &sub_id.to_mark()
+        ));
     }
 }

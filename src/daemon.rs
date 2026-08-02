@@ -28,6 +28,12 @@ impl DaemonState {
     }
 
     pub fn register_agent(&mut self, agent_id: AgentId, project_id: ProjectId, pid: u32, app_id: String, parent_id: Option<AgentId>) {
+        let is_subagent = if let Some(ref p_id) = parent_id {
+            self.agents.contains_key(p_id)
+        } else {
+            false
+        };
+
         let mark = agent_id.to_mark();
         let agent = AgentWindow {
             id: agent_id.clone(),
@@ -41,8 +47,46 @@ impl DaemonState {
         self.agents.insert(agent_id.clone(), agent);
         self.pid_to_agent.insert(pid, agent_id.clone());
 
+        if is_subagent && self.config.daemon.auto_monitor {
+            self.spawn_monitor_terminal(&agent_id);
+        }
+
         if let Some(ref hook) = self.config.hooks.on_agent_spawn {
             execute_lifecycle_hook(hook, &agent_id, "idle");
+        }
+    }
+
+    pub fn spawn_monitor_terminal(&self, agent_id: &AgentId) {
+        let monitor_app_id = format!("agent.monitor.{}", agent_id.0);
+        let monitor_title = format!("Monitor: {}", agent_id.0);
+        let monitor_cmd = format!("tail -f /tmp/swayve/logs/{}.log", agent_id.0);
+
+        let mut term_args = Vec::new();
+        for arg in &self.config.terminal.args {
+            if arg == "{command}" {
+                if let Some(split_cmds) = shlex::split(&monitor_cmd) {
+                    for sub_arg in split_cmds {
+                        term_args.push(sub_arg);
+                    }
+                } else {
+                    term_args.push(monitor_cmd.clone());
+                }
+            } else {
+                let replaced = arg
+                    .replace("{app_id}", &monitor_app_id)
+                    .replace("{title}", &monitor_title);
+                term_args.push(replaced);
+            }
+        }
+
+        if let Err(e) = std::process::Command::new(&self.config.terminal.default_emulator)
+            .args(&term_args)
+            .spawn()
+        {
+            eprintln!(
+                "[daemon] Failed to spawn monitor terminal for agent {}: {:?}",
+                agent_id.0, e
+            );
         }
     }
 
@@ -219,18 +263,47 @@ pub async fn run_daemon_loops(
             DaemonEvent::Sway(sway_event) => {
                 match sway_event {
                     SwayEvent::WindowCreated { con_id, app_id, pid } => {
-                        if app_id.starts_with("agent.") {
+                        if app_id.starts_with("agent.monitor.") {
+                            let target_agent_id_str = &app_id["agent.monitor.".len()..];
+                            let target_agent_id = AgentId(target_agent_id_str.to_string());
+                            if let Some(agent) = state.agents.get(&target_agent_id) {
+                                let project_id = agent.project.clone();
+                                let parent_id = agent.parent_id.clone();
+
+                                println!(
+                                    "[daemon] Sway monitor window created for agent {}: con_id={}",
+                                    target_agent_id.0, con_id
+                                );
+
+                                delegate_to_layout(
+                                    LayoutAction::WindowCreated {
+                                        con_id,
+                                        app_id: app_id.clone(),
+                                        project_id,
+                                        parent_id,
+                                    },
+                                    &layout_manager,
+                                    &state,
+                                    &sway_cmd_tx,
+                                )
+                                .await;
+                            }
+                        } else if app_id.starts_with("agent.") {
                             if let Some(agent_id) = register_agent_window(&app_id, con_id, &mut state) {
                                 if state.config.daemon.process_tree_audit_enabled {
                                     if let (Some(con_pid), Some(agent)) =
                                         (pid, state.agents.get_mut(&agent_id))
                                     {
-                                        apply_process_tree_auditing(
+                                        if apply_process_tree_auditing(
                                             agent,
                                             con_pid as u32,
                                             &state.pid_to_agent,
                                             state.config.daemon.max_ancestry_depth,
-                                        );
+                                        ) {
+                                            if state.config.daemon.auto_monitor {
+                                                state.spawn_monitor_terminal(&agent_id);
+                                            }
+                                        }
                                     }
                                 }
 
@@ -613,5 +686,37 @@ mod tests {
 
         assert!(contents.contains("spawn test_hook_agent idle"));
         assert!(contents.contains("status test_hook_agent thinking"));
+    }
+
+    #[test]
+    fn test_auto_monitor_subagent_registration() {
+        let mut config = Config::default();
+        config.daemon.auto_monitor = true;
+        config.terminal.default_emulator = "true".to_string();
+
+        let mut state = DaemonState::new(config);
+        let parent = AgentId("parent_agent".to_string());
+        let child = AgentId("child_agent".to_string());
+        let project = ProjectId("test_project".to_string());
+
+        // Register parent agent (auto_monitor should not trigger for root agent)
+        state.register_agent(
+            parent.clone(),
+            project.clone(),
+            100,
+            "agent.parent".to_string(),
+            None,
+        );
+
+        // Register child agent under active parent (auto_monitor should trigger)
+        state.register_agent(
+            child.clone(),
+            project.clone(),
+            101,
+            "agent.child".to_string(),
+            Some(parent.clone()),
+        );
+
+        assert!(state.agents.contains_key(&child));
     }
 }
