@@ -62,12 +62,10 @@ if command -v jq >/dev/null 2>&1; then
         jq --arg thinking "$HOOK_CMD_THINKING" \
            --arg tool "$HOOK_CMD_TOOL" \
            --arg idle "$HOOK_CMD_IDLE" \
-           '.hooks = ((.hooks // {}) * {
-              SessionStart: [{matcher: "", hooks: [{type: "command", command: $thinking}]}],
-              PreToolUse: [{matcher: "", hooks: [{type: "command", command: $tool}]}],
-              PostToolUse: [{matcher: "", hooks: [{type: "command", command: $thinking}]}],
-              Stop: [{matcher: "", hooks: [{type: "command", command: $idle}]}]
-           })' "$TARGET_FILE" > "$TARGET_FILE.tmp" && mv "$TARGET_FILE.tmp" "$TARGET_FILE"
+           '.hooks.SessionStart = [{matcher: "", hooks: [{type: "command", command: $thinking}]}] |
+            .hooks.PreToolUse = [{matcher: "", hooks: [{type: "command", command: $tool}]}] |
+            .hooks.PostToolUse = [{matcher: "", hooks: [{type: "command", command: $thinking}]}] |
+            .hooks.Stop = [{matcher: "", hooks: [{type: "command", command: $idle}]}]' "$TARGET_FILE" > "$TARGET_FILE.tmp" && mv "$TARGET_FILE.tmp" "$TARGET_FILE"
     else
         jq -n \
            --arg thinking "$HOOK_CMD_THINKING" \
