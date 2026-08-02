@@ -131,8 +131,9 @@ pub async fn run_cli() -> Result<()> {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis();
-            let agent_id = format!("{}-{}-{}", agent, wave, now % 100000);
-            let app_id = format!("agent.{}.{}", agent, wave);
+            let suffix = now % 100000;
+            let agent_id = format!("{}-{}-{}", agent, wave, suffix);
+            let app_id = format!("agent.{}.{}.{}", agent, wave, suffix);
             let title = format!("Agent [{}]: {}", agent, wave);
 
             println!("[spawn] Registering agent {} with daemon...", agent_id);
@@ -182,6 +183,9 @@ pub async fn run_cli() -> Result<()> {
 
             if !dry_run {
                 Command::new(&config.terminal.default_emulator)
+                    .env("SWAYVE_SOCKET", socket_path)
+                    .env("SWAYVE_AGENT_ID", &agent_id)
+                    .env("SWAYVE_PROJECT_ID", &project)
                     .args(&term_args)
                     .spawn()
                     .context("Failed to launch agent terminal emulator")?;

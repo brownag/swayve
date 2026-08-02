@@ -38,7 +38,7 @@
 
 ### Wave 6: Border Fixing, Unique IDs, and Environment Injection
 - [x] **Task 6.1**: Fix Sway border formatting command in `src/sway.rs`
-- [ ] **Task 6.2**: Plumb unique `app_id` and environment variables in `src/cli.rs`
+- [x] **Task 6.2**: Plumb unique `app_id` and environment variables in `src/cli.rs`
 - [ ] **Task 6.3**: Update and verify integration tests
 
 ## Task Reports
@@ -54,3 +54,10 @@
 - **Test commands**: `cargo check` (pass), `cargo test` (17 passed, 0 failed)
 - **Deviations**: none
 - **Gotchas for dependent tasks**: none
+
+## 6.2
+- **Status**: Completed
+- **Files changed**: `src/cli.rs` (lines 130–136, 183–190)
+- **Test commands**: `cargo check` (pass), `cargo test` (17 passed, 0 failed)
+- **Deviations**: none
+- **Gotchas for dependent tasks**: `app_id` format now includes the timestamp suffix (`agent.<agent>.<wave>.<suffix>`). Task 6.3 should verify this format if inspecting `app_id`.
