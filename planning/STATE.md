@@ -50,7 +50,7 @@
 
 ### Wave 9: Pi and Claude Integration Testing Scripts
 - [x] **Task 9.1**: Configure and verify Pi integration tests
-- [ ] **Task 9.2**: Build and verify Claude `test-hooks.sh` integration
+- [x] **Task 9.2**: Build and verify Claude `test-hooks.sh` integration
 
 ## Task Reports
 
@@ -67,4 +67,14 @@
 - **Verification**: `cd integrations/pi && npm test` (3 passed, 0 failed, 1 suite)
 - **Deviations**: None
 - **Gotchas for dependent tasks**: None
+
+#### Task 9.2 Report
+- **Status**: Completed
+- **Files Changed**:
+  - `integrations/claude/test-hooks.sh` (L1-L127: created executable test script)
+  - `integrations/claude/README.md` (L88-L101: added `## Testing` section)
+- **Verification**: `bash integrations/claude/test-hooks.sh` (5 assertions passed, 0 failed)
+- **Deviations**: None
+- **Gotchas for dependent tasks**: None
+
 

@@ -86,3 +86,16 @@ In addition to lifecycle hooks, you can launch Claude Code via `claude-wrapper.s
 # Run wrapper script directly
 ./integrations/claude/claude-wrapper.sh --dangerously-skip-permissions
 ```
+
+---
+
+## Testing (`test-hooks.sh`)
+
+You can verify the Swayve Claude integration hooks and wrapper status updates locally by running the integration test script:
+
+```bash
+./integrations/claude/test-hooks.sh
+```
+
+This script spins up an inline Python Unix domain socket server at `/tmp/swayve_claude_test.sock`, executes `claude-wrapper.sh`, simulates Claude Code lifecycle hooks (`SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`), asserts the JSON RPC status payloads received, and cleans up socket and server resources upon completion.
+
