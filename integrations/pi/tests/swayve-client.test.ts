@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
-import { SwayveClient } from './swayve-client.js';
+import { SwayveClient } from '../src/swayve-client.js';
 
 describe('SwayveClient', () => {
   const socketPath = path.join(process.cwd(), 'test.sock');

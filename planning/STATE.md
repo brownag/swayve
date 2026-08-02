@@ -48,22 +48,23 @@
 ### Wave 8: Claude Code Lifecycle Hook Integration
 - [x] **Task 8.1**: Create Claude hook templates and installer
 
+### Wave 9: Pi and Claude Integration Testing Scripts
+- [x] **Task 9.1**: Configure and verify Pi integration tests
+- [ ] **Task 9.2**: Build and verify Claude `test-hooks.sh` integration
+
 ## Task Reports
 
-### Waves 1-7 (Completed)
-- All tasks in Waves 1 to 7 are fully implemented, verified, and integrated.
+### Waves 1-8 (Completed)
+- All tasks in Waves 1 to 8 are fully implemented, verified, and integrated.
 
-### Wave 8 Reports
+### Wave 9 Reports
 
-#### 8.1
+#### Task 9.1 Report
 - **Status**: Completed
 - **Files Changed**:
-  - `integrations/claude/install-hooks.sh` (L1-118)
-  - `integrations/claude/README.md` (L1-77)
-- **Tests**:
-  - Syntax check: `bash -n integrations/claude/install-hooks.sh` (Pass)
-  - Execution test: Created/merged `/tmp/test_claude_settings.json` (Pass)
-  - Full suite: `cargo test` (19 passed, 0 failed)
+  - `integrations/pi/package.json` (L12: updated test script to `tsx --test tests/*.test.ts`)
+  - `integrations/pi/README.md` (L74-L82: added `## Testing` section)
+- **Verification**: `cd integrations/pi && npm test` (3 passed, 0 failed, 1 suite)
 - **Deviations**: None
-- **Gotchas**: None
+- **Gotchas for dependent tasks**: None
 

@@ -71,6 +71,15 @@ To build the library:
 npm run build
 ```
 
+## Testing
+
+To run the integration test suite:
+
+```bash
+npm test
+```
+
+
 ## API Reference
 
 ### `SwayveClient`

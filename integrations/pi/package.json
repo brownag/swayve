@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc",
     "dev:run-agent": "tsx src/run-agent.ts",
-    "test": "node --test"
+    "test": "tsx --test tests/*.test.ts"
   },
   "keywords": [
     "swayve",
