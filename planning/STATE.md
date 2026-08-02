@@ -41,31 +41,22 @@
 - [x] **Task 6.2**: Plumb unique `app_id` and environment variables in `src/cli.rs`
 - [x] **Task 6.3**: Update and verify integration tests
 
+### Wave 7: Agent Integrations and Shell Abstractions
+- [x] **Task 7.1**: Add `init-shell` CLI subcommand
+- [ ] **Task 7.2**: Build the `integrations/` directory structures
+
 ## Task Reports
 
-### Waves 1-5 (Completed)
-- All tasks in Waves 1 to 5 are fully implemented, verified, and integrated. All 17 tests pass successfully.
+### Waves 1-6 (Completed)
+- All tasks in Waves 1 to 6 are fully implemented, verified, and integrated. All 18 tests pass successfully.
 
-### Wave 6 Reports
+### Wave 7 Reports
 
-## 6.1
+#### Task 7.1: Add init-shell CLI Subcommand
 - **Status**: Completed
-- **Files changed**: `src/sway.rs` (lines 47–49)
-- **Test commands**: `cargo check` (pass), `cargo test` (17 passed, 0 failed)
-- **Deviations**: none
-- **Gotchas for dependent tasks**: none
-
-## 6.2
-- **Status**: Completed
-- **Files changed**: `src/cli.rs` (lines 130–136, 183–190)
-- **Test commands**: `cargo check` (pass), `cargo test` (17 passed, 0 failed)
-- **Deviations**: none
-- **Gotchas for dependent tasks**: `app_id` format now includes the timestamp suffix (`agent.<agent>.<wave>.<suffix>`). Task 6.3 should verify this format if inspecting `app_id`.
-
-## 6.3
-- **Status**: Completed
-- **Files changed**: `tests/integration_tests.rs` (lines 48–91, 636–739)
-- **Test commands**: `cargo test` (18 passed [11 unit, 7 integration], 0 failed)
-- **Deviations**: none
-- **Gotchas for dependent tasks**: none
+- **Files changed**: `src/cli.rs` (L27-L28, L77-L128, L432-L442)
+- **Tests**: `cargo test` (19 passed, 0 failed: 12 unit tests, 7 integration tests)
+- **Manual Verification**: `cargo run -- init-shell` successfully outputs POSIX-compliant prompt hook snippet for bash and zsh
+- **Deviations**: None
+- **Gotchas for dependent tasks**: Shell scripts requiring prompt integration can source output of `swayve init-shell` directly in subshell / agent terminals.
 

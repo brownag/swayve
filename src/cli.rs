@@ -24,6 +24,8 @@ pub struct Cli {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Commands {
+    /// Output shell prompt hook configuration for bash/zsh
+    InitShell,
     /// Start the swayve background daemon
     Daemon,
     /// Spawn an agent terminal inside Sway
@@ -72,6 +74,58 @@ pub async fn run_cli() -> Result<()> {
     let dry_run = args.dry_run || env::var("SWAYVE_DRY_RUN").is_ok();
 
     match args.command {
+        Commands::InitShell => {
+            let script = r#"# Swayve shell hook initialization for bash and zsh
+_swayve_send_status() {
+    [ -z "$SWAYVE_SOCKET" ] || [ -z "$SWAYVE_AGENT_ID" ] || [ ! -S "$SWAYVE_SOCKET" ] && return 0
+    local status="$1"
+    local msg="{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"$SWAYVE_AGENT_ID\",\"status\":\"$status\"}}"
+    if command -v nc >/dev/null 2>&1; then
+        printf '%s\n' "$msg" | nc -U "$SWAYVE_SOCKET" 2>/dev/null || true
+    elif command -v socat >/dev/null 2>&1; then
+        printf '%s\n' "$msg" | socat - UNIX-CONNECT:"$SWAYVE_SOCKET" 2>/dev/null || true
+    fi
+}
+
+_swayve_precmd() {
+    _swayve_send_status "idle"
+}
+
+_swayve_preexec() {
+    [ -n "$COMP_LINE" ] && return 0
+    _swayve_send_status "thinking"
+}
+
+if [ -n "$ZSH_VERSION" ]; then
+    autoload -Uz add-zsh-hook 2>/dev/null && {
+        add-zsh-hook precmd _swayve_precmd
+        add-zsh-hook preexec _swayve_preexec
+    } || {
+        precmd_functions+=(_swayve_precmd)
+        preexec_functions+=(_swayve_preexec)
+    }
+elif [ -n "$BASH_VERSION" ]; then
+    _swayve_in_precmd=0
+    _swayve_bash_precmd() {
+        _swayve_in_precmd=1
+        _swayve_precmd
+    }
+    _swayve_bash_preexec() {
+        if [ "$_swayve_in_precmd" -eq 1 ]; then
+            _swayve_in_precmd=0
+            return 0
+        fi
+        _swayve_preexec
+    }
+    if [[ ! "$PROMPT_COMMAND" =~ _swayve_bash_precmd ]]; then
+        PROMPT_COMMAND="_swayve_bash_precmd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+    fi
+    trap '_swayve_bash_preexec' DEBUG
+fi
+"#;
+            println!("{}", script);
+        }
+
         Commands::Daemon => {
             println!("[daemon] Starting swayve daemon...");
             let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(128);
@@ -374,3 +428,16 @@ async fn focus_cycle_standalone() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn test_init_shell_cmd_parsing() {
+        let cli = Cli::try_parse_from(["swayve", "init-shell"]).unwrap();
+        assert!(matches!(cli.command, Commands::InitShell));
+    }
+}
+
