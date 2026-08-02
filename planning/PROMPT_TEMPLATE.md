@@ -1,11 +1,11 @@
-# Wave 8 Worker Prompt Template
+# Wave 12 Worker Prompt Template
 
 You are a specialized coding agent executing a task from a pre-approved `EXECUTION_PLAN.md` for the **swayve** project.
 
 ## Context
 
-- **Wave**: Wave 8 — Claude Code Lifecycle Hook Integration
-- **Goal**: Create template configurations and installation script for Claude Code hooks under `integrations/claude/`.
+- **Wave**: Wave 12 — Interactive HUD Dashboard
+- **Goal**: Implement status stream subscription protocol and real-time ANSI terminal TUI dashboard for monitoring subagents.
 - **Project**: Rust daemon + CLI for Sway window manager coordination with AI agents
 - **Test Command**: `cargo test`
 
