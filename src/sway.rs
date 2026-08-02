@@ -44,8 +44,8 @@ impl SwayManager {
                 SwayCommand::MarkWindow { con_id, mark } => {
                     format!("[con_id=\"{}\"] mark --add \"{}\"", con_id, mark)
                 }
-                SwayCommand::SetBorderColor { mark, hex_color } => {
-                    format!("[con_mark=\"{}\"] border pixel 3, client.focused {}", mark, hex_color)
+                SwayCommand::SetBorderColor { mark, .. } => {
+                    format!("[con_mark=\"{}\"] border pixel 3", mark)
                 }
                 SwayCommand::FocusWindow { mark } => {
                     format!("[con_mark=\"{}\"] focus", mark)

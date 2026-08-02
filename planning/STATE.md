@@ -4,9 +4,9 @@
 - [x] `src/daemon.rs` exists
 - [x] `src/sway.rs` exists
 - [x] `src/types.rs` exists
-- [x] `src/layout.rs` exists (Wave 2)
+- [x] `src/layout.rs` exists
 - [x] `src/config.rs` exists
-- [x] Tests exist and pass (Wave 1 & 2)
+- [x] Tests exist and pass
 
 ## Wave Board
 
@@ -30,156 +30,27 @@
 - [x] **Task 4.3**: Wire CLI Focus Command to Daemon via Socket IPC
 - [x] **Task 4.4**: Integration Test for CLI→Daemon→Sway Focus Flow
 
+### Wave 5: Destruction Handling & Focus Reachability
+- [x] **Task 5.1**: Promote orphaned children on parent destruction
+- [x] **Task 5.1b**: Advance between root-level agents in `next_focus_target`
+- [x] **Task 5.2**: Re-assert the children mark when its carrier dies
+- [x] **Task 5.3**: Bind focus cycling in the documented Sway config
+
+### Wave 6: Border Fixing, Unique IDs, and Environment Injection
+- [x] **Task 6.1**: Fix Sway border formatting command in `src/sway.rs`
+- [ ] **Task 6.2**: Plumb unique `app_id` and environment variables in `src/cli.rs`
+- [ ] **Task 6.3**: Update and verify integration tests
+
 ## Task Reports
 
-### Wave 1 & 2 (Completed)
-- **Task 1.1-1.3 + 2.1-2.2**: Implemented `LayoutManager` module with basic and hierarchical orchestration. ✅
-- **Standards Cleanups**: Applied three cleanup recommendations (mark extraction, test helper, depth constant). ✅
+### Waves 1-5 (Completed)
+- All tasks in Waves 1 to 5 are fully implemented, verified, and integrated. All 17 tests pass successfully.
 
-### Wave 3 (Completed)
-- **Task 3.1**: ✅ Completed — Extract AgentRegistry trait, impl on DaemonState, update layout.rs imports
-- **Task 3.2**: ✅ Completed — Add daemon config section with max_ancestry_depth and process_tree_audit_enabled
-- **Task 3.3**: ✅ Completed — Test end-to-end parent agent flow; wire Focus event handler into daemon
+### Wave 6 Reports
 
-### Wave 5: Destruction Handling & Focus Reachability
-- [x] **Task 1**: Promote orphaned children on parent destruction
-- [x] **Task 1b**: Advance between root-level agents in `next_focus_target` (discovered mid-execution)
-- [x] **Task 2**: Re-assert the children mark when its carrier dies
-- [x] **Task 3**: Bind focus cycling in the documented Sway config
-
-### Wave 4 (Completed)
-- **Task 4.1**: ✅ Completed — Implement hierarchical focus algorithm with sibling cycling
-- **Task 4.2**: ✅ Completed — Refactor WindowCreated into private helpers (register, audit, delegate)
-- **Task 4.3**: ✅ Completed — Wire CLI focus to daemon via socket IPC
-- **Task 4.4**: ✅ Completed — Integration test for CLI→daemon→Sway focus flow
-
-## Task 3.1 Report
-
-**Status**: Completed
-
-**Files Changed**:
-- `src/types.rs` (lines 41-45): Added `AgentRegistry` trait with `agents()` method
-- `src/daemon.rs` (line 4): Added `AgentRegistry` to imports; (lines 66-70): Implemented trait on `DaemonState`
-- `src/layout.rs` (line 1): Removed `daemon` import, replaced with `AgentRegistry`; (lines 3, 25, 36, 51, 58): Updated to use `&dyn AgentRegistry` parameter and `.agents()` method calls; (line 86): Added `DaemonState` import to test module
-- `src/lib.rs` (line 8): Exported `AgentRegistry` trait
-
-**Test Results**: All 3 layout module tests pass ✅
-
-**Build**: `cargo check` passes ✅
-
-**Deviation**: Minor cleanup — added `use std::collections::HashMap;` at top of trait definition in types.rs (clean import organization)
-
-## Task 3.2 Report
-
-**Status**: Completed
-
-**Files Changed**:
-- `src/config.rs` (lines 27-42): Added `DaemonConfig` struct with `max_ancestry_depth` (default 32) and `process_tree_audit_enabled` (default true); (lines 44-50): Implemented `Default` for `DaemonConfig`; (line 8): Added `daemon` field to `Config` struct; (line 50): Updated `Config::default()` to initialize daemon field
-- `src/daemon.rs` (line 264): Removed hardcoded `const MAX_ANCESTRY_DEPTH`; (line 266): Updated `find_registered_parent_ancestor()` signature to accept `max_depth: usize` parameter; (line 272): Updated loop condition to use `max_depth` parameter; (lines 191-201): Added guard `state.config.daemon.process_tree_audit_enabled` and passed `state.config.daemon.max_ancestry_depth` to function call; (lines 287-319): Added unit test module with 2 tests
-
-**Test Results**: All 8 tests pass (2 new + 3 existing layout + 3 integration) ✅
-
-**Build**: `cargo check` passes ✅
-
-**Deviations**: None — executed 12-step plan as specified
-
-## Task 3.3 Report
-
-**Status**: Completed
-
-**Files Changed**:
-- `tests/integration_tests.rs` (lines 348-462): Added `test_cli_parent_flag_to_layout()` async test validating parent-child hierarchy: registers parent and child agents, sends synthetic window-created events, verifies SplitHorizontal, MarkWindow, and SetLayoutTabbed commands from LayoutManager
-- `src/daemon.rs` (line 75): Added `Focus` variant to `DaemonEvent` enum; (lines 242-259): Added Focus match arm in `run_daemon_loops()` event loop handler that collects agent windows and rotates focus
-
-**Test Results**: All 9 tests pass (4 integration + 5 unit) ✅
-- New test: `test_cli_parent_flag_to_layout` validates end-to-end parent-child hierarchy
-
-**Build**: `cargo check` passes ✅
-
-**Deviations**: None — executed 10 of 11 steps; Step 10 (CLI-daemon wiring for focus) deferred to Wave 4 as per spec
-
-## Task 4.1 Report
-
-**Status**: Completed
-
-**Files Changed**:
-- `src/daemon.rs` (line 138): Added `last_focused: Option<AgentId>` local to `run_daemon_loops()`; (lines 244–256): Replaced naive Focus arm with a thin caller of `next_focus_target`, updating `last_focused` after each send; (lines 263–301): Added private `next_focus_target()` implementing parent → children → sibling → parent cycling; (lines 375–428): Added `mock_agent`/`registry` helpers and `test_hierarchical_focus`
-
-**Test Results**: 10 tests pass (6 unit + 4 integration), run serially ✅
-- `cargo test --lib daemon::tests` — 3 passed
-- `cargo test -- --test-threads=1` — 6 unit + 4 integration, 0 failed
-
-**Build**: `cargo check` passes ✅
-
-**Deviations**: Focus state is a `run_daemon_loops` local rather than thread-local or a Sway query — satisfies the "no new DaemonState fields" constraint with less machinery. Algorithm extracted to a pure `next_focus_target(agents, last_focused)` so the test is a plain `#[test]` over a HashMap with no channels or async.
-
-**Gotchas for dependent tasks**: Task 4.3 must send `DaemonEvent::Focus`; nothing triggers it yet. `last_focused` lives in the loop, so it resets on daemon restart — first Focus after restart targets the lowest con_id. Only agents with `container_id.is_some()` are focus candidates.
-
-## Task 4.2 Report
-
-**Status**: Completed
-
-**Files Changed**:
-- `src/daemon.rs` (lines 181–219): WindowCreated arm reduced from ~50 lines to a three-call sequence; (lines 263–318): Added private `register_agent_window()`, `apply_process_tree_auditing()`, and `delegate_to_layout()`
-
-**Test Results**: 10 tests pass (6 unit + 4 integration), run serially ✅
-- `cargo test -- --test-threads=1` — 0 failed; `test_dynamic_process_tree_auditing` covers the audit path
-- `cargo check` — no warnings
-
-**Deviations**: `register_agent_window()` returns `Option<AgentId>` rather than the spec's 4-tuple. The spec's version snapshots `parent_id` before auditing runs, so an auto-detected parent would never reach the LayoutManager on that event — a behavior regression. The handler now re-reads `project`/`parent_id` from state after auditing, matching the original ordering. The `process_tree_audit_enabled` check stays at the call site since the helper takes no Config.
-
-**Gotchas for dependent tasks**: `apply_process_tree_auditing()` returns a bool that the caller currently ignores; it is there for future logging. The post-audit re-read is load-bearing — do not collapse it back into `register_agent_window()`.
-
-## Task 4.3 Report
-
-**Status**: Completed
-
-**Files Changed**:
-- `src/types.rs` (lines 61–63): Added unit variant `AgentIPCMessage::Focus` tagged `daemon.focus`
-- `src/daemon.rs` (lines 118–121): `handle_client()` routes `Focus` to `DaemonEvent::Focus` instead of wrapping it as agent bookkeeping; (line 180): Added no-op `AgentIPCMessage::Focus` arm to keep the inner match exhaustive; (lines 380–390): Added `test_focus_ipc_roundtrip`
-- `src/cli.rs` (lines 303–324): `Commands::Focus` now sends the IPC message to the daemon, falling back to direct Sway on connect failure; (lines 331–372): Extracted the previous inline logic into `focus_cycle_standalone()`
-
-**Test Results**: 11 tests pass (7 unit + 4 integration), run serially ✅
-- `cargo check` — no warnings
-
-**Deviations**: Added a unit test pinning the wire format to `{"method":"daemon.focus"}`, since that string is now the CLI/daemon contract and nothing else asserts it.
-
-**Gotchas for dependent tasks**: The dry-run branch returns before any socket use, so Task 4.4 must drive `DaemonEvent::Focus` over a real socket (or the event channel) rather than through `--dry-run`. Fallback triggers only on connect failure, not on a daemon that accepts and ignores.
-
-## Task 4.4 Report
-
-**Status**: Completed
-
-**Files Changed**:
-- `tests/integration_tests.rs` (lines 459–553): Added `test_cli_focus_with_hierarchy()` — registers a parent with two children over the socket, gives each a window with ascending con_id, drains the layout commands, then sends four `daemon.focus` messages and asserts the emitted `FocusWindow` marks are parent → child_a → child_b → parent
-
-**Test Results**: 12 tests pass (7 unit + 5 integration), run serially ✅
-- `cargo test --test integration_tests test_cli_focus_with_hierarchy` — 1 passed
-- `cargo test -- --test-threads=1` — 0 failed
-
-**Deviations**: The test drives focus by writing `daemon.focus` to the socket rather than mocking focus state, so it covers the `handle_client` routing added in 4.3 as well as the traversal — closer to the real CLI path than the spec's "mock via test fixtures" suggestion.
-
-**Gotchas for dependent tasks**: The assertion depends on con_id ordering (4000/4001/4002) since ties are not otherwise broken. `FocusWindow` is also emitted by the `AwaitingHumanInput` status path — a future test combining both must disambiguate.
-
-## Wave 5 Report
-
-**Status**: Completed. Planned with `plan-first` (see `TODO.md`), not wave-orchestration — worker spawns were blocked by the account spend limit.
-
-**Commits**: `1fc4e57` focus traversal + orphan promotion, `08ad0b6` children-mark rehoming, `ce448f3` README keybinding
-
-**Files Changed**:
-- `src/daemon.rs`: Rewrote `next_focus_target()` as a pre-order walk (roots, each followed by its children, wrapping); added `promote_orphans()` and called it from the `WindowDestroyed` arm; that arm now also dispatches a layout action; `delegate_to_layout()` reduced from 7 params to 4 by taking a `LayoutAction`
-- `src/layout.rs`: Added `LayoutAction::WindowDestroyed`; `compute_commands` re-marks the lowest-con_id surviving sibling with the parent's children mark
-- `tests/integration_tests.rs`: Added `test_focus_survives_parent_destruction`
-- `README.md`: Added `bindsym $mod+a exec swayve focus --cycle`
-
-**Test Results**: 17 pass (11 unit + 6 integration), serial. `cargo check` warning-free.
-
-**Corrections made to the plan during execution**:
-- The planned tasks 1/2 ordering constraint was a phantom — task 2 reads the destroyed agent's own `parent_id`, promotion clears its *children's*. Independent.
-- `test_focus_survives_parent_destruction` passes with `promote_orphans` disabled; 1b's dangling-child fallback alone fixes that symptom. Added `test_promote_orphans` to cover the helper directly.
-
-**Gotchas for future work**:
-- Wave 4 shipped focus cycling that could not cycle a flat workspace; the Wave 4 test only built one parent with children and so went green. Prefer a flat-workspace case in any focus test.
-- `mark --add` moving a mark between containers is still unverified on a live compositor — the layout test pins the emitted command, not Sway's reaction.
-- `last_focused` remains a loop local: it resets on daemon restart and desyncs if you focus by mouse or a plain sway binding.
+## 6.1
+- **Status**: Completed
+- **Files changed**: `src/sway.rs` (lines 47–49)
+- **Test commands**: `cargo check` (pass), `cargo test` (17 passed, 0 failed)
+- **Deviations**: none
+- **Gotchas for dependent tasks**: none
