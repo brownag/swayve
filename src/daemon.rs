@@ -15,6 +15,7 @@ pub struct DaemonState {
     pub agents: HashMap<AgentId, AgentWindow>,
     pub pid_to_agent: HashMap<u32, AgentId>,
     pub con_to_agent: HashMap<i64, AgentId>,
+    pub subscribers: Vec<mpsc::Sender<String>>,
 }
 
 impl DaemonState {
@@ -24,7 +25,36 @@ impl DaemonState {
             agents: HashMap::new(),
             pid_to_agent: HashMap::new(),
             con_to_agent: HashMap::new(),
+            subscribers: Vec::new(),
         }
+    }
+
+    pub fn broadcast_status(&mut self) {
+        if self.subscribers.is_empty() {
+            return;
+        }
+        let agents_list: Vec<&AgentWindow> = self.agents.values().collect();
+        let json = match serde_json::to_string(&agents_list) {
+            Ok(j) => j,
+            Err(e) => {
+                eprintln!(
+                    "[daemon] Failed to serialize agents for subscription broadcast: {:?}",
+                    e
+                );
+                return;
+            }
+        };
+
+        self.subscribers.retain(|tx| {
+            match tx.try_send(json.clone()) {
+                Ok(()) => true,
+                Err(mpsc::error::TrySendError::Full(_)) => {
+                    eprintln!("[daemon] Subscriber channel full; retaining subscriber");
+                    true
+                }
+                Err(mpsc::error::TrySendError::Closed(_)) => false,
+            }
+        });
     }
 
     pub fn register_agent(&mut self, agent_id: AgentId, project_id: ProjectId, pid: u32, app_id: String, parent_id: Option<AgentId>) {
@@ -151,6 +181,7 @@ pub enum DaemonEvent {
     AgentIPC(AgentIPCMessage),
     Sway(SwayEvent),
     Focus,
+    Subscribe(mpsc::Sender<String>),
 }
 
 pub async fn start_daemon_ipc(
@@ -183,8 +214,10 @@ pub async fn start_daemon_ipc(
 }
 
 async fn handle_client(stream: UnixStream, event_tx: mpsc::Sender<DaemonEvent>) -> Result<()> {
-    let reader = BufReader::new(stream);
+    let (reader, writer) = stream.into_split();
+    let reader = BufReader::new(reader);
     let mut lines = reader.lines();
+    let mut writer_opt = Some(writer);
 
     while let Some(line) = lines.next_line().await? {
         if line.trim().is_empty() {
@@ -195,6 +228,24 @@ async fn handle_client(stream: UnixStream, event_tx: mpsc::Sender<DaemonEvent>) 
             // Focus is a daemon-level request, not agent bookkeeping.
             Ok(AgentIPCMessage::Focus) => {
                 let _ = event_tx.send(DaemonEvent::Focus).await;
+            }
+            Ok(AgentIPCMessage::SubscribeStatus) => {
+                let (sub_tx, mut sub_rx) = mpsc::channel::<String>(32);
+                if event_tx.send(DaemonEvent::Subscribe(sub_tx)).await.is_err() {
+                    return Ok(());
+                }
+                if let Some(mut writer) = writer_opt.take() {
+                    tokio::spawn(async move {
+                        use tokio::io::AsyncWriteExt;
+                        while let Some(msg) = sub_rx.recv().await {
+                            if writer.write_all(msg.as_bytes()).await.is_err()
+                                || writer.write_all(b"\n").await.is_err()
+                            {
+                                break;
+                            }
+                        }
+                    });
+                }
             }
             Ok(msg) => {
                 let _ = event_tx.send(DaemonEvent::AgentIPC(msg)).await;
@@ -232,6 +283,7 @@ pub async fn run_daemon_loops(
                             params.app_id.clone(),
                             params.parent_agent_id.clone(),
                         );
+                        state.broadcast_status();
                     }
                     AgentIPCMessage::UpdateStatus { params } => {
                         println!(
@@ -255,9 +307,12 @@ pub async fn run_daemon_loops(
                                     .await;
                             }
                         }
+                        state.broadcast_status();
                     }
                     // Routed to DaemonEvent::Focus by handle_client; never arrives here.
                     AgentIPCMessage::Focus => {}
+                    // Routed to DaemonEvent::Subscribe by handle_client; never arrives here.
+                    AgentIPCMessage::SubscribeStatus => {}
                 }
             }
             DaemonEvent::Sway(sway_event) => {
@@ -355,6 +410,8 @@ pub async fn run_daemon_loops(
                                 &sway_cmd_tx,
                             )
                             .await;
+
+                            state.broadcast_status();
                         }
                     }
                 }
@@ -371,6 +428,10 @@ pub async fn run_daemon_loops(
                         last_focused = Some(target);
                     }
                 }
+            }
+            DaemonEvent::Subscribe(sub_tx) => {
+                state.subscribers.push(sub_tx);
+                state.broadcast_status();
             }
         }
     }
@@ -718,5 +779,45 @@ mod tests {
         );
 
         assert!(state.agents.contains_key(&child));
+    }
+
+    #[test]
+    fn test_subscribe_status_ipc_serde() {
+        let wire = serde_json::to_string(&AgentIPCMessage::SubscribeStatus).unwrap();
+        assert_eq!(wire, r#"{"method":"daemon.subscribe"}"#);
+        assert!(matches!(
+            serde_json::from_str::<AgentIPCMessage>(&wire).unwrap(),
+            AgentIPCMessage::SubscribeStatus
+        ));
+    }
+
+    #[test]
+    fn test_daemon_broadcast_status() {
+        let mut state = DaemonState::new(Config::default());
+        let (tx1, mut rx1) = mpsc::channel(10);
+        let (tx2, mut rx2) = mpsc::channel(10);
+
+        state.subscribers.push(tx1);
+        state.subscribers.push(tx2);
+
+        let agent_id = AgentId("test_sub_agent".to_string());
+        state.register_agent(
+            agent_id.clone(),
+            ProjectId("proj".to_string()),
+            123,
+            "agent.sub".to_string(),
+            None,
+        );
+        state.broadcast_status();
+
+        let msg1 = rx1.try_recv().unwrap();
+        let msg2 = rx2.try_recv().unwrap();
+        assert_eq!(msg1, msg2);
+        assert!(msg1.contains("test_sub_agent"));
+
+        // Drop rx1 and verify closed subscriber gets pruned on next broadcast
+        drop(rx1);
+        state.broadcast_status();
+        assert_eq!(state.subscribers.len(), 1);
     }
 }

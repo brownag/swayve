@@ -60,37 +60,21 @@
 - [x] **Task 11.2**: Auto-spawn log-tail monitoring windows for subagents
 - [x] **Task 11.3**: Integration tests for hooks and auto-monitoring
 
+### Wave 12: Interactive HUD Dashboard
+- [x] **Task 12.1**: Add daemon status subscription broadcast
+- [ ] **Task 12.2**: Build interactive HUD dashboard CLI client
+- [ ] **Task 12.3**: Verify dashboard CLI stream assertions
+
 ## Task Reports
 
-### Waves 1-10 (Completed)
-- All tasks in Waves 1 to 10 are fully completed, verified, and integrated.
+### Waves 1-11 (Completed)
+- All tasks in Waves 1 to 11 are fully completed, verified, and integrated. All 26 tests pass successfully.
 
-### Wave 11 Reports
-### 11.1
+### Wave 12 Reports
+
+#### Task 12.1: Add Daemon Status Subscription Broadcast
 - **Status**: Completed
-- **Files changed**:
-  - `src/config.rs` (L11-19, L76, L93-139): Added `HooksConfig` struct, `hooks` config field, defaults, and unit tests.
-  - `src/cli.rs` (L239-247): Created `/tmp/swayve/logs` directory and redirected spawned terminal `stdout`/`stderr` to `/tmp/swayve/logs/{agent_id}.log`.
-  - `src/daemon.rs` (L42-45, L48-52, L64-88, L585-616): Added `execute_lifecycle_hook`, status conversion helper, hook triggers in `register_agent`/`update_status`, and unit tests.
-- **Verification**: `cargo check` passed; `cargo test` passed (22/22 tests passed: 15 unit tests, 7 integration tests).
+- **Files Changed**: `src/types.rs` (L63-L65), `src/daemon.rs` (L18, L26, L30-L58, L184, L217, L235-L252, L283, L305, L310, L410, L426-L429, L781-L818)
+- **Tests**: `cargo check` (0 errors/warnings), `cargo test` (28 passed: 20 unit + 8 integration)
 - **Deviations**: None
-- **Gotchas for dependent tasks**: Log redirection creates files in `/tmp/swayve/logs/<agent_id>.log` which Task 11.2 can tail directly.
-
-### 11.2
-- **Status**: Completed
-- **Files changed**:
-  - `src/config.rs` (L40-60, L150-168): Added `auto_monitor: bool` field to `DaemonConfig` and config parsing unit test.
-  - `src/daemon.rs` (L30-80, L265-310, L690-720): Added `spawn_monitor_terminal`, checked `auto_monitor` upon subagent registration & process audit, routed `agent.monitor.` windows to layout, and added unit tests.
-  - `src/layout.rs` (L35-55, L385-425): Updated `LayoutManager` to group `agent.monitor.` windows side-by-side with target subagent windows, and added unit test.
-- **Verification**: `cargo test` passed (25/25 tests passed: 18 unit tests, 7 integration tests).
-- **Deviations**: None
-- **Gotchas for dependent tasks**: Task 11.3 can test auto-monitoring by enabling `auto_monitor = true` in config and verifying monitor window layout.
-
-### 11.3
-- **Status**: Completed
-- **Files changed**:
-  - `tests/integration_tests.rs` (L743-870): Added `test_hooks_and_monitoring` integration test.
-- **Verification**: Executed `cargo test` (26/26 tests passed: 18 unit tests, 8 integration tests).
-- **Deviations**: None
-- **Gotchas for dependent tasks**: None
-
+- **Gotchas for Dependent Tasks**: Task 12.2 can send `{"method":"daemon.subscribe"}` over Unix socket to receive live JSON line stream of `Vec<AgentWindow>`.

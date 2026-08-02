@@ -60,6 +60,9 @@ pub enum AgentIPCMessage {
     /// Ask the daemon to advance focus to the next window in the agent hierarchy.
     #[serde(rename = "daemon.focus")]
     Focus,
+    /// Subscribe to daemon agent status broadcast updates.
+    #[serde(rename = "daemon.subscribe")]
+    SubscribeStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
