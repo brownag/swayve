@@ -58,7 +58,7 @@
 ### Wave 11: Hook System, Log Redirection, and Auto-Monitoring
 - [x] **Task 11.1**: Add hook config, log redirection, and hook execution
 - [x] **Task 11.2**: Auto-spawn log-tail monitoring windows for subagents
-- [ ] **Task 11.3**: Integration tests for hooks and auto-monitoring
+- [x] **Task 11.3**: Integration tests for hooks and auto-monitoring
 
 ## Task Reports
 
@@ -85,3 +85,12 @@
 - **Verification**: `cargo test` passed (25/25 tests passed: 18 unit tests, 7 integration tests).
 - **Deviations**: None
 - **Gotchas for dependent tasks**: Task 11.3 can test auto-monitoring by enabling `auto_monitor = true` in config and verifying monitor window layout.
+
+### 11.3
+- **Status**: Completed
+- **Files changed**:
+  - `tests/integration_tests.rs` (L743-870): Added `test_hooks_and_monitoring` integration test.
+- **Verification**: Executed `cargo test` (26/26 tests passed: 18 unit tests, 8 integration tests).
+- **Deviations**: None
+- **Gotchas for dependent tasks**: None
+

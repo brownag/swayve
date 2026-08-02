@@ -740,3 +740,131 @@ async fn test_multiple_agents_same_wave_unique_app_id() {
     }
 }
 
+#[tokio::test]
+async fn test_hooks_and_monitoring() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let socket_path = "/tmp/swayve_test_hooks_mon.sock";
+    let socket_p = Path::new(socket_path);
+    if socket_p.exists() {
+        let _ = fs::remove_file(socket_p).await;
+    }
+
+    let spawn_flag_path = "/tmp/swayve_test_spawn_flag.txt";
+    let spawn_p = Path::new(spawn_flag_path);
+    if spawn_p.exists() {
+        let _ = fs::remove_file(spawn_p).await;
+    }
+
+    let monitor_flag_path = "/tmp/swayve_test_monitor_flag.txt";
+    let monitor_p = Path::new(monitor_flag_path);
+    if monitor_p.exists() {
+        let _ = fs::remove_file(monitor_p).await;
+    }
+
+    let mock_term_path = "/tmp/swayve_test_mock_term.sh";
+    let mock_term_p = Path::new(mock_term_path);
+    if mock_term_p.exists() {
+        let _ = fs::remove_file(mock_term_p).await;
+    }
+
+    // Create mock terminal emulator script that writes its arguments to monitor_flag_path
+    let mock_term_content = format!("#!/bin/sh\necho \"$@\" > {}\n", monitor_flag_path);
+    fs::write(mock_term_path, mock_term_content).await.expect("Failed to write mock term script");
+    let mut perms = fs::metadata(mock_term_path).await.unwrap().permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(mock_term_path, perms).await.expect("Failed to set mock term permissions");
+
+    let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
+    let (sway_cmd_tx, _sway_cmd_rx) = mpsc::channel::<SwayCommand>(32);
+
+    let socket_path_str = socket_path.to_string();
+    let listener_handle = tokio::spawn(async move {
+        start_daemon_ipc(&socket_path_str, event_tx).await
+    });
+
+    let mut config = Config::default();
+    config.hooks.on_agent_spawn = Some(format!("echo \"$SWAYVE_AGENT_ID\" >> {}", spawn_flag_path));
+    config.daemon.auto_monitor = true;
+    config.terminal.default_emulator = mock_term_path.to_string();
+
+    let daemon_handle = tokio::spawn(async move {
+        run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect to socket");
+
+    // 1. Register Parent Agent
+    let parent_id = AgentId("parent-hooks-1".to_string());
+    let reg_parent = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: parent_id.clone(),
+            agent_type: "pi".to_string(),
+            project_id: ProjectId("test-hooks-proj".to_string()),
+            pid: 20001,
+            app_id: "agent.pi.parent-hooks-1".to_string(),
+            parent_agent_id: None,
+        },
+    };
+    stream.write_all((serde_json::to_string(&reg_parent).unwrap() + "\n").as_bytes()).await.expect("Failed to write reg_parent");
+
+    // 2. Register Subagent
+    let subagent_id = AgentId("subagent-hooks-1".to_string());
+    let reg_sub = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: subagent_id.clone(),
+            agent_type: "pi".to_string(),
+            project_id: ProjectId("test-hooks-proj".to_string()),
+            pid: 20002,
+            app_id: "agent.pi.subagent-hooks-1".to_string(),
+            parent_agent_id: Some(parent_id.clone()),
+        },
+    };
+    stream.write_all((serde_json::to_string(&reg_sub).unwrap() + "\n").as_bytes()).await.expect("Failed to write reg_sub");
+    stream.flush().await.unwrap();
+
+    // Wait a brief moment for spawn hooks and auto_monitor process execution
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // Verify on_agent_spawn hook executed for both agents
+    let spawn_flag_content = fs::read_to_string(spawn_flag_path)
+        .await
+        .expect("spawn flag file was not created by lifecycle hook");
+    assert!(
+        spawn_flag_content.contains("parent-hooks-1"),
+        "Spawn flag missing parent-hooks-1"
+    );
+    assert!(
+        spawn_flag_content.contains("subagent-hooks-1"),
+        "Spawn flag missing subagent-hooks-1"
+    );
+
+    // Verify spawn_monitor_terminal launched mock terminal for subagent
+    let monitor_flag_content = fs::read_to_string(monitor_flag_path)
+        .await
+        .expect("monitor flag file was not created by auto_monitor process");
+    assert!(
+        monitor_flag_content.contains("agent.monitor.subagent-hooks-1"),
+        "Monitor flag content missing monitor app_id: {}",
+        monitor_flag_content
+    );
+    assert!(
+        monitor_flag_content.contains("tail -f /tmp/swayve/logs/subagent-hooks-1.log"),
+        "Monitor flag content missing log tail command: {}",
+        monitor_flag_content
+    );
+
+    // Clean up
+    listener_handle.abort();
+    daemon_handle.abort();
+    let _ = fs::remove_file(socket_p).await;
+    let _ = fs::remove_file(spawn_p).await;
+    let _ = fs::remove_file(monitor_p).await;
+    let _ = fs::remove_file(mock_term_p).await;
+}
+
+
