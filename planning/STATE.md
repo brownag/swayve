@@ -62,7 +62,7 @@
 
 ### Wave 12: Interactive HUD Dashboard
 - [x] **Task 12.1**: Add daemon status subscription broadcast
-- [ ] **Task 12.2**: Build interactive HUD dashboard CLI client
+- [x] **Task 12.2**: Build interactive HUD dashboard CLI client
 - [ ] **Task 12.3**: Verify dashboard CLI stream assertions
 
 ## Task Reports
@@ -78,3 +78,10 @@
 - **Tests**: `cargo check` (0 errors/warnings), `cargo test` (28 passed: 20 unit + 8 integration)
 - **Deviations**: None
 - **Gotchas for Dependent Tasks**: Task 12.2 can send `{"method":"daemon.subscribe"}` over Unix socket to receive live JSON line stream of `Vec<AgentWindow>`.
+
+#### Task 12.2: Build Interactive HUD Dashboard CLI Client
+- **Status**: Completed
+- **Files Changed**: `src/cli.rs` (L55, L306, L322-L328, L451-L531)
+- **Tests**: `cargo check` (0 errors/warnings), `cargo test` (30 passed: 22 unit + 8 integration)
+- **Deviations**: None
+- **Gotchas for Dependent Tasks**: Task 12.3 can verify status subscription and dashboard stream assertions against `swayve status --watch` and socket broadcasts.

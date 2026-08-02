@@ -52,6 +52,8 @@ pub enum Commands {
     Status {
         #[arg(long)]
         json: bool,
+        #[arg(long, short)]
+        watch: bool,
     },
     /// Focus navigation commands
     Focus {
@@ -301,7 +303,7 @@ fi
                     println!("[panel] Orchestrator panel not found. Spawning...");
                     // Template args for orchestrator panel
                     let mut term_args = Vec::new();
-                    let status_cmd = format!("swayve status");
+                    let status_cmd = format!("swayve status --watch");
                     for arg in &config.terminal.args {
                         let replaced = arg
                             .replace("{app_id}", "agent.orchestrator")
@@ -317,8 +319,14 @@ fi
             }
         },
 
-        Commands::Status { json } => {
-            if json {
+        Commands::Status { json, watch } => {
+            if watch {
+                if dry_run {
+                    println!("[status] [DRY-RUN] HUD watch mode active (dry run)");
+                    return Ok(());
+                }
+                run_status_watch(socket_path).await?;
+            } else if json {
                 let summary = serde_json::json!({
                     "text": "Swayve: Active",
                     "tooltip": "Swayve is monitoring active agents.",
@@ -440,6 +448,113 @@ async fn focus_cycle_standalone() -> Result<()> {
     Ok(())
 }
 
+async fn run_status_watch(socket_path: &str) -> Result<()> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let mut stream = match UnixStream::connect(socket_path).await {
+        Ok(s) => s,
+        Err(e) => {
+            println!("[status] Could not connect to daemon socket at {}: {:?}", socket_path, e);
+            return Ok(());
+        }
+    };
+
+    let sub_msg = AgentIPCMessage::SubscribeStatus;
+    let payload = serde_json::to_string(&sub_msg)? + "\n";
+    stream.write_all(payload.as_bytes()).await?;
+
+    let (reader, _) = stream.into_split();
+    let buf_reader = BufReader::new(reader);
+    let mut lines = buf_reader.lines();
+
+    while let Some(line) = lines.next_line().await? {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        if let Ok(agents) = serde_json::from_str::<Vec<crate::types::AgentWindow>>(&line) {
+            print!("\x1B[2J\x1B[H");
+            use std::io::Write;
+            let _ = std::io::stdout().flush();
+            render_agent_tree(&agents);
+        }
+    }
+
+    Ok(())
+}
+
+fn render_agent_tree(agents: &[crate::types::AgentWindow]) {
+    println!("==================================================");
+    println!("        SWAYVE AGENT HIERARCHY DASHBOARD          ");
+    println!("==================================================");
+
+    if agents.is_empty() {
+        println!("No active agents registered.");
+        return;
+    }
+
+    let agent_ids: std::collections::HashSet<&crate::types::AgentId> =
+        agents.iter().map(|a| &a.id).collect();
+
+    let mut parent_map: std::collections::HashMap<
+        Option<crate::types::AgentId>,
+        Vec<&crate::types::AgentWindow>,
+    > = std::collections::HashMap::new();
+
+    for agent in agents {
+        let parent = match &agent.parent_id {
+            Some(pid) if agent_ids.contains(pid) => Some(pid.clone()),
+            _ => None,
+        };
+        parent_map.entry(parent).or_default().push(agent);
+    }
+
+    fn print_node(
+        node: &crate::types::AgentWindow,
+        prefix: &str,
+        is_last: bool,
+        parent_map: &std::collections::HashMap<
+            Option<crate::types::AgentId>,
+            Vec<&crate::types::AgentWindow>,
+        >,
+    ) {
+        let connector = if is_last { "└── " } else { "├── " };
+        let status_str = format_status(&node.status);
+        println!(
+            "{}{}{} [Status: {}] [Project: {}] [App ID: {}]",
+            prefix, connector, node.id.0, status_str, node.project.0, node.app_id
+        );
+
+        let new_prefix = format!("{}{}", prefix, if is_last { "    " } else { "│   " });
+        if let Some(children) = parent_map.get(&Some(node.id.clone())) {
+            for (i, child) in children.iter().enumerate() {
+                let child_is_last = i == children.len() - 1;
+                print_node(child, &new_prefix, child_is_last, parent_map);
+            }
+        }
+    }
+
+    if let Some(roots) = parent_map.get(&None) {
+        for (i, root) in roots.iter().enumerate() {
+            let is_last = i == roots.len() - 1;
+            print_node(root, "", is_last, &parent_map);
+        }
+    }
+}
+
+fn format_status(status: &crate::types::AgentStatus) -> String {
+    match status {
+        crate::types::AgentStatus::Idle => "\x1B[90mIdle\x1B[0m".to_string(),
+        crate::types::AgentStatus::Thinking => "\x1B[38;5;208mThinking\x1B[0m".to_string(),
+        crate::types::AgentStatus::ExecutingTool => "\x1B[36mExecutingTool\x1B[0m".to_string(),
+        crate::types::AgentStatus::AwaitingHumanInput => {
+            "\x1B[5;1;31mAwaitingInput\x1B[0m".to_string()
+        }
+        crate::types::AgentStatus::Completed => "\x1B[32mCompleted\x1B[0m".to_string(),
+        crate::types::AgentStatus::Failed(err) => format!("\x1B[31mFailed({})\x1B[0m", err),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -450,5 +565,28 @@ mod tests {
         let cli = Cli::try_parse_from(["swayve", "init-shell"]).unwrap();
         assert!(matches!(cli.command, Commands::InitShell));
     }
+
+    #[test]
+    fn test_status_watch_cmd_parsing() {
+        let cli = Cli::try_parse_from(["swayve", "status", "--watch"]).unwrap();
+        if let Commands::Status { watch, json } = cli.command {
+            assert!(watch);
+            assert!(!json);
+        } else {
+            panic!("Expected Commands::Status");
+        }
+    }
+
+    #[test]
+    fn test_format_status_ansi_codes() {
+        use crate::types::AgentStatus;
+        assert_eq!(format_status(&AgentStatus::Idle), "\x1B[90mIdle\x1B[0m");
+        assert_eq!(format_status(&AgentStatus::Thinking), "\x1B[38;5;208mThinking\x1B[0m");
+        assert_eq!(format_status(&AgentStatus::ExecutingTool), "\x1B[36mExecutingTool\x1B[0m");
+        assert_eq!(format_status(&AgentStatus::AwaitingHumanInput), "\x1B[5;1;31mAwaitingInput\x1B[0m");
+        assert_eq!(format_status(&AgentStatus::Completed), "\x1B[32mCompleted\x1B[0m");
+        assert_eq!(format_status(&AgentStatus::Failed("error".to_string())), "\x1B[31mFailed(error)\x1B[0m");
+    }
 }
+
 
