@@ -867,4 +867,126 @@ async fn test_hooks_and_monitoring() {
     let _ = fs::remove_file(mock_term_p).await;
 }
 
+#[tokio::test]
+async fn test_dashboard_subscription_stream() {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    use swayve::types::AgentWindow;
+
+    let socket_path = "/tmp/swayve_test_dashboard_stream.sock";
+    let path = Path::new(socket_path);
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+
+    let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
+    let (sway_cmd_tx, _sway_cmd_rx) = mpsc::channel::<SwayCommand>(32);
+
+    let socket_path_str = socket_path.to_string();
+    let listener_handle = tokio::spawn(async move {
+        start_daemon_ipc(&socket_path_str, event_tx).await
+    });
+
+    let config = Config::default();
+    let daemon_handle = tokio::spawn(async move {
+        run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Connect subscriber stream and subscribe to status updates
+    let mut sub_stream = UnixStream::connect(socket_path)
+        .await
+        .expect("Failed to connect subscriber stream to socket");
+    let sub_msg = AgentIPCMessage::SubscribeStatus;
+    let sub_payload = serde_json::to_string(&sub_msg).unwrap() + "\n";
+    sub_stream
+        .write_all(sub_payload.as_bytes())
+        .await
+        .expect("Failed to send SubscribeStatus");
+    sub_stream.flush().await.unwrap();
+
+    let (sub_reader, _) = sub_stream.into_split();
+    let mut sub_lines = BufReader::new(sub_reader).lines();
+
+    // 1. First broadcast line should be sent immediately upon subscription (empty list of agents)
+    let line1 = timeout(Duration::from_secs(2), sub_lines.next_line())
+        .await
+        .expect("Timeout waiting for initial subscriber status broadcast")
+        .expect("Stream closed unexpectedly")
+        .expect("Failed to read line 1");
+
+    let agents1: Vec<AgentWindow> = serde_json::from_str(&line1).expect("Failed to parse initial agent list JSON");
+    assert!(agents1.is_empty(), "Initial agent list should be empty");
+
+    // 2. Connect client stream and register an agent
+    let mut client_stream = UnixStream::connect(socket_path)
+        .await
+        .expect("Failed to connect client stream to socket");
+
+    let test_agent_id = AgentId("dash-agent-1".to_string());
+    let reg_msg = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: test_agent_id.clone(),
+            agent_type: "pi".to_string(),
+            project_id: ProjectId("dash-proj".to_string()),
+            pid: 30001,
+            app_id: "agent.pi.dash-agent-1".to_string(),
+            parent_agent_id: None,
+        },
+    };
+    let reg_payload = serde_json::to_string(&reg_msg).unwrap() + "\n";
+    client_stream
+        .write_all(reg_payload.as_bytes())
+        .await
+        .expect("Failed to write register message");
+    client_stream.flush().await.unwrap();
+
+    // 3. Second broadcast line should contain the newly registered agent
+    let line2 = timeout(Duration::from_secs(2), sub_lines.next_line())
+        .await
+        .expect("Timeout waiting for registration subscriber status broadcast")
+        .expect("Stream closed unexpectedly")
+        .expect("Failed to read line 2");
+
+    let agents2: Vec<AgentWindow> = serde_json::from_str(&line2).expect("Failed to parse registration agent list JSON");
+    assert_eq!(agents2.len(), 1, "Should have exactly 1 registered agent");
+    assert_eq!(agents2[0].id, test_agent_id);
+    assert_eq!(agents2[0].status, AgentStatus::Idle);
+
+    // 4. Update status for registered agent
+    let status_msg = AgentIPCMessage::UpdateStatus {
+        params: UpdateStatusParams {
+            agent_id: test_agent_id.clone(),
+            status: AgentStatus::AwaitingHumanInput,
+        },
+    };
+    let status_payload = serde_json::to_string(&status_msg).unwrap() + "\n";
+    client_stream
+        .write_all(status_payload.as_bytes())
+        .await
+        .expect("Failed to write status message");
+    client_stream.flush().await.unwrap();
+
+    // 5. Third broadcast line should reflect the updated status
+    let line3 = timeout(Duration::from_secs(2), sub_lines.next_line())
+        .await
+        .expect("Timeout waiting for status update subscriber broadcast")
+        .expect("Stream closed unexpectedly")
+        .expect("Failed to read line 3");
+
+    let agents3: Vec<AgentWindow> = serde_json::from_str(&line3).expect("Failed to parse status update agent list JSON");
+    assert_eq!(agents3.len(), 1, "Should have 1 agent after status update");
+    assert_eq!(agents3[0].id, test_agent_id);
+    assert_eq!(agents3[0].status, AgentStatus::AwaitingHumanInput);
+
+    // Clean up
+    listener_handle.abort();
+    daemon_handle.abort();
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+}
+
+
 

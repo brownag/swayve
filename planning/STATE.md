@@ -63,7 +63,7 @@
 ### Wave 12: Interactive HUD Dashboard
 - [x] **Task 12.1**: Add daemon status subscription broadcast
 - [x] **Task 12.2**: Build interactive HUD dashboard CLI client
-- [ ] **Task 12.3**: Verify dashboard CLI stream assertions
+- [x] **Task 12.3**: Verify dashboard CLI stream assertions
 
 ## Task Reports
 
@@ -85,3 +85,10 @@
 - **Tests**: `cargo check` (0 errors/warnings), `cargo test` (30 passed: 22 unit + 8 integration)
 - **Deviations**: None
 - **Gotchas for Dependent Tasks**: Task 12.3 can verify status subscription and dashboard stream assertions against `swayve status --watch` and socket broadcasts.
+
+#### Task 12.3: Verify Dashboard CLI Stream Assertions
+- **Status**: Completed
+- **Files Changed**: `tests/integration_tests.rs` (L870-L990)
+- **Tests**: `cargo test` (31 passed: 22 unit + 9 integration)
+- **Deviations**: None
+- **Gotchas for Dependent Tasks**: None. Wave 12 fully complete.
