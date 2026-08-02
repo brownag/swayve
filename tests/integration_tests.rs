@@ -45,11 +45,11 @@ async fn test_daemon_registration_and_status() {
     let register_msg = AgentIPCMessage::Register {
         id: None,
         params: RegisterParams {
-            agent_id: AgentId("test-agent".to_string()),
+            agent_id: AgentId("pi-wave1-12345".to_string()),
             agent_type: "pi".to_string(),
             project_id: ProjectId("test-proj".to_string()),
             pid: 12345,
-            app_id: "agent.pi.test-agent".to_string(),
+            app_id: "agent.pi.wave1.12345".to_string(),
             parent_agent_id: None,
         },
     };
@@ -59,7 +59,7 @@ async fn test_daemon_registration_and_status() {
     // Send update status message
     let status_msg = AgentIPCMessage::UpdateStatus {
         params: UpdateStatusParams {
-            agent_id: AgentId("test-agent".to_string()),
+            agent_id: AgentId("pi-wave1-12345".to_string()),
             status: AgentStatus::AwaitingHumanInput,
         },
     };
@@ -75,7 +75,7 @@ async fn test_daemon_registration_and_status() {
 
     match cmd1 {
         SwayCommand::SetBorderColor { mark, hex_color } => {
-            assert_eq!(mark, "mark_test_agent");
+            assert_eq!(mark, "mark_pi_wave1_12345");
             assert_eq!(hex_color, "#ff5555"); // AwaitingHumanInput border color (Dracula red)
         }
         _ => panic!("Expected SetBorderColor command, got {:?}", cmd1),
@@ -88,7 +88,7 @@ async fn test_daemon_registration_and_status() {
 
     match cmd2 {
         SwayCommand::FocusWindow { mark } => {
-            assert_eq!(mark, "mark_test_agent");
+            assert_eq!(mark, "mark_pi_wave1_12345");
         }
         _ => panic!("Expected FocusWindow command, got {:?}", cmd2),
     }
@@ -636,3 +636,107 @@ async fn test_cli_focus_with_hierarchy() {
         let _ = fs::remove_file(path).await;
     }
 }
+
+#[tokio::test]
+async fn test_multiple_agents_same_wave_unique_app_id() {
+    let socket_path = "/tmp/swayve_test_unique_appid.sock";
+    let path = Path::new(socket_path);
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+
+    let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
+    let (sway_cmd_tx, mut sway_cmd_rx) = mpsc::channel::<SwayCommand>(32);
+
+    let socket_path_str = socket_path.to_string();
+    let listener_handle = tokio::spawn(async move {
+        start_daemon_ipc(&socket_path_str, event_tx).await
+    });
+
+    let config = Config::default();
+    let daemon_handle = tokio::spawn(async move {
+        run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect to test socket");
+
+    // Agent 1 spawned in wave1
+    let agent1_id = AgentId("worker-wave1-10001".to_string());
+    let reg1 = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: agent1_id.clone(),
+            agent_type: "worker".to_string(),
+            project_id: ProjectId("test-proj".to_string()),
+            pid: 11001,
+            app_id: "agent.worker.wave1.10001".to_string(),
+            parent_agent_id: None,
+        },
+    };
+
+    // Agent 2 spawned in wave1 (distinct suffix and app_id)
+    let agent2_id = AgentId("worker-wave1-10002".to_string());
+    let reg2 = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: agent2_id.clone(),
+            agent_type: "worker".to_string(),
+            project_id: ProjectId("test-proj".to_string()),
+            pid: 11002,
+            app_id: "agent.worker.wave1.10002".to_string(),
+            parent_agent_id: None,
+        },
+    };
+
+    stream.write_all((serde_json::to_string(&reg1).unwrap() + "\n").as_bytes()).await.expect("Failed to write reg1");
+    stream.write_all((serde_json::to_string(&reg2).unwrap() + "\n").as_bytes()).await.expect("Failed to write reg2");
+
+    // Update status for Agent 1 and Agent 2
+    let status1 = AgentIPCMessage::UpdateStatus {
+        params: UpdateStatusParams {
+            agent_id: agent1_id.clone(),
+            status: AgentStatus::AwaitingHumanInput,
+        },
+    };
+    let status2 = AgentIPCMessage::UpdateStatus {
+        params: UpdateStatusParams {
+            agent_id: agent2_id.clone(),
+            status: AgentStatus::AwaitingHumanInput,
+        },
+    };
+
+    stream.write_all((serde_json::to_string(&status1).unwrap() + "\n").as_bytes()).await.expect("Failed to write status1");
+    stream.write_all((serde_json::to_string(&status2).unwrap() + "\n").as_bytes()).await.expect("Failed to write status2");
+    stream.flush().await.unwrap();
+
+    let mut border_marks = Vec::new();
+    let mut focus_marks = Vec::new();
+
+    for _ in 0..4 {
+        if let Some(cmd) = recv_command(&mut sway_cmd_rx, 500).await {
+            match cmd {
+                SwayCommand::SetBorderColor { mark, hex_color: _ } => {
+                    border_marks.push(mark);
+                }
+                SwayCommand::FocusWindow { mark } => {
+                    focus_marks.push(mark);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    assert!(border_marks.contains(&"mark_worker_wave1_10001".to_string()));
+    assert!(border_marks.contains(&"mark_worker_wave1_10002".to_string()));
+    assert!(focus_marks.contains(&"mark_worker_wave1_10001".to_string()));
+    assert!(focus_marks.contains(&"mark_worker_wave1_10002".to_string()));
+
+    listener_handle.abort();
+    daemon_handle.abort();
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+}
+
