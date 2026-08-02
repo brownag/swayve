@@ -63,10 +63,10 @@ if command -v jq >/dev/null 2>&1; then
            --arg tool "$HOOK_CMD_TOOL" \
            --arg idle "$HOOK_CMD_IDLE" \
            '.hooks = ((.hooks // {}) * {
-              SessionStart: [{command: $thinking}],
-              PreToolUse: [{command: $tool}],
-              PostToolUse: [{command: $thinking}],
-              Stop: [{command: $idle}]
+              SessionStart: [{matcher: "", hooks: [{type: "command", command: $thinking}]}],
+              PreToolUse: [{matcher: "", hooks: [{type: "command", command: $tool}]}],
+              PostToolUse: [{matcher: "", hooks: [{type: "command", command: $thinking}]}],
+              Stop: [{matcher: "", hooks: [{type: "command", command: $idle}]}]
            })' "$TARGET_FILE" > "$TARGET_FILE.tmp" && mv "$TARGET_FILE.tmp" "$TARGET_FILE"
     else
         jq -n \
@@ -75,10 +75,10 @@ if command -v jq >/dev/null 2>&1; then
            --arg idle "$HOOK_CMD_IDLE" \
            '{
              hooks: {
-               SessionStart: [{command: $thinking}],
-               PreToolUse: [{command: $tool}],
-               PostToolUse: [{command: $thinking}],
-               Stop: [{command: $idle}]
+               SessionStart: [{matcher: "", hooks: [{type: "command", command: $thinking}]}],
+               PreToolUse: [{matcher: "", hooks: [{type: "command", command: $tool}]}],
+               PostToolUse: [{matcher: "", hooks: [{type: "command", command: $thinking}]}],
+               Stop: [{matcher: "", hooks: [{type: "command", command: $idle}]}]
              }
            }' > "$TARGET_FILE"
     fi
@@ -92,10 +92,10 @@ tool_cmd = sys.argv[3]
 idle_cmd = sys.argv[4]
 
 hooks_data = {
-    "SessionStart": [{"command": thinking_cmd}],
-    "PreToolUse": [{"command": tool_cmd}],
-    "PostToolUse": [{"command": thinking_cmd}],
-    "Stop": [{"command": idle_cmd}]
+    "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": thinking_cmd}]}],
+    "PreToolUse": [{"matcher": "", "hooks": [{"type": "command", "command": tool_cmd}]}],
+    "PostToolUse": [{"matcher": "", "hooks": [{"type": "command", "command": thinking_cmd}]}],
+    "Stop": [{"matcher": "", "hooks": [{"type": "command", "command": idle_cmd}]}]
 }
 
 data = {}

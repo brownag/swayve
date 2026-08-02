@@ -52,29 +52,21 @@
 - [x] **Task 9.1**: Configure and verify Pi integration tests
 - [x] **Task 9.2**: Build and verify Claude `test-hooks.sh` integration
 
+### Wave 10: Claude Code Hooks Schema Fix
+- [x] **Task 10.1**: Restructure Claude Code hooks to match the correct schema
+
 ## Task Reports
 
-### Waves 1-8 (Completed)
-- All tasks in Waves 1 to 8 are fully implemented, verified, and integrated.
+### Waves 1-9 (Completed)
+- All tasks in Waves 1 to 9 are fully completed, verified, and integrated.
 
-### Wave 9 Reports
+### Wave 10 Reports
 
-#### Task 9.1 Report
+#### 10.1 Restructure Claude Code Hooks to Match Correct Schema
 - **Status**: Completed
 - **Files Changed**:
-  - `integrations/pi/package.json` (L12: updated test script to `tsx --test tests/*.test.ts`)
-  - `integrations/pi/README.md` (L74-L82: added `## Testing` section)
-- **Verification**: `cd integrations/pi && npm test` (3 passed, 0 failed, 1 suite)
+  - `integrations/claude/install-hooks.sh` (L63-L99)
+  - `integrations/claude/README.md` (L52-L77)
+- **Tests**: Executed `bash integrations/claude/test-hooks.sh` (5/5 assertions passed, exit code 0)
 - **Deviations**: None
-- **Gotchas for dependent tasks**: None
-
-#### Task 9.2 Report
-- **Status**: Completed
-- **Files Changed**:
-  - `integrations/claude/test-hooks.sh` (L1-L127: created executable test script)
-  - `integrations/claude/README.md` (L88-L101: added `## Testing` section)
-- **Verification**: `bash integrations/claude/test-hooks.sh` (5 assertions passed, 0 failed)
-- **Deviations**: None
-- **Gotchas for dependent tasks**: None
-
-
+- **Gotchas**: None
