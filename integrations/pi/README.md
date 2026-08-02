@@ -1,165 +1,95 @@
-# Pi Integration for Swayve
+# Swayve TypeScript Client
 
-This guide provides instructions and examples for integration of Pi agent extensions and plugins with **Swayve**.
+A production-ready TypeScript library and scaffold for integrating agents with **Swayve**, a native Sway window manager orchestrator for autonomous agents.
 
-## Overview
+## Features
 
-Swayve manages agent terminal windows and hierarchical layouts by listening on a Unix domain socket specified by the `$SWAYVE_SOCKET` environment variable. Pi plugins can register their subagents and update their execution status (`idle`, `thinking`, `executing_tool`, `awaiting_human_input`, `completed`, `failed`) in real time over this socket.
+- **Type-safe**: Full TypeScript support for agent statuses and client methods.
+- **Robust IPC**: Handles UNIX domain socket communication with error resilience and timeouts.
+- **Status Management**: Easy methods for updating agent status (`thinking`, `executing_tool`, etc.).
+- **Scaffold Included**: A `run-agent.ts` script to quickly test and implement your agent logic.
 
----
+## Installation
 
-## Environment Variables
+```bash
+# Clone this repository
+git clone <repository-url>
+cd swayve-client
 
-When Swayve launches an agent container or window, it injects the following environment variables:
-
-| Variable | Description |
-| :--- | :--- |
-| `SWAYVE_SOCKET` | Path to the Swayve IPC Unix domain socket (e.g., `/tmp/swayve.sock`) |
-| `SWAYVE_AGENT_ID` | Unique identifier assigned to this agent instance |
-| `SWAYVE_PROJECT_ID` | Project or workspace identifier |
-| `SWAYVE_PARENT_ID` | (Optional) Parent agent ID if this agent is spawned as a child subagent |
-
----
-
-## System Prompt for Pi
-
-Inject the following prompt into your Pi system configuration or subagent instructions:
-
-```text
-You are operating within the Swayve agent environment.
-Whenever you start processing a task, execute a tool call, wait for user input, or finish execution, notify the Swayve daemon via the Unix socket specified in $SWAYVE_SOCKET.
-
-Use the agent.update_status IPC method with your $SWAYVE_AGENT_ID and status string ("thinking", "executing_tool", "idle", "completed", or "failed").
+# Install dependencies
+npm install
 ```
 
----
+## Integration
 
-## Mock Python Integration Code
+### 1. Set Environment Variables
 
-```python
-import os
-import json
-import socket
-import sys
+Swayve injects the following variables into your agent's environment:
 
-def send_swayve_ipc(payload: dict) -> bool:
-    socket_path = os.environ.get("SWAYVE_SOCKET")
-    if not socket_path or not os.path.exists(socket_path):
-        return False
+- `SWAYVE_SOCKET`: Path to the UNIX domain socket.
+- `SWAYVE_AGENT_ID`: Unique identifier for the agent.
+- `SWAYVE_PROJECT_ID`: Project or workspace identifier.
+
+### 2. Using the Client
+
+```typescript
+import { SwayveClient, withSwayve } from 'swayve-client';
+
+const client = new SwayveClient();
+
+async function myAgentTask() {
+  // Register the agent with Swayve
+  await client.register();
+
+  // Wrap your main execution loop for automatic status management
+  await withSwayve(client, async (agent) => {
+    console.log('Starting my task...');
     
-    try:
-        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        client.connect(socket_path)
-        data = json.dumps(payload) + "\n"
-        client.sendall(data.encode("utf-8"))
-        client.close()
-        return True
-    except Exception as e:
-        sys.stderr.write(f"[Swayve IPC Warning] Failed to send IPC payload: {e}\n")
-        return False
+    // Manually update status for specific steps
+    await agent.sendStatus('executing_tool');
+    
+    // ... your agent logic here ...
+    
+    await agent.requestFocus();
+  });
+}
 
-def register_agent(agent_id: str, agent_type: str = "pi", project_id: str = "default", parent_id: str = None):
-    payload = {
-        "method": "agent.register",
-        "params": {
-            "agent_id": agent_id,
-            "agent_type": agent_type,
-            "project_id": project_id,
-            "pid": os.getpid(),
-            "app_id": f"agent.{agent_id}",
-            "parent_agent_id": parent_id
-        }
-    }
-    return send_swayve_ipc(payload)
-
-def update_status(agent_id: str, status: str):
-    payload = {
-        "method": "agent.update_status",
-        "params": {
-            "agent_id": agent_id,
-            "status": status
-        }
-    }
-    return send_swayve_ipc(payload)
-
-if __name__ == "__main__":
-    agent_id = os.environ.get("SWAYVE_AGENT_ID", "pi-demo-agent")
-    project_id = os.environ.get("SWAYVE_PROJECT_ID", "default-project")
-    parent_id = os.environ.get("SWAYVE_PARENT_ID")
-
-    print(f"Registering Pi agent {agent_id} with Swayve...")
-    register_agent(agent_id=agent_id, agent_type="pi", project_id=project_id, parent_id=parent_id)
-
-    print("Updating status to thinking...")
-    update_status(agent_id, "thinking")
-
-    print("Updating status to completed...")
-    update_status(agent_id, "completed")
+myAgentTask().catch(console.error);
 ```
 
----
+## Development
 
-## Mock JavaScript / Node.js Integration Code
+To run the provided scaffold script:
 
-```javascript
-const net = require('net');
-const process = require('process');
+```bash
+npm run dev:run-agent
+```
 
-function sendSwayveIPC(payload) {
-    const socketPath = process.env.SWAYVE_SOCKET;
-    if (!socketPath) {
-        return Promise.resolve(false);
-    }
+To build the library:
 
-    return new Promise((resolve) => {
-        const client = net.createConnection({ path: socketPath }, () => {
-            client.write(JSON.stringify(payload) + '\n', () => {
-                client.end();
-                resolve(true);
-            });
-        });
+```bash
+npm run build
+```
 
-        client.on('error', (err) => {
-            console.error(`[Swayve IPC Warning] ${err.message}`);
-            resolve(false);
-        });
-    });
-}
+## API Reference
 
-async function registerAgent(agentId, agentType = 'pi', projectId = 'default', parentId = null) {
-    const payload = {
-        method: 'agent.register',
-        params: {
-            agent_id: agentId,
-            agent_type: agentType,
-            project_id: projectId,
-            pid: process.pid,
-            app_id: `agent.${agentId}`,
-            parent_agent_id: parentId
-        }
-    };
-    return await sendSwayveIPC(payload);
-}
+### `SwayveClient`
 
-async function updateStatus(agentId, status) {
-    const payload = {
-        method: 'agent.update_status',
-        params: {
-            agent_id: agentId,
-            status: status
-        }
-    };
-    return await sendSwayveIPC(payload);
-}
+| Method | Signature | Description |
+|---|---|---|
+| `register()` | `Promise<void>` | Registers the agent with the Swayve daemon. |
+| `sendStatus(status)` | `Promise<void>` | Updates the agent's status (e.g., `'thinking'`, `'idle'`). |
+| `requestFocus()` | `Promise<void>` | Requests the daemon to focus the agent's window. |
 
-// Example usage
-(async () => {
-    const agentId = process.env.SWAYVE_AGENT_ID || 'pi-js-agent';
-    const projectId = process.env.SWAYVE_PROJECT_ID || 'default-project';
-    const parentId = process.env.SWAYVE_PARENT_ID || null;
+### `withSwayve`
 
-    await registerAgent(agentId, 'pi', projectId, parentId);
-    await updateStatus(agentId, 'thinking');
-    await updateStatus(agentId, 'idle');
-})();
+A higher-order function that manages agent status automatically:
+- Sets status to `'thinking'` before the task runs.
+- Sets status to `'completed'` after successful completion.
+- Sets status to `'failed'` if an error is thrown.
+
+```typescript
+await withSwayve(client, async (agent) => {
+  // Your logic
+});
 ```

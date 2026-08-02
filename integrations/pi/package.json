@@ -1,0 +1,27 @@
+{
+  "name": "swayve-client",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "TypeScript client for Swayve integration",
+  "main": "dist/swayve-client.js",
+  "module": "dist/swayve-client.js",
+  "types": "dist/swayve-client.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev:run-agent": "tsx src/run-agent.ts",
+    "test": "node --test"
+  },
+  "keywords": [
+    "swayve",
+    "client",
+    "typescript",
+    "ipc"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

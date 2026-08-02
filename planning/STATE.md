@@ -45,26 +45,25 @@
 - [x] **Task 7.1**: Add `init-shell` CLI subcommand
 - [x] **Task 7.2**: Build the `integrations/` directory structures
 
+### Wave 8: Claude Code Lifecycle Hook Integration
+- [x] **Task 8.1**: Create Claude hook templates and installer
+
 ## Task Reports
 
-### Waves 1-6 (Completed)
-- All tasks in Waves 1 to 6 are fully implemented, verified, and integrated. All 18 tests pass successfully.
+### Waves 1-7 (Completed)
+- All tasks in Waves 1 to 7 are fully implemented, verified, and integrated.
 
-### Wave 7 Reports
+### Wave 8 Reports
 
-#### Task 7.1: Add init-shell CLI Subcommand
+#### 8.1
 - **Status**: Completed
-- **Files changed**: `src/cli.rs` (L27-L28, L77-L128, L432-L442)
-- **Tests**: `cargo test` (19 passed, 0 failed: 12 unit tests, 7 integration tests)
-- **Manual Verification**: `cargo run -- init-shell` successfully outputs POSIX-compliant prompt hook snippet for bash and zsh
+- **Files Changed**:
+  - `integrations/claude/install-hooks.sh` (L1-118)
+  - `integrations/claude/README.md` (L1-77)
+- **Tests**:
+  - Syntax check: `bash -n integrations/claude/install-hooks.sh` (Pass)
+  - Execution test: Created/merged `/tmp/test_claude_settings.json` (Pass)
+  - Full suite: `cargo test` (19 passed, 0 failed)
 - **Deviations**: None
-- **Gotchas for dependent tasks**: Shell scripts requiring prompt integration can source output of `swayve init-shell` directly in subshell / agent terminals.
-
-#### Task 7.2: Build the integrations/ Directory Structure
-- **Status**: Completed
-- **Files created**: `integrations/pi/README.md` (L1-L157), `integrations/claude/claude-wrapper.sh` (L1-L39), `integrations/antigravity/README.md` (L1-L107)
-- **Tests**: `bash -n integrations/claude/claude-wrapper.sh` (0 errors), `./integrations/claude/claude-wrapper.sh --version` (pass), `cargo test` (19 passed, 0 failed)
-- **Deviations**: None
-- **Gotchas for dependent tasks**: `claude-wrapper.sh` requires `chmod +x` (applied) and routes status updates through `$SWAYVE_SOCKET` using `nc -U` or `socat`.
-
+- **Gotchas**: None
 
