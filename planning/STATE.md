@@ -43,7 +43,7 @@
 
 ### Wave 7: Agent Integrations and Shell Abstractions
 - [x] **Task 7.1**: Add `init-shell` CLI subcommand
-- [ ] **Task 7.2**: Build the `integrations/` directory structures
+- [x] **Task 7.2**: Build the `integrations/` directory structures
 
 ## Task Reports
 
@@ -59,4 +59,12 @@
 - **Manual Verification**: `cargo run -- init-shell` successfully outputs POSIX-compliant prompt hook snippet for bash and zsh
 - **Deviations**: None
 - **Gotchas for dependent tasks**: Shell scripts requiring prompt integration can source output of `swayve init-shell` directly in subshell / agent terminals.
+
+#### Task 7.2: Build the integrations/ Directory Structure
+- **Status**: Completed
+- **Files created**: `integrations/pi/README.md` (L1-L157), `integrations/claude/claude-wrapper.sh` (L1-L39), `integrations/antigravity/README.md` (L1-L107)
+- **Tests**: `bash -n integrations/claude/claude-wrapper.sh` (0 errors), `./integrations/claude/claude-wrapper.sh --version` (pass), `cargo test` (19 passed, 0 failed)
+- **Deviations**: None
+- **Gotchas for dependent tasks**: `claude-wrapper.sh` requires `chmod +x` (applied) and routes status updates through `$SWAYVE_SOCKET` using `nc -U` or `socat`.
+
 
