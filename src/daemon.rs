@@ -39,12 +39,20 @@ impl DaemonState {
             status: AgentStatus::Idle,
         };
         self.agents.insert(agent_id.clone(), agent);
-        self.pid_to_agent.insert(pid, agent_id);
+        self.pid_to_agent.insert(pid, agent_id.clone());
+
+        if let Some(ref hook) = self.config.hooks.on_agent_spawn {
+            execute_lifecycle_hook(hook, &agent_id, "idle");
+        }
     }
 
     pub fn update_status(&mut self, agent_id: &AgentId, status: AgentStatus) -> Option<AgentWindow> {
         if let Some(agent) = self.agents.get_mut(agent_id) {
             agent.status = status;
+            let status_str = agent_status_to_str(&agent.status);
+            if let Some(ref hook) = self.config.hooks.on_agent_status_change {
+                execute_lifecycle_hook(hook, agent_id, status_str);
+            }
             Some(agent.clone())
         } else {
             None
@@ -60,6 +68,32 @@ impl DaemonState {
             AgentStatus::Completed => self.config.border_colors.completed.clone(),
             AgentStatus::Failed(_) => self.config.border_colors.failed.clone(),
         }
+    }
+}
+
+fn agent_status_to_str(status: &AgentStatus) -> &'static str {
+    match status {
+        AgentStatus::Idle => "idle",
+        AgentStatus::Thinking => "thinking",
+        AgentStatus::ExecutingTool => "executing_tool",
+        AgentStatus::AwaitingHumanInput => "awaiting_human_input",
+        AgentStatus::Completed => "completed",
+        AgentStatus::Failed(_) => "failed",
+    }
+}
+
+fn execute_lifecycle_hook(hook_cmd: &str, agent_id: &AgentId, status: &str) {
+    if let Err(e) = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(hook_cmd)
+        .env("SWAYVE_AGENT_ID", &agent_id.0)
+        .env("SWAYVE_AGENT_STATUS", status)
+        .spawn()
+    {
+        eprintln!(
+            "[daemon] Failed to execute lifecycle hook '{}': {:?}",
+            hook_cmd, e
+        );
     }
 }
 
@@ -547,5 +581,37 @@ mod tests {
         assert_eq!(next_focus_target(&mixed, Some(&root_a)), Some(kid.clone()));
         assert_eq!(next_focus_target(&mixed, Some(&kid)), Some(root_b.clone()));
         assert_eq!(next_focus_target(&mixed, Some(&root_b)), Some(root_a.clone()));
+    }
+
+    #[test]
+    fn test_lifecycle_hooks_execution() {
+        let out_path = format!("/tmp/test_swayve_hook_{}.txt", std::process::id());
+        let _ = std::fs::remove_file(&out_path);
+
+        let mut config = Config::default();
+        config.hooks.on_agent_spawn = Some(format!("echo \"spawn $SWAYVE_AGENT_ID $SWAYVE_AGENT_STATUS\" >> {}", out_path));
+        config.hooks.on_agent_status_change = Some(format!("echo \"status $SWAYVE_AGENT_ID $SWAYVE_AGENT_STATUS\" >> {}", out_path));
+
+        let mut state = DaemonState::new(config);
+        let agent_id = AgentId("test_hook_agent".to_string());
+
+        state.register_agent(
+            agent_id.clone(),
+            ProjectId("proj".to_string()),
+            123,
+            "agent.test".to_string(),
+            None,
+        );
+
+        state.update_status(&agent_id, AgentStatus::Thinking);
+
+        // Wait for background hooks to finish execution
+        std::thread::sleep(std::time::Duration::from_millis(200));
+
+        let contents = std::fs::read_to_string(&out_path).unwrap_or_default();
+        let _ = std::fs::remove_file(&out_path);
+
+        assert!(contents.contains("spawn test_hook_agent idle"));
+        assert!(contents.contains("status test_hook_agent thinking"));
     }
 }

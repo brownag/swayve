@@ -55,18 +55,23 @@
 ### Wave 10: Claude Code Hooks Schema Fix
 - [x] **Task 10.1**: Restructure Claude Code hooks to match the correct schema
 
+### Wave 11: Hook System, Log Redirection, and Auto-Monitoring
+- [x] **Task 11.1**: Add hook config, log redirection, and hook execution
+- [ ] **Task 11.2**: Auto-spawn log-tail monitoring windows for subagents
+- [ ] **Task 11.3**: Integration tests for hooks and auto-monitoring
+
 ## Task Reports
 
-### Waves 1-9 (Completed)
-- All tasks in Waves 1 to 9 are fully completed, verified, and integrated.
+### Waves 1-10 (Completed)
+- All tasks in Waves 1 to 10 are fully completed, verified, and integrated.
 
-### Wave 10 Reports
-
-#### 10.1 Restructure Claude Code Hooks to Match Correct Schema
+### Wave 11 Reports
+### 11.1
 - **Status**: Completed
-- **Files Changed**:
-  - `integrations/claude/install-hooks.sh` (L63-L99)
-  - `integrations/claude/README.md` (L52-L77)
-- **Tests**: Executed `bash integrations/claude/test-hooks.sh` (5/5 assertions passed, exit code 0)
+- **Files changed**:
+  - `src/config.rs` (L11-19, L76, L93-139): Added `HooksConfig` struct, `hooks` config field, defaults, and unit tests.
+  - `src/cli.rs` (L239-247): Created `/tmp/swayve/logs` directory and redirected spawned terminal `stdout`/`stderr` to `/tmp/swayve/logs/{agent_id}.log`.
+  - `src/daemon.rs` (L42-45, L48-52, L64-88, L585-616): Added `execute_lifecycle_hook`, status conversion helper, hook triggers in `register_agent`/`update_status`, and unit tests.
+- **Verification**: `cargo check` passed; `cargo test` passed (22/22 tests passed: 15 unit tests, 7 integration tests).
 - **Deviations**: None
-- **Gotchas**: None
+- **Gotchas for dependent tasks**: Log redirection creates files in `/tmp/swayve/logs/<agent_id>.log` which Task 11.2 can tail directly.

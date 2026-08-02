@@ -8,6 +8,14 @@ pub struct Config {
     pub terminal: TerminalConfig,
     #[serde(default)]
     pub daemon: DaemonConfig,
+    #[serde(default)]
+    pub hooks: HooksConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct HooksConfig {
+    pub on_agent_spawn: Option<String>,
+    pub on_agent_status_change: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,6 +82,7 @@ impl Default for Config {
                 ],
             },
             daemon: DaemonConfig::default(),
+            hooks: HooksConfig::default(),
         }
     }
 }
@@ -91,3 +100,43 @@ pub fn load_config() -> Config {
     }
     Config::default()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hooks_config_default() {
+        let config = Config::default();
+        assert_eq!(config.hooks.on_agent_spawn, None);
+        assert_eq!(config.hooks.on_agent_status_change, None);
+    }
+
+    #[test]
+    fn test_hooks_config_parsing() {
+        let toml_str = r##"
+            [border_colors]
+            idle = "#111111"
+            thinking = "#222222"
+            executing_tool = "#333333"
+            awaiting_human_input = "#444444"
+            completed = "#555555"
+            failed = "#666666"
+
+            [terminal]
+            default_emulator = "foot"
+            args = ["-e", "{command}"]
+
+            [hooks]
+            on_agent_spawn = "echo spawn"
+            on_agent_status_change = "echo status"
+        "##;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.hooks.on_agent_spawn, Some("echo spawn".to_string()));
+        assert_eq!(
+            config.hooks.on_agent_status_change,
+            Some("echo status".to_string())
+        );
+    }
+}
+

@@ -236,11 +236,22 @@ fi
             );
 
             if !dry_run {
+                std::fs::create_dir_all("/tmp/swayve/logs")
+                    .context("Failed to create log directory /tmp/swayve/logs")?;
+                let log_path = format!("/tmp/swayve/logs/{}.log", agent_id);
+                let log_file = std::fs::File::create(&log_path)
+                    .with_context(|| format!("Failed to create log file at {}", log_path))?;
+                let err_file = log_file
+                    .try_clone()
+                    .with_context(|| format!("Failed to clone log file handle for {}", log_path))?;
+
                 Command::new(&config.terminal.default_emulator)
                     .env("SWAYVE_SOCKET", socket_path)
                     .env("SWAYVE_AGENT_ID", &agent_id)
                     .env("SWAYVE_PROJECT_ID", &project)
                     .args(&term_args)
+                    .stdout(log_file)
+                    .stderr(err_file)
                     .spawn()
                     .context("Failed to launch agent terminal emulator")?;
             } else {
