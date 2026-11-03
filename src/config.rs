@@ -94,18 +94,30 @@ impl Default for Config {
     }
 }
 
+pub fn parse_config_file(path: &std::path::Path) -> Result<Option<Config>, String> {
+    let content = match fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{}: {}", path.display(), e)),
+    };
+    toml::from_str::<Config>(&content)
+        .map(Some)
+        .map_err(|e| format!("{}: {}", path.display(), e))
+}
+
 pub fn load_config() -> Config {
-    if let Some(home) = std::env::var("HOME").ok() {
-        let path = PathBuf::from(format!("{}/.config/swayve/config.toml", home));
-        if path.exists() {
-            if let Ok(content) = fs::read_to_string(&path) {
-                if let Ok(parsed) = toml::from_str::<Config>(&content) {
-                    return parsed;
-                }
-            }
+    let Ok(home) = std::env::var("HOME") else {
+        return Config::default();
+    };
+    let path = PathBuf::from(format!("{}/.config/swayve/config.toml", home));
+    match parse_config_file(&path) {
+        Ok(Some(c)) => c,
+        Ok(None) => Config::default(),
+        Err(msg) => {
+            eprintln!("[config] {}; using defaults", msg);
+            Config::default()
         }
     }
-    Config::default()
 }
 
 #[cfg(test)]
@@ -117,6 +129,17 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.hooks.on_agent_spawn, None);
         assert_eq!(config.hooks.on_agent_status_change, None);
+    }
+
+    #[test]
+    fn test_parse_config_file_malformed_reports_path() {
+        let path = std::env::temp_dir()
+            .join(format!("swayve-config-test-{}.toml", std::process::id()));
+        fs::write(&path, "daemon = [").unwrap();
+        let result = parse_config_file(&path);
+        fs::remove_file(&path).unwrap();
+        let msg = result.unwrap_err();
+        assert!(msg.contains(&path.display().to_string()), "{msg}");
     }
 
     #[test]
