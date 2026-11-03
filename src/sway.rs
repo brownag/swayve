@@ -85,6 +85,7 @@ impl SwayManager {
 pub enum SwayEvent {
     WindowCreated { con_id: i64, app_id: String, pid: Option<i32> },
     WindowDestroyed { con_id: i64 },
+    WindowFocused { con_id: i64 },
 }
 
 pub async fn run_event_listener(
@@ -124,6 +125,10 @@ pub async fn run_event_listener(
                 WindowChange::Close => {
                     let con_id = win_event.container.id;
                     let _ = event_tx.send(SwayEvent::WindowDestroyed { con_id }).await;
+                }
+                WindowChange::Focus => {
+                    let con_id = win_event.container.id;
+                    let _ = event_tx.send(SwayEvent::WindowFocused { con_id }).await;
                 }
                 _ => {}
             }

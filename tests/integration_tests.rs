@@ -543,6 +543,101 @@ async fn test_focus_survives_parent_destruction() {
 }
 
 #[tokio::test]
+async fn test_focus_follows_sway_focus() {
+    let socket_path = "/tmp/swayve_test_focus_follows.sock";
+    let path = Path::new(socket_path);
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+
+    let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
+    let (sway_cmd_tx, mut sway_cmd_rx) = mpsc::channel::<SwayCommand>(32);
+
+    let socket_path_str = socket_path.to_string();
+    let event_tx_listener = event_tx.clone();
+    let listener_handle = tokio::spawn(async move {
+        start_daemon_ipc(&socket_path_str, event_tx_listener).await
+    });
+
+    let config = Config::default();
+    let daemon_handle = tokio::spawn(async move {
+        run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect");
+
+    let agents = [
+        ("parent-f", None),
+        ("child-a", Some("parent-f")),
+        ("child-b", Some("parent-f")),
+    ];
+    for (idx, (agent_id, parent)) in agents.iter().enumerate() {
+        let reg = AgentIPCMessage::Register {
+            id: None,
+            params: RegisterParams {
+                agent_id: AgentId(agent_id.to_string()),
+                agent_type: "pi".to_string(),
+                project_id: ProjectId("proj-follow".to_string()),
+                pid: 500 + idx as u32,
+                app_id: format!("agent.pi.{}", agent_id),
+                parent_agent_id: parent.map(|p| AgentId(p.to_string())),
+            },
+        };
+        stream.write_all((serde_json::to_string(&reg).unwrap() + "\n").as_bytes()).await.unwrap();
+    }
+    stream.flush().await.unwrap();
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    for (idx, (agent_id, _)) in agents.iter().enumerate() {
+        let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated {
+            con_id: 6000 + idx as i64,
+            app_id: format!("agent.pi.{}", agent_id),
+            pid: None,
+        })).await;
+    }
+
+    while recv_command(&mut sway_cmd_rx, 300).await.is_some() {}
+
+    let focus_payload = serde_json::to_string(&AgentIPCMessage::Focus).unwrap() + "\n";
+    let mut focused = Vec::new();
+    for step in 0..4 {
+        match step {
+            // Manual focus on child-b: the cycle continues from there
+            2 => {
+                let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowFocused { con_id: 6002 })).await;
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            // Not an agent: ignored
+            3 => {
+                let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowFocused { con_id: 9999 })).await;
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            _ => {}
+        }
+        stream.write_all(focus_payload.as_bytes()).await.unwrap();
+        stream.flush().await.unwrap();
+        match recv_command(&mut sway_cmd_rx, 500).await {
+            Some(SwayCommand::FocusWindow { mark }) => focused.push(mark),
+            other => panic!("step {}: expected FocusWindow, got {:?}", step, other),
+        }
+    }
+
+    assert_eq!(
+        focused,
+        vec!["mark_parent_f", "mark_child_a", "mark_parent_f", "mark_child_a"]
+    );
+
+    listener_handle.abort();
+    daemon_handle.abort();
+    if path.exists() {
+        let _ = fs::remove_file(path).await;
+    }
+}
+
+#[tokio::test]
 async fn test_cli_focus_with_hierarchy() {
     let socket_path = "/tmp/swayve_test_focus_hierarchy.sock";
     let path = Path::new(socket_path);

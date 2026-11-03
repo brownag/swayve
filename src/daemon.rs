@@ -414,6 +414,12 @@ pub async fn run_daemon_loops(
                             state.broadcast_status();
                         }
                     }
+                    SwayEvent::WindowFocused { con_id } => {
+                        // Manual focus on an agent window moves the cycle; other windows are ignored.
+                        if let Some(agent_id) = state.con_to_agent.get(&con_id) {
+                            last_focused = Some(agent_id.clone());
+                        }
+                    }
                 }
             }
             DaemonEvent::Focus => {
