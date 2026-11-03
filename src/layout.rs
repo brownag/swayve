@@ -357,6 +357,29 @@ mod tests {
     }
 
     #[test]
+    fn test_window_destroyed_rehomes_to_lowest_survivor() {
+        // Registration order differs from con_id order: the heir is the lowest
+        // surviving con_id (200), not the first registered survivor (300).
+        let (state, parent_id) =
+            state_with_children(&[("first", 100), ("second", 300), ("third", 200)]);
+
+        let lm = LayoutManager::new();
+        let commands = lm.compute_commands(
+            LayoutAction::WindowDestroyed {
+                agent_id: AgentId("first".to_string()),
+                parent_id: Some(parent_id),
+            },
+            &state,
+        );
+
+        assert_eq!(commands.len(), 1);
+        assert!(matches!(
+            &commands[0],
+            SwayCommand::MarkWindow { con_id: 200, mark } if mark == "mark_children_parent"
+        ));
+    }
+
+    #[test]
     fn test_window_destroyed_without_survivors_is_silent() {
         // Last child of the parent: nothing left to carry the mark
         let (state, parent_id) = state_with_children(&[("only", 100)]);
