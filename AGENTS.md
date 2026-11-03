@@ -2,32 +2,58 @@
 
 ## Quick Start
 
-- **Build**: `make build` (or `cargo build`)
-- **Run**: `make run` (or `cargo run`)
-- **Test**: `make test` (or `cargo test`)
-- **Daemon**: `make daemon` (starts live daemon) or `make daemon-dry` (starts dry-run mock daemon)
-- **Reload**: `make reload` (reloads Sway configuration)
-
+- **Build**: `make build` (release binary) or `cargo build`
+- **Check**: `make check` (`cargo check`)
+- **Test**: `make test` (`cargo test`) — runs integration and unit tests
+- **Full gate**: `make all` (check + test + build)
+- **Run CLI**: `make run` (`cargo run -- --help`)
+- **Daemon**: `make daemon` (live, requires `SWAYSOCK`) or `make daemon-dry` (dry-run, logs commands, offline safe)
+- **Reload**: `make reload` (`swaymsg reload`)
+- **Clean**: `make clean`
 
 ## Find Things
 
-- `src/` — Source code (`main.rs`, `lib.rs`, `cli.rs`, `config.rs`, `daemon.rs`, `sway.rs`, `types.rs`)
+- `src/` — Rust crate source
+  - `main.rs` — binary entry point
+  - `lib.rs` — module root (`cli`, `config`, `daemon`, `layout`, `sway`, `types`)
+  - `cli.rs` — argument parsing (clap)
+  - `config.rs` — TOML config loading (`~/.config/swayve/config.toml`)
+  - `daemon.rs` — background daemon and IPC
+  - `layout.rs` — window/container layout logic
+  - `sway.rs` — Sway IPC client (`swayipc-async`)
+  - `types.rs` — shared types
 - `tests/` — Integration tests (`integration_tests.rs`)
-- `planning/` — Implementation plans and state (`EXECUTION_PLAN.md`, `PROMPT_TEMPLATE.md`, `STATE.md`)
-- `target/` — Build artifacts and dependency information
+- `integrations/` — Agent-side clients, separate from the Rust crate
+  - `claude/` — shell wrapper, hook installer, and hook test script (`test-hooks.sh`)
+  - `pi/` — TypeScript client (`src/`, `tests/`), its own `package.json`
+  - `antigravity/` — README only
+- `planning/` — Execution plans and state
+  - `EXECUTION_PLAN*.md` — wave plans
+  - `PROMPT_TEMPLATE.md` — worker prompt template
+  - `STATE.md` — execution state
+  - `tasks/` — per-task files, named `<wave>.<task>.todo.md`
+- `target/` — Cargo build output (gitignored)
+- `.pi-subagents/` — agent run artifacts (gitignored)
+- Root design docs: `Sway Multi Agent Architecture Design.md`, `Sway Multi-Agent Viewer Architecture.md`
 
 ## Workflows
 
-- **Development**: Use `cargo` for building, running, and testing.
-- **Implementation Planning**: Review `planning/` for active execution plans and state before making changes.
+- **Rust development**: `cargo` via `make`. Edition 2024.
+- **TypeScript client** (`integrations/pi/`): `npm run build`, `npm test` (uses `tsx --test`), run from that directory. Not covered by the root Makefile.
+- **Claude hook tests**: `integrations/claude/test-hooks.sh` — starts a mock Unix-socket server and checks hook status messages.
+- **Implementation planning**: Review `planning/` for the active wave plan and `STATE.md` before changing code. Task status lives there, not in this file.
 
 ## Infrastructure
 
-- **Ecosystem**: Rust (Edition 2024)
-- **Build Tool**: Cargo
-- **Key Dependencies**: `tokio`, `serde`, `swayipc-async`, `clap`, `toml`, `anyhow`, `futures-lite`
+- **Ecosystem**: Rust (Edition 2024), Cargo
+- **Key dependencies**: `tokio`, `serde`, `serde_json`, `swayipc-async`, `clap`, `toml`, `anyhow`, `futures-lite`, `shlex`
+- **Runtime requirement**: a running Sway session with `SWAYSOCK` set for live mode
+- **Config file**: `~/.config/swayve/config.toml`
+- **Ignored paths**: `target/`, `.pi-subagents/`, `node_modules/`, `dist/`, `*.js`
 
 ## References
 
-- `Sway Multi Agent Architecture Design.md` — High-level design documentation.
-- `Sway Multi-Agent Viewer Architecture.md` — Viewer component architecture.
+- `README.md` — user-facing install, Sway config, CLI reference
+- `Sway Multi Agent Architecture Design.md` — high-level design
+- `Sway Multi-Agent Viewer Architecture.md` — viewer component architecture
+- `integrations/claude/README.md`, `integrations/pi/README.md`, `integrations/antigravity/README.md` — per-integration setup
