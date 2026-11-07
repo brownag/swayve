@@ -1,11 +1,11 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-07
-Source State: STATE_16.md (Orchestration 16 complete; ADRs 0001-0011 accepted; `make all` 25 unit + 10 integration passing)
+Source State: STATE_16.md (Orchestration 16 complete; ADRs 0001-0011 accepted; `make all` 25 unit + 10 integration passing; live Sway focus check passed)
 
 ## Circled Goal (Active)
 
-- None. G8 is complete (see Completed).
+- None. G12 is complete (see Completed).
 
 ## Sequenced Goals (Dependency DAG)
 
@@ -13,8 +13,10 @@ Source State: STATE_16.md (Orchestration 16 complete; ADRs 0001-0011 accepted; `
 
 ## Independent Backlog
 
-- None.
-
+- **[G13]** The daemon-down focus fallback has a test that pins its flat behavior. Covers the gap ADR 0003 records.
+  - Low leverage. Nothing depends on it.
+- **[G14]** Planning waves 1–14 are archived out of `planning/` into `planning/archive/`. `AGENTS.md`'s "Find things" section is updated to match.
+  - Low leverage. Cleanup only, and reversible through git.
 
 ## Deferred
 
@@ -25,17 +27,22 @@ Source State: STATE_16.md (Orchestration 16 complete; ADRs 0001-0011 accepted; `
 
 ## Blocked / Pruned
 
+- **[G15]** An Antigravity sidecar integration exists in this repo. `integrations/antigravity/` has a README only.
+  - Status: Blocked / External Watch
+  - Reason: the sidecar is built and owned outside this repo. It depends on Antigravity's API, which is not available here.
 - **[G11]** Adopt the JSON-RPC 2.0 envelope from the design doc.
   - Status: Pruned
   - Reason: ADR 0004 rejected it; the newline-delimited JSON protocol is in use.
 
 ## Completed
 
-- **[G1]** Daemon focus follows Sway's actual focus. Commit `436b190`; test `test_focus_follows_sway_focus` (`tests/integration_tests.rs`). Live-Sway check from plan 13 is still outstanding (`planning/STATE_15.md`).
+- **[G1]** Daemon focus follows Sway's actual focus. Commit `436b190`. Live check passed on 2026-11-07 (`planning/STATE_16.md`).
 - **[G2]** Focus-state decision recorded as ADR 0011. Commit `874d7db`.
-- **[G3]** Malformed config reports an error and falls back to defaults. Commit `5788c3e`. Live check from plan 15 is still outstanding.
-- **[G4]** Children-mark rehome covered with several surviving siblings. Commit `3422164`.
-- **[G5]** Subscriber drop-on-full policy recorded in ADR 0008 and covered by `test_daemon_broadcast_drops_newest_when_subscriber_full`. Commit `55314d4` (plan 16).
-- **[G6]** Daemon-down fallback decided and documented: the CLI keeps the flat fallback and does not start the daemon. Recorded in the README note on the `$mod+a` binding and in ADR 0003's Consequences. No new ADR: the choice is easy to reverse. Uncommitted at time of writing.
-- **[G8]** Test layout and CI convention recorded in `AGENTS.md` (Test layout and CI bullets), not an ADR: the choice is easy to change. Uncommitted at time of writing.
-- **[G7]** Planning docs reconciled: the five questions in `planning/tasks/4.1.todo.md` are marked resolved, each pointing to ADR 0007, ADR 0011, or the code. The JSON-RPC section of `planning/Sway Multi-Agent Viewer Architecture.md` carries a superseded note pointing to ADR 0004. Uncommitted at time of writing.
+- **[G12]** Malformed config is reported live: `swayve status` with a malformed `config.toml` prints the path and parse error to stderr, exits 0, and runs with defaults. Checked 2026-11-07 (`planning/STATE_16.md`).
+- **[G3]** Malformed config reports an error and falls back to defaults. Commit `5788c3e`. Unit test plus the G12 live check.
+- **[G4]** Children-mark rehome covered with several surviving siblings. Commit `3422164`. Live check passed on 2026-11-07: the mark moved to the surviving sibling.
+- **[G5]** Subscriber drop-on-full policy recorded in ADR 0008 and covered by `test_daemon_broadcast_drops_newest_when_subscriber_full`. Commit `55314d4`.
+- **[G6]** Daemon-down fallback decided: the CLI keeps the flat fallback and does not start the daemon. Recorded in the README note on the `$mod+a` binding and ADR 0003. No new ADR. Commit `d313105`.
+- **[G7]** Planning docs reconciled. Commit `ccf52a7`.
+- **[G8]** Test layout and CI convention recorded in `AGENTS.md`, not an ADR. Commit `d313105`.
+- **[G16]** Stale docs and CLI trap fixed: Pi and Antigravity README drift, stale `TODO.md` removed, `spawn --parent` documents the full agent ID and warns when the parent is unregistered. Commits `398fa92`, `66ef55c`.
