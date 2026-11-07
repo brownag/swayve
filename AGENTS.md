@@ -28,9 +28,9 @@
   - `pi/` — TypeScript client (`src/`, `tests/`), its own `package.json`
   - `antigravity/` — README only
 - `planning/` — Execution plans and state
-  - `EXECUTION_PLAN*.md` — wave plans
+  - `EXECUTION_PLAN_N.md` — wave plans (current: highest N; older waves in planning/archive/)
   - `PROMPT_TEMPLATE.md` — worker prompt template
-  - `STATE.md` — execution state
+  - `STATE_N.md` — execution state (current: highest N)
   - `tasks/` — per-task files, named `<wave>.<task>.todo.md`
 - `target/` — Cargo build output (gitignored)
 - `.pi-subagents/` — agent run artifacts (gitignored)
@@ -41,7 +41,7 @@
 - **Rust development**: `cargo` via `make`. Edition 2024.
 - **TypeScript client** (`integrations/pi/`): `npm run build`, `npm test` (uses `tsx --test`), run from that directory. Not covered by the root Makefile.
 - **Claude hook tests**: `integrations/claude/test-hooks.sh` — starts a mock Unix-socket server and checks hook status messages.
-- **Implementation planning**: Review `planning/` for the active wave plan and `STATE.md` before changing code. Task status lives there, not in this file.
+- **Implementation planning**: Review `planning/` for the active wave plan and the highest-numbered `STATE_N.md` before changing code. Task status lives there, not in this file.
 - **Test layout**: Rust unit tests live in a `#[cfg(test)] mod tests` at the bottom of the module they cover (`src/daemon.rs`, `src/layout.rs`, `src/config.rs`). Cross-module and socket-level tests go in `tests/integration_tests.rs`. Each `integrations/` client tests itself in its own directory; the root gate does not run them.
 - **CI**: none. There is no `.github/` workflow. `make all` run locally is the only gate.
 

@@ -36,6 +36,8 @@ Source State: STATE_16.md (Orchestration 16 complete; ADRs 0001-0011 accepted; `
 
 ## Completed
 
+- **[G13]** Daemon-down fallback test: `test_flat_fallback_cycles_agent_windows_in_tree_order` pins the flat selection (Orchestration 17, task 17.1.1). README and ADR 0003 now say the fallback cycles agent windows only (17.1.2).
+- **[G14]** Planning waves 1–14 archived into `planning/archive/` with `git mv` (17.1.3). `AGENTS.md` points at `EXECUTION_PLAN_N.md` and `STATE_N.md` with the highest N as current.
 - **[G1]** Daemon focus follows Sway's actual focus. Commit `436b190`. Live check passed on 2026-11-07 (`planning/STATE_16.md`).
 - **[G2]** Focus-state decision recorded as ADR 0011. Commit `874d7db`.
 - **[G12]** Malformed config is reported live: `swayve status` with a malformed `config.toml` prints the path and parse error to stderr, exits 0, and runs with defaults. Checked 2026-11-07 (`planning/STATE_16.md`).
