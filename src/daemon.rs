@@ -826,4 +826,38 @@ mod tests {
         state.broadcast_status();
         assert_eq!(state.subscribers.len(), 1);
     }
+
+    #[test]
+    fn test_daemon_broadcast_drops_newest_when_subscriber_full() {
+        let mut state = DaemonState::new(Config::default());
+        let (tx, mut rx) = mpsc::channel(32);
+        state.subscribers.push(tx);
+
+        state.register_agent(
+            AgentId("full_sub_agent".to_string()),
+            ProjectId("proj".to_string()),
+            124,
+            "agent.full".to_string(),
+            None,
+        );
+
+        // Fill the channel, then one more snapshot that must be dropped.
+        for _ in 0..32 {
+            state.broadcast_status();
+        }
+        state.broadcast_status();
+        assert_eq!(state.subscribers.len(), 1);
+
+        let mut received = 0;
+        while rx.try_recv().is_ok() {
+            received += 1;
+        }
+        assert_eq!(received, 32);
+
+        // Subscriber stays registered and receives the next snapshot.
+        state.broadcast_status();
+        let msg = rx.try_recv().unwrap();
+        assert!(msg.contains("full_sub_agent"));
+        assert_eq!(state.subscribers.len(), 1);
+    }
 }
