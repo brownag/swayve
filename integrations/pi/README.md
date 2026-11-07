@@ -14,7 +14,7 @@ A production-ready TypeScript library and scaffold for integrating agents with *
 ```bash
 # Clone this repository
 git clone <repository-url>
-cd swayve-client
+cd integrations/pi   # from the swayve repository root
 
 # Install dependencies
 npm install

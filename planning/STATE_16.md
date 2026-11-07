@@ -17,7 +17,7 @@ Last Updated: 2026-11-07
 - [x] `make all` passes serially (check, test, build); 25 unit + 10 integration passed, release build OK, no warnings
 
 ### Deferred (manual, not gated)
-- [ ] Live-Sway focus check from plan 13 (outstanding).
+- [x] Live-Sway focus check from plan 13, run 2026-11-07 on a scratch workspace (`proj:c1`, closed afterwards). Manual focus on A2 then `focus --cycle` landed on B. Pre-order cycle A→A1→A2→B→A held. After A1 closed, the children mark moved to A2 (TODO.md task 2 assumption confirmed on a compositor). Note: `swayve spawn --parent` takes the parent's full agent ID (for example `A-c1-14404`), not the bare name.
 - [ ] Malformed-config live check from plan 15 (outstanding).
 
 ## Task Reports

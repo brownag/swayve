@@ -17,7 +17,7 @@ When Swayve launches an agent container or window, or when an Antigravity subage
 | `SWAYVE_SOCKET` | Path to the active Swayve IPC Unix domain socket | `/tmp/swayve.sock` |
 | `SWAYVE_AGENT_ID` | Unique ID of the agent instance | `agy-agent-8f3a` |
 | `SWAYVE_PROJECT_ID` | Project / workspace ID | `swayve-dev` |
-| `SWAYVE_PARENT_ID` | Agent ID of the spawning parent agent (if subagent) | `parent-agent-001` |
+| `SWAYVE_PARENT_ID` | Agent ID of the spawning parent agent (if subagent). Not set by the swayve daemon today; the Antigravity sidecar must supply it | `parent-agent-001` |
 
 ---
 
