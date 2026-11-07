@@ -5,21 +5,20 @@ Source State: STATE_16.md (Orchestration 16 complete; ADRs 0001-0011 accepted; `
 
 ## Circled Goal (Active)
 
-- **[G7]** Planning docs reconciled: stale open questions in `planning/tasks/4.1.todo.md` closed, and the design docs' JSON-RPC sections marked superseded by ADR 0004.
-  - Why now: it is the only remaining goal that needs no owner decision. G6 needs one, and G8 needs ADR content decided first. Stale planning text also misleads future orchestrators, and it is cheap to fix.
-  - Exit criteria: every question in `planning/tasks/4.1.todo.md` is either answered with a pointer to the ADR or code that settles it, or marked as resolved and superseded. The JSON-RPC section of `Sway Multi-Agent Viewer Architecture.md` (around line 565) carries a superseded note that points to ADR 0004. Docs-only change, so `make all` stays green with the same test counts.
-  - First action: read `planning/tasks/4.1.todo.md` lines 59-80 and map each of the five questions to ADR 0007 or 0011 (focus derivation, sibling sort order, and focus-event source are already settled there). Record each answer in place.
+- None ready without an owner decision. Pick G6 or G8 below.
 
 ## Sequenced Goals (Dependency DAG)
 
-- None open. G9 depends on G5, which is complete, but G9 is deferred on a trigger (see Deferred).
+- None open.
 
 ## Independent Backlog
 
 - **[G6]** Daemon-down fallback is decided and documented: keep the flat cycle and document it, or make the CLI start the daemon. Current default: keep flat and document (ADR 0003 rejected a shared state file).
   - Needs an owner decision. Choosing "keep flat" is a docs-only change. Choosing "CLI starts the daemon" is a behavior change.
+  - Awaiting decision: keep flat (docs-only) or CLI starts the daemon (behavior change).
 - **[G8]** A test-layout and CI ADR is written (candidate listed in `docs/decisions/README.md`).
   - Needs the owner to state the convention to record. Only `make test` exists today.
+  - Awaiting decision: the convention to record.
 
 ## Deferred
 
@@ -41,3 +40,4 @@ Source State: STATE_16.md (Orchestration 16 complete; ADRs 0001-0011 accepted; `
 - **[G3]** Malformed config reports an error and falls back to defaults. Commit `5788c3e`. Live check from plan 15 is still outstanding.
 - **[G4]** Children-mark rehome covered with several surviving siblings. Commit `3422164`.
 - **[G5]** Subscriber drop-on-full policy recorded in ADR 0008 and covered by `test_daemon_broadcast_drops_newest_when_subscriber_full`. Commit `55314d4` (plan 16).
+- **[G7]** Planning docs reconciled: the five questions in `planning/tasks/4.1.todo.md` are marked resolved, each pointing to ADR 0007, ADR 0011, or the code. The JSON-RPC section of `planning/Sway Multi-Agent Viewer Architecture.md` carries a superseded note pointing to ADR 0004. Uncommitted at time of writing.

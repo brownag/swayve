@@ -562,6 +562,8 @@ Save this in \~/.config/sway/config.d/50-agent-viewer.conf (or include it in you
 
 ---
 
+> **Superseded (protocol):** This JSON-RPC 2.0 section is superseded by [ADR 0004](../docs/decisions/0004-newline-delimited-json-ipc.md), which uses newline-delimited JSON with method-tagged messages. The `sway-agentd` naming is superseded by [ADR 0002](../docs/decisions/0002-rust-tokio-daemon.md). Kept for history; do not implement from it.
+
 *User prompt: Define a JSON-RPC protocol specification for sub-agents (Pi, Claude Code) to communicate state to the orchestrator daemon.*
 
 Response: Here is the formal **JSON-RPC 2.0 Protocol Specification** designed for bi-directional communication over local Unix Domain Sockets (/tmp/sway-agent.sock).
