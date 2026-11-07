@@ -405,6 +405,14 @@ fi
     Ok(())
 }
 
+/// Pick the next agent in tree order after the focused one (wrapping); first if none focused.
+fn next_flat_agent_index(agents: &[(i64, bool)]) -> Option<usize> {
+    if agents.is_empty() {
+        return None;
+    }
+    Some(agents.iter().position(|&(_, f)| f).map_or(0, |i| (i + 1) % agents.len()))
+}
+
 /// Cycle focus across agent windows by talking to Sway directly, ignoring hierarchy.
 /// Used only when the daemon is not reachable.
 async fn focus_cycle_standalone() -> Result<()> {
@@ -432,15 +440,9 @@ async fn focus_cycle_standalone() -> Result<()> {
     let mut agents = Vec::new();
     collect_agents_focus(&tree, &mut agents);
 
-    if agents.is_empty() {
+    let Some(next_idx) = next_flat_agent_index(&agents) else {
         println!("No active agent windows found to focus.");
         return Ok(());
-    }
-
-    let focused_idx = agents.iter().position(|&(_, focused)| focused);
-    let next_idx = match focused_idx {
-        Some(idx) => (idx + 1) % agents.len(),
-        None => 0,
     };
     let (target_id, _) = agents[next_idx];
     conn.run_command(&format!("[con_id=\"{}\"] focus", target_id)).await?;
@@ -560,6 +562,15 @@ fn format_status(status: &crate::types::AgentStatus) -> String {
 mod tests {
     use super::*;
     use clap::Parser;
+
+    #[test]
+    fn test_flat_fallback_cycles_agent_windows_in_tree_order() {
+        assert_eq!(next_flat_agent_index(&[]), None);
+        assert_eq!(next_flat_agent_index(&[(1, false), (2, true), (3, false)]), Some(2));
+        assert_eq!(next_flat_agent_index(&[(1, false), (2, false), (3, true)]), Some(0));
+        assert_eq!(next_flat_agent_index(&[(1, false), (2, false)]), Some(0));
+        assert_eq!(next_flat_agent_index(&[(1, true)]), Some(0));
+    }
 
     #[test]
     fn test_init_shell_cmd_parsing() {
