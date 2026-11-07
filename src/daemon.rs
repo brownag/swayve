@@ -63,6 +63,12 @@ impl DaemonState {
         } else {
             false
         };
+        if let Some(ref p_id) = parent_id {
+            if !is_subagent {
+                // Usually a bare name passed where the full agent ID is needed.
+                eprintln!("[daemon] Parent {} is not registered; {} is not linked to it", p_id.0, agent_id.0);
+            }
+        }
 
         let mark = agent_id.to_mark();
         let agent = AgentWindow {

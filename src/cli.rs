@@ -40,6 +40,7 @@ pub enum Commands {
         command: Option<String>,
         #[arg(long, short)]
         prompt: Option<String>,
+        /// Full agent ID of the parent (its SWAYVE_AGENT_ID, e.g. A-c1-14404), not the bare name
         #[arg(long)]
         parent: Option<String>,
     },
