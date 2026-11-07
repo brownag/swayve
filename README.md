@@ -91,7 +91,7 @@ for_window [app_id="agent.orchestrator"] {
 bindsym $mod+Shift+a exec swaymsg '[con_mark="needs_attention"] focus'
 
 # Step through agent windows in hierarchy order (each parent, then its children)
-# Requires the daemon. Without it, cycling falls back to every Sway window in flat order.
+# Requires the daemon. Without it, cycling falls back to agent windows only, in flat order (hierarchy is lost).
 bindsym $mod+a exec swayve focus --cycle
 
 # Toggle HUD/Orchestrator Panel overlay

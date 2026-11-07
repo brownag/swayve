@@ -30,7 +30,7 @@ Chosen option: "CLI sends requests to the daemon over the Unix socket", because 
 
 ### Consequences
 * **Positive**: `swayve focus --cycle` sends `daemon.focus` to the socket (`src/cli.rs` `Commands::Focus`). The daemon chooses the next sibling.
-* **Negative**: When the socket is unreachable, the CLI falls back to a **flat** cycle over the Sway tree and prints `Daemon unreachable. Cycling focus directly.` The hierarchy is lost in that path. Wave 4's hazard notes called this "graceful degradation"; that is what it does, with the reduced behaviour above.
+* **Negative**: When the socket is unreachable, the CLI falls back to a **flat** cycle over agent windows (`app_id` starting with `agent.`) in the Sway tree and prints `Daemon unreachable. Cycling focus directly.` The hierarchy is lost in that path. Wave 4's hazard notes called this "graceful degradation"; that is what it does, with the reduced behaviour above.
 * **Negative**: Every focus action needs a live daemon for full behaviour.
 
 ## Validation & Compliance
