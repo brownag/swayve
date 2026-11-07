@@ -5,7 +5,7 @@ Source State: STATE_16.md (Orchestration 16 complete; ADRs 0001-0011 accepted; `
 
 ## Circled Goal (Active)
 
-- None ready without an owner decision. Pick G6 or G8 below.
+- None. G8 is complete (see Completed).
 
 ## Sequenced Goals (Dependency DAG)
 
@@ -13,12 +13,8 @@ Source State: STATE_16.md (Orchestration 16 complete; ADRs 0001-0011 accepted; `
 
 ## Independent Backlog
 
-- **[G6]** Daemon-down fallback is decided and documented: keep the flat cycle and document it, or make the CLI start the daemon. Current default: keep flat and document (ADR 0003 rejected a shared state file).
-  - Needs an owner decision. Choosing "keep flat" is a docs-only change. Choosing "CLI starts the daemon" is a behavior change.
-  - Awaiting decision: keep flat (docs-only) or CLI starts the daemon (behavior change).
-- **[G8]** A test-layout and CI ADR is written (candidate listed in `docs/decisions/README.md`).
-  - Needs the owner to state the convention to record. Only `make test` exists today.
-  - Awaiting decision: the convention to record.
+- None.
+
 
 ## Deferred
 
@@ -40,4 +36,6 @@ Source State: STATE_16.md (Orchestration 16 complete; ADRs 0001-0011 accepted; `
 - **[G3]** Malformed config reports an error and falls back to defaults. Commit `5788c3e`. Live check from plan 15 is still outstanding.
 - **[G4]** Children-mark rehome covered with several surviving siblings. Commit `3422164`.
 - **[G5]** Subscriber drop-on-full policy recorded in ADR 0008 and covered by `test_daemon_broadcast_drops_newest_when_subscriber_full`. Commit `55314d4` (plan 16).
+- **[G6]** Daemon-down fallback decided and documented: the CLI keeps the flat fallback and does not start the daemon. Recorded in the README note on the `$mod+a` binding and in ADR 0003's Consequences. No new ADR: the choice is easy to reverse. Uncommitted at time of writing.
+- **[G8]** Test layout and CI convention recorded in `AGENTS.md` (Test layout and CI bullets), not an ADR: the choice is easy to change. Uncommitted at time of writing.
 - **[G7]** Planning docs reconciled: the five questions in `planning/tasks/4.1.todo.md` are marked resolved, each pointing to ADR 0007, ADR 0011, or the code. The JSON-RPC section of `planning/Sway Multi-Agent Viewer Architecture.md` carries a superseded note pointing to ADR 0004. Uncommitted at time of writing.

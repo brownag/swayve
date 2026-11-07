@@ -42,6 +42,8 @@
 - **TypeScript client** (`integrations/pi/`): `npm run build`, `npm test` (uses `tsx --test`), run from that directory. Not covered by the root Makefile.
 - **Claude hook tests**: `integrations/claude/test-hooks.sh` — starts a mock Unix-socket server and checks hook status messages.
 - **Implementation planning**: Review `planning/` for the active wave plan and `STATE.md` before changing code. Task status lives there, not in this file.
+- **Test layout**: Rust unit tests live in a `#[cfg(test)] mod tests` at the bottom of the module they cover (`src/daemon.rs`, `src/layout.rs`, `src/config.rs`). Cross-module and socket-level tests go in `tests/integration_tests.rs`. Each `integrations/` client tests itself in its own directory; the root gate does not run them.
+- **CI**: none. There is no `.github/` workflow. `make all` run locally is the only gate.
 
 ## Infrastructure
 

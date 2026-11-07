@@ -19,5 +19,5 @@ Ordered by dependency: each record depends only on records above it.
 ## Not recorded as ADRs
 
 * **Design docs** (`Sway Multi Agent Architecture Design.md`, `Sway Multi-Agent Viewer Architecture.md`): their JSON-RPC 2.0 protocol and `sway-agentd` naming are superseded in practice by [0004](0004-newline-delimited-json-ipc.md) and [0002](0002-rust-tokio-daemon.md). They are proposals, not decisions, and are not superseded formally.
-* **Test layout and CI**: no enforced convention beyond `make test`. Candidate for a future record.
+* **Test layout and CI**: recorded in `AGENTS.md` (Test layout and CI bullets). Not an ADR, because it is easy to change.
 * **Per-task micro-plan details** (`planning/tasks/`): transient, per the heuristic filter.
