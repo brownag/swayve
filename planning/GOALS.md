@@ -1,32 +1,29 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-02
-Source State: STATE.md (Wave 12 complete; ADRs 0001-0010 accepted)
+Last Updated: 2026-11-07
+Source State: STATE_16.md (Orchestration 16 complete; ADRs 0001-0011 accepted; `make all` 25 unit + 10 integration passing)
 
 ## Circled Goal (Active)
 
-- **[G1]** Daemon focus follows Sway's actual focus, so `focus --cycle` continues from the window the user is really on.
-  - Why now: `last_focused` (`src/daemon.rs:271`) only changes when the daemon itself focuses. `src/sway.rs` subscribes to window create and close events, not focus. After any manual focus change, the next cycle starts from a stale window. Every focus action depends on this (ADR 0007).
-  - Exit criteria: a test changes focus outside the daemon, runs a focus cycle, and lands on the correct sibling. `cargo test` passes with no new warnings.
-  - First action: subscribe to Sway window-focus events in `src/sway.rs` and send a focus event to the daemon that updates `last_focused`.
+- **[G7]** Planning docs reconciled: stale open questions in `planning/tasks/4.1.todo.md` closed, and the design docs' JSON-RPC sections marked superseded by ADR 0004.
+  - Why now: it is the only remaining goal that needs no owner decision. G6 needs one, and G8 needs ADR content decided first. Stale planning text also misleads future orchestrators, and it is cheap to fix.
+  - Exit criteria: every question in `planning/tasks/4.1.todo.md` is either answered with a pointer to the ADR or code that settles it, or marked as resolved and superseded. The JSON-RPC section of `Sway Multi-Agent Viewer Architecture.md` (around line 565) carries a superseded note that points to ADR 0004. Docs-only change, so `make all` stays green with the same test counts.
+  - First action: read `planning/tasks/4.1.todo.md` lines 59-80 and map each of the five questions to ADR 0007 or 0011 (focus derivation, sibling sort order, and focus-event source are already settled there). Record each answer in place.
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G2]** Record the focus-state decision as ADR 0011 (`last_focused` as the source of truth, fed by Sway focus events).
-  - Depends on: G1
+- None open. G9 depends on G5, which is complete, but G9 is deferred on a trigger (see Deferred).
 
 ## Independent Backlog
 
-- **[G3]** A malformed `~/.config/swayve/config.toml` reports an error instead of silently using defaults (ADR 0010; `src/config.rs` `load_config`).
-- **[G4]** A test confirms that when a child closes, the children mark moves to the surviving sibling (ADR 0007 negative).
-- **[G5]** The subscriber channel's drop-on-full behavior is recorded and covered by a test (ADR 0008; `try_send` at `src/daemon.rs:49`).
 - **[G6]** Daemon-down fallback is decided and documented: keep the flat cycle and document it, or make the CLI start the daemon. Current default: keep flat and document (ADR 0003 rejected a shared state file).
-- **[G7]** Planning docs reconciled: stale open questions in `planning/tasks/4.1.todo.md` closed, and the design docs' JSON-RPC sections marked superseded by ADR 0004.
+  - Needs an owner decision. Choosing "keep flat" is a docs-only change. Choosing "CLI starts the daemon" is a behavior change.
 - **[G8]** A test-layout and CI ADR is written (candidate listed in `docs/decisions/README.md`).
+  - Needs the owner to state the convention to record. Only `make test` exists today.
 
 ## Deferred
 
-- **[G9]** Full-state broadcast cost is reduced to diffs (ADR 0008 upgrade path).
+- **[G9]** Full-state broadcast cost is reduced to diffs (ADR 0008 upgrade path). Depends on G5 (complete).
   - Trigger: measurable HUD lag, or agent counts that make full-list pushes noticeable.
 - **[G10]** `XDG_CONFIG_HOME` is honored for the config path (ADR 0010 negative).
   - Trigger: a user request or a packaging need.
@@ -36,3 +33,11 @@ Source State: STATE.md (Wave 12 complete; ADRs 0001-0010 accepted)
 - **[G11]** Adopt the JSON-RPC 2.0 envelope from the design doc.
   - Status: Pruned
   - Reason: ADR 0004 rejected it; the newline-delimited JSON protocol is in use.
+
+## Completed
+
+- **[G1]** Daemon focus follows Sway's actual focus. Commit `436b190`; test `test_focus_follows_sway_focus` (`tests/integration_tests.rs`). Live-Sway check from plan 13 is still outstanding (`planning/STATE_15.md`).
+- **[G2]** Focus-state decision recorded as ADR 0011. Commit `874d7db`.
+- **[G3]** Malformed config reports an error and falls back to defaults. Commit `5788c3e`. Live check from plan 15 is still outstanding.
+- **[G4]** Children-mark rehome covered with several surviving siblings. Commit `3422164`.
+- **[G5]** Subscriber drop-on-full policy recorded in ADR 0008 and covered by `test_daemon_broadcast_drops_newest_when_subscriber_full`. Commit `55314d4` (plan 16).
