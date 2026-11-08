@@ -432,6 +432,17 @@ pub async fn start_daemon_ipc_with_limits(
     }
 }
 
+/// Owns a subscription's receiver and socket write half. Ends on a write error, dropping `rx`
+/// so the daemon prunes the subscriber. An idle writer notices a closed socket only on its next write.
+async fn subscriber_writer(mut rx: mpsc::Receiver<String>, mut writer: tokio::net::unix::OwnedWriteHalf) {
+    use tokio::io::AsyncWriteExt;
+    while let Some(msg) = rx.recv().await {
+        if writer.write_all(msg.as_bytes()).await.is_err() || writer.write_all(b"\n").await.is_err() {
+            break;
+        }
+    }
+}
+
 async fn handle_client(
     stream: UnixStream,
     event_tx: mpsc::Sender<DaemonEvent>,
@@ -469,40 +480,18 @@ async fn handle_client(
             Ok(AgentIPCMessage::Focus) => {
                 let _ = event_tx.send(DaemonEvent::Focus).await;
             }
-            Ok(AgentIPCMessage::SubscribeStatus) => {
-                let (sub_tx, mut sub_rx) = mpsc::channel::<String>(32);
-                if event_tx.send(DaemonEvent::Subscribe(sub_tx)).await.is_err() {
+            Ok(sub @ (AgentIPCMessage::SubscribeStatus | AgentIPCMessage::SubscribeDiff)) => {
+                let (sub_tx, sub_rx) = mpsc::channel::<String>(32);
+                let event = if matches!(sub, AgentIPCMessage::SubscribeDiff) {
+                    DaemonEvent::SubscribeDiff(sub_tx)
+                } else {
+                    DaemonEvent::Subscribe(sub_tx)
+                };
+                if event_tx.send(event).await.is_err() {
                     return Ok(());
                 }
-                if let Some(mut writer) = writer_opt.take() {
-                    tokio::spawn(async move {
-                        use tokio::io::AsyncWriteExt;
-                        while let Some(msg) = sub_rx.recv().await {
-                            if writer.write_all(msg.as_bytes()).await.is_err()
-                                || writer.write_all(b"\n").await.is_err()
-                            {
-                                break;
-                            }
-                        }
-                    });
-                }
-            }
-            Ok(AgentIPCMessage::SubscribeDiff) => {
-                let (sub_tx, mut sub_rx) = mpsc::channel::<String>(32);
-                if event_tx.send(DaemonEvent::SubscribeDiff(sub_tx)).await.is_err() {
-                    return Ok(());
-                }
-                if let Some(mut writer) = writer_opt.take() {
-                    tokio::spawn(async move {
-                        use tokio::io::AsyncWriteExt;
-                        while let Some(msg) = sub_rx.recv().await {
-                            if writer.write_all(msg.as_bytes()).await.is_err()
-                                || writer.write_all(b"\n").await.is_err()
-                            {
-                                break;
-                            }
-                        }
-                    });
+                if let Some(writer) = writer_opt.take() {
+                    tokio::spawn(subscriber_writer(sub_rx, writer));
                 }
             }
             Ok(msg) => {
@@ -1421,5 +1410,46 @@ mod tests {
                 drop(rxs);
             }
         }
+    }
+
+    async fn writer_ends_after_peer_close(mut state: DaemonState, diff: bool) {
+        use tokio::io::AsyncBufReadExt;
+        let (tx, rx) = mpsc::channel::<String>(32);
+        if diff {
+            state.push_diff_subscriber(tx.clone());
+        } else {
+            state.push_full_subscriber(tx.clone());
+        }
+        let (daemon_side, peer) = UnixStream::pair().unwrap();
+        let (_r, w) = daemon_side.into_split();
+        let handle = tokio::spawn(subscriber_writer(rx, w));
+
+        tx.send("one".to_string()).await.unwrap();
+        let mut lines = BufReader::new(peer).lines();
+        assert_eq!(lines.next_line().await.unwrap().as_deref(), Some("one"));
+        drop(lines);
+
+        // Writes to a closed peer may need a couple of attempts to surface EPIPE.
+        let ended = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while !handle.is_finished() {
+                let _ = tx.send("two".to_string()).await;
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        assert!(ended.is_ok(), "writer task did not end after peer close");
+        assert!(tx.is_closed());
+        state.broadcast_status();
+        assert_eq!(state.subscribers.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_writer_ends_on_socket_close_full() {
+        writer_ends_after_peer_close(DaemonState::new(Config::default()), false).await;
+    }
+
+    #[tokio::test]
+    async fn test_writer_ends_on_socket_close_diff() {
+        writer_ends_after_peer_close(DaemonState::new(Config::default()), true).await;
     }
 }

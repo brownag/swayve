@@ -28,7 +28,7 @@ Last Updated: 2026-11-08
 - [x] **Task 28.2.1**: `broadcast_diff` detects a closed channel before the unchanged-state return
 
 ### Wave 6: full and diff writers share one lifetime owner (G81)
-- [ ] **Task 28.2.2**: one writer function for both subscription modes
+- [x] **Task 28.2.2**: one writer function for both subscription modes
 
 ### Wave 7: monitor argv through one helper (G80)
 - [ ] **Task 28.3.1**: `spawn_monitor_terminal` builds argv from a list; spaced log path stays one argument
@@ -42,7 +42,7 @@ Last Updated: 2026-11-08
 ### Wave gates
 - [x] After wave 1: `make all` serial, exit 0, zero warnings.
 - [x] After wave 4: `make all` serial, exit 0, zero warnings. G79 exit criteria checked.
-- [ ] After wave 6: `make all` serial, exit 0, zero warnings. G81 exit criteria checked.
+- [x] After wave 6: `make all` serial, exit 0, zero warnings. G81 exit criteria checked.
 - [ ] After wave 9: `make all` serial, exit 0, zero warnings. G80 exit criteria checked.
 
 ### Orchestrator steps
@@ -79,4 +79,11 @@ Last Updated: 2026-11-08
 - Status: done. `src/daemon.rs` `broadcast_diff` (~108) early return is `!sub.tx.is_closed()`. New test `test_diff_subscriber_removed_when_unchanged`.
 - Red: subscriber count 1, expected 0. Green: `test_diff_subscriber` 3 passed; `slow_consumer` 1 passed; `make check` exit 0, zero warnings.
 - Deviations: none.
+
+### 28.2.2 (done) and wave 6 gate
+- Status: done. `src/daemon.rs` `subscriber_writer(rx, writer)` (~435) is the one writer for both modes; `handle_client` merges the two subscribe arms (~483). Tests `test_writer_ends_on_socket_close_full` and `test_writer_ends_on_socket_close_diff`.
+- Design change (approved): no oneshot and no half-close signal, so shell clients that half-close keep their stream. Accepted limit: an idle writer notices a closed socket only on its next write.
+- Red: compile failure (missing `subscriber_writer`). Green: writer tests pass.
+- Gate: `make all` serial exit 0, zero warnings; unit 80 passed / 2 ignored; integration 12 passed; subscribe_golden, slow_consumer green.
+- G81 exit criteria: diff-subscriber closed-channel removal (28.2.1), writer-cleanup tests (28.2.2), overflow and slow-consumer tests and both wire formats unchanged.
 
