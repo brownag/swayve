@@ -7,17 +7,20 @@ export interface SwayveClientConfig {
   socketPath?: string;
   agentId?: string;
   projectId?: string;
+  parentAgentId?: string;
 }
 
 export class SwayveClient {
   private readonly socketPath: string;
   private readonly agentId: string;
   private readonly projectId: string;
+  private readonly parentAgentId: string | null;
 
   constructor(config: SwayveClientConfig = {}) {
     this.socketPath = config.socketPath || process.env.SWAYVE_SOCKET || '';
     this.agentId = config.agentId || process.env.SWAYVE_AGENT_ID || 'unknown-agent';
     this.projectId = config.projectId || process.env.SWAYVE_PROJECT_ID || 'default-project';
+    this.parentAgentId = config.parentAgentId ?? process.env.SWAYVE_PARENT_ID ?? null;
   }
 
   private async _send(payload: Record<string, any>): Promise<void> {
@@ -62,6 +65,7 @@ export class SwayveClient {
         agent_id: this.agentId,
         agent_type: 'pi',
         project_id: this.projectId,
+        parent_agent_id: this.parentAgentId,
         pid: process.pid,
         app_id: `agent.${this.agentId}`,
       }

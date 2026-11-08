@@ -29,6 +29,7 @@ Swayve injects the following variables into your agent's environment:
 - `SWAYVE_SOCKET`: Path to the UNIX domain socket.
 - `SWAYVE_AGENT_ID`: Unique identifier for the agent.
 - `SWAYVE_PROJECT_ID`: Project or workspace identifier.
+- `SWAYVE_PARENT_ID`: ID of the spawning agent; unset for a root agent.
 
 ### 2. Using the Client
 
