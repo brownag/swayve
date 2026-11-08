@@ -8,7 +8,7 @@ help:
 	@echo "Available targets:"
 	@echo "  all       : Run check, test, and build the release binary"
 	@echo "  build     : Compile the release executable"
-	@echo "  check     : Run cargo check for compilation sanity"
+	@echo "  check     : Run cargo check and clippy (warnings denied)"
 	@echo "  test      : Run Rust, Pi and hook tests"
 	@echo "  clean     : Clean compile artifacts"
 	@echo "  run       : Run the debug binary"
@@ -28,6 +28,7 @@ build:
 # Compilation checks
 check:
 	cargo check
+	cargo clippy --all-targets -- -D warnings
 
 # Run tests
 test:
