@@ -264,8 +264,6 @@ impl DaemonState {
     }
 
     pub fn spawn_monitor_terminal(&self, agent_id: &AgentId) {
-        let monitor_app_id = format!("agent.monitor.{}", agent_id.0);
-        let monitor_title = format!("Monitor: {}", agent_id.0);
         let logs_dir = match crate::cli::swayve_runtime_dir() {
             Ok(d) => d.join("logs"),
             Err(e) => {
@@ -273,25 +271,7 @@ impl DaemonState {
                 return;
             }
         };
-        let monitor_cmd = format!("tail -f {}/{}.log", logs_dir.display(), agent_id.0);
-
-        let mut term_args = Vec::new();
-        for arg in &self.config.terminal.args {
-            if arg == "{command}" {
-                if let Some(split_cmds) = shlex::split(&monitor_cmd) {
-                    for sub_arg in split_cmds {
-                        term_args.push(sub_arg);
-                    }
-                } else {
-                    term_args.push(monitor_cmd.clone());
-                }
-            } else {
-                let replaced = arg
-                    .replace("{app_id}", &monitor_app_id)
-                    .replace("{title}", &monitor_title);
-                term_args.push(replaced);
-            }
-        }
+        let term_args = monitor_argv(&self.config.terminal.args, agent_id, &logs_dir);
 
         if let Err(e) = std::process::Command::new(&self.config.terminal.default_emulator)
             .args(&term_args)
@@ -788,9 +768,29 @@ fn find_registered_parent_ancestor(
     None
 }
 
+/// Pure argv for the monitor terminal; the log path stays a single argument.
+fn monitor_argv(template: &[String], agent_id: &AgentId, logs_dir: &std::path::Path) -> Vec<String> {
+    let log = logs_dir.join(format!("{}.log", agent_id.0)).to_string_lossy().into_owned();
+    let command = ["tail".to_string(), "-f".to_string(), log];
+    crate::cli::expand_terminal_args(
+        template,
+        &format!("agent.monitor.{}", agent_id.0),
+        &format!("Monitor: {}", agent_id.0),
+        &command,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_monitor_argv_spaced_path_is_one_arg() {
+        let tmpl: Vec<String> = ["--app-id", "{app_id}", "--title", "{title}", "-e", "{command}"]
+            .iter().map(|s| s.to_string()).collect();
+        let argv = monitor_argv(&tmpl, &AgentId("a1".into()), std::path::Path::new("/run/my swayve/logs"));
+        assert_eq!(argv, ["--app-id", "agent.monitor.a1", "--title", "Monitor: a1", "-e", "tail", "-f", "/run/my swayve/logs/a1.log"]);
+    }
 
     #[tokio::test]
     async fn test_stale_socket_removal_refuses_regular_file() {

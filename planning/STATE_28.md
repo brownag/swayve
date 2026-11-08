@@ -31,7 +31,7 @@ Last Updated: 2026-11-08
 - [x] **Task 28.2.2**: one writer function for both subscription modes
 
 ### Wave 7: monitor argv through one helper (G80)
-- [ ] **Task 28.3.1**: `spawn_monitor_terminal` builds argv from a list; spaced log path stays one argument
+- [x] **Task 28.3.1**: `spawn_monitor_terminal` builds argv from a list; spaced log path stays one argument
 
 ### Wave 8: argv-capture test replaces substring assertions (G80)
 - [ ] **Task 28.3.2**: mock terminal writes one argument per line; exact argv assertions
@@ -86,4 +86,10 @@ Last Updated: 2026-11-08
 - Red: compile failure (missing `subscriber_writer`). Green: writer tests pass.
 - Gate: `make all` serial exit 0, zero warnings; unit 80 passed / 2 ignored; integration 12 passed; subscribe_golden, slow_consumer green.
 - G81 exit criteria: diff-subscriber closed-channel removal (28.2.1), writer-cleanup tests (28.2.2), overflow and slow-consumer tests and both wire formats unchanged.
+
+### 28.3.1 (done)
+- Status: done. `src/cli.rs` `expand_terminal_args` (~529) is the shared pure argv helper (also reusable by 28.3.3). `src/daemon.rs` `monitor_argv` (~771) feeds `spawn_monitor_terminal`; shlex loop removed there. `spawn_plan` unchanged.
+- Red: compile failure on missing helpers. Green: `test_monitor_argv` 2 passed; `test_spawn_plan` 8 passed (spec said 7; the filter matches 8).
+- Gate: `make check` exit 0, zero warnings. Full `make all` runs at wave 9.
+- Deviations: none.
 

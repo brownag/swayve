@@ -526,6 +526,20 @@ pub struct SpawnRequest<'a> {
     pub parent: Option<&'a str>,
 }
 
+/// Expands a terminal template. `{command}` is replaced by the argv entries as-is (no shell
+/// splitting); `{app_id}` and `{title}` are substituted in every other entry.
+pub fn expand_terminal_args(template: &[String], app_id: &str, title: &str, command: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    for arg in template {
+        if arg == "{command}" {
+            out.extend(command.iter().cloned());
+        } else {
+            out.push(arg.replace("{app_id}", app_id).replace("{title}", title));
+        }
+    }
+    out
+}
+
 /// Builds the spawn plan. `term_template` is `config.terminal.args`. `{command}` is replaced by
 /// the shell-split command; `{app_id}` and `{title}` are replaced by the derived values.
 pub fn spawn_plan(req: SpawnRequest<'_>) -> SpawnPlan {
@@ -742,6 +756,13 @@ fn format_status(status: &crate::types::AgentStatus) -> String {
 mod tests {
     use super::*;
     use clap::Parser;
+
+    #[test]
+    fn test_monitor_argv_splices_command_entries() {
+        let t = vec!["{command}".to_string()];
+        let c = vec!["a".to_string(), "b c".to_string()];
+        assert_eq!(expand_terminal_args(&t, "i", "t", &c), ["a", "b c"]);
+    }
 
     #[tokio::test]
     async fn test_register_and_wait_false_when_no_socket() {
