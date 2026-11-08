@@ -1,6 +1,6 @@
 # Agent prompt: Antigravity sidecar against the Swayve socket contract (G25, G15)
 
-You are working in the Antigravity sidecar repository, which is outside the swayve repo. Its location is `{{SIDECAR_REPO}}`. Do not edit anything in the swayve repo. Do not push or run any remote-write git command.
+You are working in `integrations/antigravity/` inside the swayve repo at `~/workspace/swayve`. Edit only files under `integrations/antigravity/`. Do not edit other swayve files, such as `src/` or `planning/`. Do not push or run any remote-write git command. Local commits are allowed.
 
 ## Goal
 The sidecar reports Antigravity agent state to the Swayve daemon, using only the documented socket contract. Done means every item in "Acceptance" passes against a live `swayve daemon` or `make daemon-dry` (run from the swayve repo, read-only).
@@ -22,21 +22,22 @@ Do not send any other method. Do not add an ack or a reply path.
 The daemon does not set `SWAYVE_PARENT_ID` for agents the sidecar starts. (`swayve spawn --parent` does set it, `src/cli.rs:568-570`, but that path is not used here.) For a subagent, the sidecar must supply `parent_agent_id` on `agent.register` itself, from the spawning parent's `agent_id`. Do not invent a parent when none exists. Send `null` for a root agent. Note: the daemon may still fill `parent_id` from the process tree when the window is created (`src/daemon.rs:217-225`, on by default per `src/config.rs:80-82`), so a `null` sent here does not guarantee a null parent in daemon state. Do not rely on that either way.
 
 ## Work
-1. Read the sidecar's current IPC code. Do not assume the message shapes above match it. Record each difference.
-2. Make the sidecar emit exactly the three messages above, with the parent id wired through.
-3. Add one test per message shape. Use the smallest runnable check: a unit test that serializes the message and compares it to the JSON above.
-4. Run the sidecar's own test command. Report the exact command and the pass count.
+1. `integrations/antigravity/` has a README only, no code. Read `integrations/antigravity/README.md`. Its register example and env-var table are the starting point. Check each against the contract above and record each difference.
+2. Implement the sidecar as a small client under `integrations/antigravity/`. Use Node.js with the built-in `node:test` runner and no dependencies. Keep it to one module plus one test file. Document the run and test commands in `integrations/antigravity/README.md`.
+3. Make the sidecar emit exactly the three messages above, with the parent id wired through.
+4. Add one test per message shape. Use the smallest runnable check: a unit test that serializes the message and compares it to the JSON above.
+5. Run the sidecar's test command from `integrations/antigravity/`. Report the exact command and the pass count.
 
 ## Acceptance
 - Register sends `parent_agent_id` for a subagent, and `null` for a root agent. A test covers both.
 - Status and focus lines match the contract byte for byte, except key order.
 - A missing socket path logs one line and does not panic or spin.
-- The sidecar's own test command passes, with no new warnings.
+- The sidecar's test command (run from `integrations/antigravity/`) passes, with no new warnings.
 - Optional live check, if the swayve daemon is available: start `make daemon-dry` from the swayve repo, point `SWAYVE_SOCKET` at its socket, and confirm the register line appears in the daemon log.
 
 ## Report (15 lines or fewer)
 - Status: done or blocked.
-- Files changed, with line ranges.
+- Files changed under `integrations/antigravity/`, with line ranges.
 - Test command and results.
 - Differences found between the sidecar's old IPC code and the contract.
 - Anything you could not verify, such as the parent-id source in the spawning code.

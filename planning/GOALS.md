@@ -40,15 +40,15 @@ None. No open goal depends on another.
   - Status: Pruned
   - Reason: `spawn_monitor_terminal` (`src/daemon.rs`, around line 287) runs the monitor with `.args(...)` and no env, and nothing in the repo reads `SWAYVE_SOCKET`, `SWAYVE_AGENT_ID`, or `SWAYVE_PROJECT_ID` from that process (Orchestration 26, D3).
 - **[G25]** The external Antigravity sidecar ships against the documented socket contract.
-  - Status: Blocked / External Watch
-  - Reason: the sidecar is built and owned outside this repo. Its internal prerequisites, G22 and G24, are complete.
+  - Status: Open
+  - Reason: the sidecar is built in `integrations/antigravity/` in this repo, not yet started. Its internal prerequisites, G22 and G24, are complete.
   - Agent prompt: `planning/external/antigravity-sidecar.prompt.md`. It covers `SWAYVE_PARENT_ID`, which the daemon does not set today.
 - **[G15]** An Antigravity sidecar integration exists in this repo. `integrations/antigravity/` has a README only.
-  - Status: Blocked / External Watch
-  - Reason: the sidecar is built and owned outside this repo. Its internal prerequisites are complete, so only the external work remains. Same prompt as G25.
+  - Status: Open
+  - Reason: the sidecar lives in `integrations/antigravity/` in this repo. Its internal prerequisites are complete. The remaining work is the sidecar itself. Same prompt as G25.
 - **[G53]** The external HUD consumes `daemon.subscribe_diff` and folds the stream.
-  - Status: Blocked / External Watch
-  - Reason: the HUD is built and owned outside this repo. The daemon side is complete (G9).
+  - Status: Open
+  - Reason: no HUD repo exists yet. The G53 prompt scaffolds `~/workspace/swayve-hud`. The daemon side is complete (G9).
   - Agent prompt: `planning/external/hud-diff-consumer.prompt.md`.
 - **[G11]** Adopt the JSON-RPC 2.0 envelope from the design doc.
   - Status: Pruned
