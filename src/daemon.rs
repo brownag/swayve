@@ -927,4 +927,39 @@ mod tests {
         assert!(msg.contains("full_sub_agent"));
         assert_eq!(state.subscribers.len(), 1);
     }
+
+    #[test]
+    #[ignore]
+    fn measure_broadcast_cost() {
+        for n in [5usize, 20, 50, 200] {
+            for k in [1usize, 10] {
+                let mut state = DaemonState::new(Config::default());
+                for i in 0..n {
+                    state.register_agent(
+                        AgentId(format!("agent_{i}")),
+                        ProjectId("proj".to_string()),
+                        1000 + i as u32,
+                        format!("agent.{i}"),
+                        None,
+                    );
+                }
+                let mut rxs = Vec::new();
+                for _ in 0..k {
+                    let (tx, rx) = mpsc::channel(10_000);
+                    state.subscribers.push(tx);
+                    rxs.push(rx);
+                }
+                let start = std::time::Instant::now();
+                for _ in 0..200 {
+                    state.broadcast_status();
+                }
+                let mean_us = start.elapsed().as_secs_f64() * 1e6 / 200.0;
+                let payload_bytes = serde_json::to_string(&state.agents.values().collect::<Vec<_>>())
+                    .unwrap()
+                    .len();
+                println!("N={n} K={k} mean_us={mean_us:.1} payload_bytes={payload_bytes}");
+                drop(rxs);
+            }
+        }
+    }
 }
