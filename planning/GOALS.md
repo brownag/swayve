@@ -1,11 +1,11 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-08 (Orchestration 24 complete locally; G52 re-scoped and built, G58 built; no goals open; nothing pushed since 805fcea)
-Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero warnings, at `8a7f002`; ADRs 0012–0015 recorded). `origin/main` = `96f18af` = local `main` (Orchestration 22 pushed by the user).
+Last Updated: 2026-11-08
+Source State: STATE_24.md (Orchestration 24 complete at `b839190`; `make all` green; `main` local, nothing pushed since `805fcea`).
 
 ## Circled Goal (Active)
 
-- None open. Orchestration 23 closed its bundle (G46–G57). Deferred: G52, G58.
+- None open.
 
 ## Sequenced Goals (Dependency DAG)
 
@@ -38,6 +38,10 @@ Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero war
 
 ## Completed
 
+- **[G59]** `swayve spawn --parent X` sets `SWAYVE_PARENT_ID=X` in the child env, and the variable is unset without `--parent` (Orchestration 25, `7b72405`; test `test_spawn_plan_sets_parent_env_when_given` and `test_spawn_plan_omits_parent_env_when_absent`).
+- **[G61]** The Pi client sends `parent_agent_id` on `agent.register` from `SWAYVE_PARENT_ID`, or `null` when unset. Its README lists the variable (Orchestration 25, `556c678`; 3 new Pi tests).
+- **[G60]** The child env is built in the pure `spawn_plan` and the spawn arm executes it (Orchestration 25, `b0438ec`).
+- **[G62]** Integration tests use per-run temp paths with no `/tmp` literal in the hook script or Pi test (Orchestration 25, `1fbb95e`).
 - **[G58]** Focus cycle owns its cursor: `FocusCycle` with `observe()` and `next()` in `src/daemon.rs` (`1012fd5`, 24.1.2). Unit tests cover the cursor moves and the no-target case.
 - **[G52]** Re-scoped and built (Orchestration 24, `8c9c420`). `swayve spawn` writes its register line and polls `daemon.subscribe` until the agent is listed, then launches (`register_and_wait`, `src/cli.rs`). The wire ack is pruned: no daemon reply is added, and ADR 0009 and 0014 are unchanged. 2 s timeout, then a warning and launch anyway.
 - **[G54]** Completed in Orchestration 23 (`55489c7`). See `EXECUTION_PLAN_23.md` task for this goal; `STATE_23.md` has the gate results.
