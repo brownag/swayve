@@ -11,27 +11,7 @@ Two orthogonal goals, circled together at the user's request for parallel work (
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G29]** `daemon.subscribe` bytes are pinned by a golden test for a fixed agent state.
-  - Depends on: none
-- **[G30]** A socket-level test shows a stalled diff subscriber recovers with a snapshot once it resumes reading.
-  - Depends on: none
-- **[G31]** The diff path is measured at the G9 N and K grid, with per-subscriber memory recorded.
-  - Depends on: none
-- **[G32]** `AgentWindow` comparison is decided and implemented: derive `PartialEq`, or keep `to_value`, based on G31 numbers.
-  - Depends on: G31
-- **[G33]** `status --watch` can opt into the diff stream.
-  - Depends on: G30 (diff recovery proven at socket level)
-
-## Independent Backlog
-
-- **[G34]** Foreign-owner checks in `ensure_private_dir` and `start_daemon_ipc` are tested by injecting the owner uid.
-  - Depends on: none
-- **[G35]** A non-UTF-8 IPC line has a decided policy (skip or close client) and a test pins it.
-  - Depends on: none
-- **[G36]** A relative or empty `XDG_CONFIG_HOME` logs a one-line warning before falling back.
-  - Depends on: none
-- **[G37]** Integration tests replace fixed startup sleeps with readiness checks.
-  - Depends on: none
+- None open. G29–G37 are complete (see Completed).
 
 ## Blocked / Pruned
 
@@ -47,6 +27,15 @@ Two orthogonal goals, circled together at the user's request for parallel work (
 
 ## Completed
 
+- **[G29]** `daemon.subscribe` bytes are pinned by a golden test (`tests/subscribe_golden.rs`, `cab1daf`, 21.1.5). The test accepts the two byte-exact orderings because the daemon's `HashMap` order is not stable. Orchestration 21.
+- **[G30]** A stalled diff subscriber recovers with a snapshot at socket level (`tests/slow_consumer.rs`, `b78343b`, 21.1.6). Orchestration 21.
+- **[G31]** The diff path is measured on the G9 grid (`measure_broadcast_cost_diff`, `3c2475f`, 21.1.1). Release N=50 K=10 = 621 µs, below the 1 ms threshold. Full grid in `STATE_21.md`. Orchestration 21.
+- **[G32]** Not included. G31 measured 621 µs at N=50 K=10, under the 1 ms threshold, so `to_value` is kept and `PartialEq` is not derived. Recorded in ADR 0013. Orchestration 21.
+- **[G33]** `swayve status --watch --diff` opts into the diff stream; `--diff` requires `--watch` (`459c583`, 21.3.2). Default stays the full list. Orchestration 21.
+- **[G34]** Foreign-owner checks are tested by injecting the owner uid: `ensure_private_dir_for` (`ab74cba`, 21.1.2) and `prepare_socket_path` (`235adf3`, 21.2.1). ADR 0012 amended. Orchestration 21.
+- **[G35]** A non-UTF-8 IPC line is logged and skipped; the client stays connected (`235adf3`, 21.2.1). Test `test_non_utf8_ipc_line_is_skipped`. Orchestration 21.
+- **[G36]** A relative or empty `XDG_CONFIG_HOME` logs a one-line warning before falling back (`7d003c7`, 21.1.3). Orchestration 21.
+- **[G37]** Startup sleeps in `tests/integration_tests.rs` are replaced with `wait_for_socket` (`82f8355`, 21.1.4): 11 replaced, 10 event-ordering sleeps kept. Orchestration 21.
 - **[G9]** Diff subscriptions for opt-in clients. `daemon.subscribe_diff` streams snapshot and delta lines; a subscriber whose channel fills gets a snapshot on its next line. Measured baseline recorded in `STATE_20.md` (20.1.1, release N=50 K=10 = 27 µs). Routing `8d6ec67`; integration test `b016cbc` replays the stream against daemon state; docs `53ae8c9`. `daemon.subscribe` keeps its bare-array format; the existing subscription tests pass. Orchestration 20. ADR 0013 pending the post-wave distillation.
 - **[G10]** `XDG_CONFIG_HOME` is honored for the config path when absolute; `$HOME/.config` is the fallback. `config_path_from` in `src/config.rs` (`c6c483a`, 20.1.2); README Configuration note and ADR 0010 amendment (`f4e9e33`, 20.1.3). Orchestration 20.
 - **[G28]** No README text in this repo describes the daemon IPC as JSON-RPC, except the deliberate correction at `README.md:54`. The `src/types.rs` link description now names newline-delimited JSON framing (one-line edit at `README.md:178`; `make all` passes).

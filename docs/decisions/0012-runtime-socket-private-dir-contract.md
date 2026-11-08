@@ -33,7 +33,7 @@ Chosen option: option 3. The default is `$XDG_RUNTIME_DIR/swayve/swayve.sock`. T
 * **Positive**: external clients have one documented default. The override covers tests and unusual setups.
 * **Negative**: the daemon will not start outside a systemd or login session that sets `XDG_RUNTIME_DIR`.
 * **Negative**: `SWAYVE_SOCKET` skips the ownership check. A user who points it at a shared path takes on that risk. This is accepted because the path is explicit.
-* **Negative**: the foreign-owner branches are covered by code review only. Tests run as the normal user and cannot create a root-owned path. The same-owner stale-socket branch and the regular-file refusal are covered by tests.
+* **Negative**: the foreign-owner branches cannot be exercised with a real foreign owner, because tests run as the normal user and cannot create a root-owned path. They are covered by tests that inject the expected uid: `ensure_private_dir_for(p, uid)` and `prepare_socket_path(path, uid)`. The public functions keep their signatures and pass `current_uid()`. The same-owner stale-socket branch and the regular-file refusal are covered by tests.
 
 ## Validation & Compliance
 * `src/cli.rs`: `test_ensure_private_dir_creates_0700`, `test_ensure_private_dir_rejects_loose_mode`.
