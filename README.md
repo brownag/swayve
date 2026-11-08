@@ -175,7 +175,7 @@ args = [
 ## 🛠 Project Structure
 
 * [src/config.rs](file:///home/andrew/workspace/swayve/src/config.rs): Configuration loading and parser routines.
-* [src/types.rs](file:///home/andrew/workspace/swayve/src/types.rs): Central data structures and JSON-RPC message framing schemas.
+* [src/types.rs](file:///home/andrew/workspace/swayve/src/types.rs): Central data structures and newline-delimited JSON message framing schemas.
 * [src/daemon.rs](file:///home/andrew/workspace/swayve/src/daemon.rs): Socket handling loop and state coordination engine.
 * [src/sway.rs](file:///home/andrew/workspace/swayve/src/sway.rs): Event listener and serialized command execution threads interfacing with `swayipc-async`.
 * [src/cli.rs](file:///home/andrew/workspace/swayve/src/cli.rs): Main subcommand handler mappings (`daemon`, `spawn`, `panel`, `status`).

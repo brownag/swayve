@@ -5,13 +5,7 @@ Source State: STATE_19.md (Orchestration 19 complete; `make all` passes at each 
 
 ## Circled Goal (Active)
 
-- **[G28]** No README or design text in this repo describes the daemon IPC as JSON-RPC. The `src/types.rs` link description matches ADR 0004 and ADR 0012.
-  - Why now: `README.md:178` still says "JSON-RPC message framing" after the Socket Contract section (19.1.4) corrected the same claim at line 54. It is the only internal contradiction left in the contract. Leverage is low. It finishes the contract and nothing else depends on it.
-  - Exit criteria:
-    - `grep -n 'JSON-RPC' README.md` shows only the deliberate correction at line 54.
-    - The `src/types.rs` link description names newline-delimited JSON with a `method` tag.
-    - `make all` passes.
-  - First action: Edit `README.md` line 178 to read "Central data structures and newline-delimited JSON message framing schemas." Then run the grep above.
+- None open. G28 is complete (see Completed).
 
 ## Sequenced Goals (Dependency DAG)
 
@@ -42,6 +36,7 @@ Source State: STATE_19.md (Orchestration 19 complete; `make all` passes at each 
 
 ## Completed
 
+- **[G28]** No README text in this repo describes the daemon IPC as JSON-RPC, except the deliberate correction at `README.md:54`. The `src/types.rs` link description now names newline-delimited JSON framing (one-line edit at `README.md:178`; `make all` passes).
 - **[G22]** The daemon's runtime socket path is enforced by tests and documented as the external client contract. Tests `cc3c7b3` (ensure_private_dir), `30f576e` (stale socket, malformed line). README Socket Contract `40c2777`. Recorded as ADR 0012 (`b6d76b3`). Orchestration 19.
 - **[G23]** `planning/GOALS.md` and `planning/STATE_18.md` agree on G17 status. Done in the 2026-11-08 rewrite.
 - **[G24]** The Antigravity integration documents the runtime socket default (`161c0de`, 19.1.3).
