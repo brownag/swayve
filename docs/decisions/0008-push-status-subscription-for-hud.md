@@ -36,6 +36,7 @@ Behaviour:
 * **Positive**: Live HUD with no poll interval. The client is a plain line reader.
 * **Negative**: Full-state push on every change grows with agent count. Diffs are the upgrade path if it does.
 * **Negative**: Slow subscribers are a risk. The bounded channel (32) bounds memory. When a subscriber's channel is full, `broadcast_status` drops the newest snapshot, keeps the subscriber registered, and logs a line. Because each snapshot is the full list, the next successful broadcast restores the subscriber's view, so a slow subscriber can show stale state until the next change. A closed channel prunes the subscriber. Covered by `test_daemon_broadcast_drops_newest_when_subscriber_full` in `src/daemon.rs`.
+* Amended 2026-11-08 (Orchestration 20): diff subscribers (daemon.subscribe_diff) recover from a dropped line with a full snapshot instead of waiting for the next change. See ADR 0013.
 
 ## Validation & Compliance
 Integration test `3fa4005` checks the dashboard subscription stream. `42ba751` covers hooks and monitoring.

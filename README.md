@@ -53,6 +53,7 @@ graph TD
 - The directory is created with mode 0700 and must be owned by the current user.
 - Framing: one JSON object per line, with a `method` field (see `docs/decisions/0004-newline-delimited-json-ipc.md`). It is not a JSON-RPC 2.0 envelope.
 - `SWAYVE_SOCKET` overrides the path and skips the directory check.
+- `daemon.subscribe` streams the full agent list as one JSON array per line. `daemon.subscribe_diff` streams `{"snapshot","upsert","remove"}` objects; the first line is a snapshot. A subscriber whose channel fills receives a snapshot on its next line.
 
 ---
 
