@@ -1,28 +1,67 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-08 (Orchestration 22 complete)
+Last Updated: 2026-11-08 (Orchestration 22 complete; backlog re-derived by Magic Wand)
 Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero warnings, at `8a7f002`; ADRs 0012–0015 recorded). `origin/main` = `96f18af` = local `main` (Orchestration 22 pushed by the user).
 
 ## Circled Goal (Active)
 
-- None open. G44 (backlog close-out) is complete; see Completed.
+- **[G45]** Every test socket and flag path is unique per run, under a temp directory. No fixed `/tmp/swayve_test*` name remains in `tests/` or `src/`.
+  - Why now: 18 fixed paths in four test files (`tests/integration_tests.rs`, `tests/slow_consumer.rs`, `tests/subscribe_golden.rs`, plus one hook output file in `src/daemon.rs`). Two runs at once, or a leftover socket, collide. It is the prerequisite for G46 and every new socket test.
+  - Exit criteria: `grep -rn '"/tmp/' tests src` finds nothing test-owned; `make all` passes; two `cargo test --test integration_tests` runs in parallel both pass; zero warnings.
+  - First action: add a helper that builds `$TMPDIR`-style paths from `std::process::id()` and the test name, and switch one test to it. Then convert the rest.
 
 ## Sequenced Goals (Dependency DAG)
 
-- None open. G29–G37 are complete (see Completed).
+- **[G46]** A socket-level test shows that an over-limit IPC line is dropped and logged, the client stays connected, and the next valid line is still processed.
+  - Depends on: G45 (unique socket path).
+  - Exit criteria: a test in `tests/` sends more than 200 lines on one connection, then a valid `daemon.focus`, and asserts a `FocusWindow` command. `cargo test` passes.
+  - First action: copy the connection setup from `tests/slow_consumer.rs`.
+- **[G47]** The README Socket Contract documents the per-client limit: 100 lines/s sustained, burst 200, over-limit lines dropped and logged, and the client kept connected.
+  - Depends on: G46 (the docs describe behavior a test has verified).
+  - Exit criteria: the README section matches `src/ratelimit.rs`. ADR 0015 links to it.
+  - First action: add three bullets under Socket Contract in `README.md`.
+- **[G48]** Per-client rate-limit values are configurable in `~/.config/swayve/config.toml`, with the current 100/200 values as defaults.
+  - Depends on: G46 (a test must show the configured limit takes effect).
+  - Reverses: Orchestration 22 D1 ("constants, not config"). The user asked for this change.
+  - Exit criteria: config keys load with serde defaults; a malformed value falls back to the default with a warning (as ADR 0010 does for config); ADR 0015 is amended or superseded by a new ADR; `make all` passes.
+  - First action: `plan-wave` for this goal. It needs an ADR decision on amend versus supersede first.
 
 ## Independent Backlog
 
-- None open. G39, G40 and G41 are complete; see Completed.
+- **[G49]** The two focus-ordering sleeps at `tests/integration_tests.rs` 633 and 638 are replaced with a barrier event.
+  - Why: the test sends a `WindowFocused` event and then a `daemon.focus` over the socket. Both reach the daemon through the same channel, but from different tasks. The sleep only guesses the order.
+  - Approach: add an internal `DaemonEvent::Sync(oneshot::Sender<()>)`. The daemon replies when it reaches the event. The test sends `Sync` after the focus event and awaits it. No wire change, no IPC ack. The enum is internal (`src/daemon.rs`).
+  - Rejected alternative: a daemon ack on the socket. Clients are fire-and-forget (ADR 0009, ADR 0014), so an ack would change the protocol. That is deferred as G52.
+  - Exit criteria: no `sleep` orders events in `test_focus_follows_sway_focus`; `subscribe_golden` unchanged; integration suite passes 5 runs.
+  - Depends on: none.
+- **[G50]** The 300 ms sleep at `tests/integration_tests.rs` 948 (spawned hooks and auto-monitor) is replaced with a poll of the flag files the test already asserts on.
+  - Why: this sleep was counted as unobservable in D2. It is observable. The test reads `spawn_flag_path` and `monitor_flag_path` after the sleep, so it can poll them with a timeout.
+  - Exit criteria: no fixed sleep in `test_hooks_and_monitoring`; the same assertions run unchanged; suite passes 5 runs.
+  - Depends on: none.
+- **[G51]** CI runs `make all` on every push.
+  - Why: AGENTS.md says there is no CI. The workflow file can be written locally. It runs only after a push, which needs your go-ahead.
+  - Exit criteria: a `.github/workflows` file that runs `make all` on Linux with Sway-free tests. The workflow is valid YAML, and the workflow file is committed locally. No push.
+  - Depends on: none. Needs `github-actions-ci` skill conventions.
+
+## Deferred
+
+- **[G52]** The daemon sends a delivery ack for each IPC message.
+  - Trigger: a client needs to know its line was applied (for example, a CLI that must wait for registration before it spawns a window), or a wire-format change is approved in an ADR review.
+  - Why deferred: it changes the fire-and-forget contract (ADR 0009, 0014). No current client needs it. G49 covers the test-ordering need without it.
 
 ## Blocked / Pruned
 
 - **[G25]** The external Antigravity sidecar ships against the documented socket contract.
   - Status: Blocked / External Watch
   - Reason: the sidecar is built and owned outside this repo. Its internal prerequisites, G22 and G24, are complete.
+  - Agent prompt: `planning/external/antigravity-sidecar.prompt.md`. It covers `SWAYVE_PARENT_ID`, which the daemon does not set today.
 - **[G15]** An Antigravity sidecar integration exists in this repo. `integrations/antigravity/` has a README only.
   - Status: Blocked / External Watch
-  - Reason: the sidecar is built and owned outside this repo. Its internal prerequisites are complete, so only the external work remains.
+  - Reason: the sidecar is built and owned outside this repo. Its internal prerequisites are complete, so only the external work remains. Same prompt as G25.
+- **[G53]** The external HUD consumes `daemon.subscribe_diff` and folds the stream.
+  - Status: Blocked / External Watch
+  - Reason: the HUD is built and owned outside this repo. The daemon side is complete (G9).
+  - Agent prompt: `planning/external/hud-diff-consumer.prompt.md`.
 - **[G11]** Adopt the JSON-RPC 2.0 envelope from the design doc.
   - Status: Pruned
   - Reason: ADR 0004 rejected it; the newline-delimited JSON protocol is in use.
