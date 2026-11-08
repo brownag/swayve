@@ -90,6 +90,11 @@ pub fn current_uid() -> Result<u32> {
 
 /// Create `p` with mode 0700, or verify an existing dir is ours with no group/other bits.
 pub fn ensure_private_dir(p: &std::path::Path) -> Result<()> {
+    ensure_private_dir_for(p, current_uid()?)
+}
+
+/// Like `ensure_private_dir`, but verifies ownership against `expected_uid`.
+pub fn ensure_private_dir_for(p: &std::path::Path, expected_uid: u32) -> Result<()> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt};
     std::fs::DirBuilder::new()
         .recursive(true)
@@ -97,7 +102,7 @@ pub fn ensure_private_dir(p: &std::path::Path) -> Result<()> {
         .create(p)
         .with_context(|| format!("Failed to create directory {}", p.display()))?;
     let md = std::fs::metadata(p)?;
-    if md.uid() != current_uid()? || md.mode() & 0o077 != 0 {
+    if md.uid() != expected_uid || md.mode() & 0o077 != 0 {
         anyhow::bail!(
             "{} must be owned by the current user with mode 0700",
             p.display()
@@ -652,6 +657,31 @@ mod tests {
         let res = ensure_private_dir(&p);
         let _ = std::fs::remove_dir_all(&p);
         assert!(res.is_err());
+    }
+
+    fn epdf_dir(tag: &str) -> std::path::PathBuf {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        let p = std::env::temp_dir().join(format!("swayve_epdf_{}_{}", std::process::id(), tag));
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::DirBuilder::new().mode(0o700).create(&p).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o700)).unwrap();
+        p
+    }
+
+    #[test]
+    fn test_ensure_private_dir_for_rejects_foreign_uid() {
+        let p = epdf_dir("foreign");
+        let res = ensure_private_dir_for(&p, current_uid().unwrap().wrapping_add(1));
+        let _ = std::fs::remove_dir_all(&p);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_ensure_private_dir_for_accepts_matching_uid() {
+        let p = epdf_dir("ok");
+        let res = ensure_private_dir_for(&p, current_uid().unwrap());
+        let _ = std::fs::remove_dir_all(&p);
+        assert!(res.is_ok());
     }
 
     #[test]
