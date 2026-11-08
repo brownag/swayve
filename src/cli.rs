@@ -557,18 +557,9 @@ pub fn spawn_plan(req: SpawnRequest<'_>) -> SpawnPlan {
     let app_id = format!("agent.{}", agent_id);
     let title = format!("Agent [{}]: {}", agent, wave);
 
-    let mut term_args = Vec::new();
-    for arg in term_template {
-        if arg == "{command}" {
-            if let Some(split_cmds) = shlex::split(&actual_command) {
-                term_args.extend(split_cmds);
-            } else {
-                term_args.push(actual_command.clone());
-            }
-        } else {
-            term_args.push(arg.replace("{app_id}", &app_id).replace("{title}", &title));
-        }
-    }
+    // D2: an unparseable command stays one raw argv entry.
+    let split = shlex::split(&actual_command).unwrap_or_else(|| vec![actual_command.clone()]);
+    let term_args = expand_terminal_args(term_template, &app_id, &title, &split);
     let mut env = vec![
         ("SWAYVE_SOCKET".to_string(), socket_path.to_string()),
         ("SWAYVE_AGENT_ID".to_string(), agent_id.clone()),
@@ -788,6 +779,20 @@ mod tests {
         let tmpl = vec!["{command}".to_string()];
         let plan = spawn_plan(SpawnRequest { prompt: Some("it's"), term_template: &tmpl, ..base() });
         assert_eq!(plan.term_args, vec!["bash", "-c", "pi \"it's\""]);
+    }
+
+    #[test]
+    fn test_spawn_plan_shell_template_quoted_prompt_argv() {
+        let tmpl: Vec<String> = ["-e", "{command}"].map(String::from).to_vec();
+        let plan = spawn_plan(SpawnRequest { prompt: Some("it's"), term_template: &tmpl, ..base() });
+        assert_eq!(plan.term_args, ["-e", "bash", "-c", "pi \"it's\""]);
+    }
+
+    #[test]
+    fn test_spawn_plan_quoted_whitespace_arg_stays_one_entry() {
+        let tmpl = vec!["{command}".to_string()];
+        let plan = spawn_plan(SpawnRequest { command: Some("tool --path \"/run/my dir/x\"".to_string()), term_template: &tmpl, ..base() });
+        assert_eq!(plan.term_args, ["tool", "--path", "/run/my dir/x"]);
     }
 
     // Pi's register() derives `agent.<agentId>`; keep this in sync (swayve-client.ts).
