@@ -29,7 +29,7 @@ By delegating window management directly to Sway/Wayland:
 graph TD
     subgraph Host OS Sway Session
         subgraph Sub-Agents
-            A["Pi Agent"] -- "JSON-RPC (agent.register)" --> S["Unix Socket: /tmp/swayve.sock"]
+            A["Pi Agent"] -- "JSON-RPC (agent.register)" --> S["Unix Socket: $XDG_RUNTIME_DIR/swayve/swayve.sock"]
             B["Claude Code"] -- "JSON-RPC (agent.update_status)" --> S
         end
 

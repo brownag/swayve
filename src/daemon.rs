@@ -95,7 +95,14 @@ impl DaemonState {
     pub fn spawn_monitor_terminal(&self, agent_id: &AgentId) {
         let monitor_app_id = format!("agent.monitor.{}", agent_id.0);
         let monitor_title = format!("Monitor: {}", agent_id.0);
-        let monitor_cmd = format!("tail -f /tmp/swayve/logs/{}.log", agent_id.0);
+        let logs_dir = match crate::cli::swayve_runtime_dir() {
+            Ok(d) => d.join("logs"),
+            Err(e) => {
+                eprintln!("[daemon] Cannot spawn monitor terminal: {}", e);
+                return;
+            }
+        };
+        let monitor_cmd = format!("tail -f {}/{}.log", logs_dir.display(), agent_id.0);
 
         let mut term_args = Vec::new();
         for arg in &self.config.terminal.args {
@@ -195,8 +202,20 @@ pub async fn start_daemon_ipc(
     event_tx: mpsc::Sender<DaemonEvent>,
 ) -> Result<()> {
     let path = Path::new(socket_path);
-    if path.exists() {
-        fs::remove_file(path).await?;
+    match fs::symlink_metadata(path).await {
+        Ok(md) => {
+            use std::os::unix::fs::{FileTypeExt, MetadataExt};
+            if md.file_type().is_socket() && md.uid() == crate::cli::current_uid()? {
+                fs::remove_file(path).await?;
+            } else {
+                anyhow::bail!(
+                    "{} exists and is not a socket owned by the current user; refusing to remove it",
+                    socket_path
+                );
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
     }
 
     let listener = UnixListener::bind(path)?;
@@ -590,6 +609,18 @@ fn find_registered_parent_ancestor(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn test_stale_socket_removal_refuses_regular_file() {
+        let p = std::env::temp_dir().join(format!("swayve_regular_{}", std::process::id()));
+        std::fs::write(&p, b"x").unwrap();
+        let (tx, _rx) = mpsc::channel(1);
+        let r = start_daemon_ipc(p.to_str().unwrap(), tx).await;
+        let still = p.exists();
+        let _ = std::fs::remove_file(&p);
+        assert!(r.is_err());
+        assert!(still);
+    }
 
     #[test]
     fn test_early_termination_at_depth_limit() {

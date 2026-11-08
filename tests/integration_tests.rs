@@ -948,7 +948,10 @@ async fn test_hooks_and_monitoring() {
         monitor_flag_content
     );
     assert!(
-        monitor_flag_content.contains("tail -f /tmp/swayve/logs/subagent-hooks-1.log"),
+        monitor_flag_content.contains(&format!(
+            "tail -f {}/swayve/logs/subagent-hooks-1.log",
+            std::env::var("XDG_RUNTIME_DIR").unwrap()
+        )),
         "Monitor flag content missing log tail command: {}",
         monitor_flag_content
     );

@@ -68,10 +68,58 @@ pub enum PanelAction {
     Toggle,
 }
 
+/// Pure: `xdg` is the value of `XDG_RUNTIME_DIR`.
+pub fn runtime_dir_from(xdg: Option<&str>) -> Result<std::path::PathBuf> {
+    match xdg {
+        Some(x) if !x.is_empty() => Ok(std::path::Path::new(x).join("swayve")),
+        _ => anyhow::bail!("XDG_RUNTIME_DIR is not set; refusing to use a shared location"),
+    }
+}
+
+pub fn swayve_runtime_dir() -> Result<std::path::PathBuf> {
+    runtime_dir_from(env::var("XDG_RUNTIME_DIR").ok().as_deref())
+}
+
+/// Current effective uid (Linux: owner of /proc/self).
+pub fn current_uid() -> Result<u32> {
+    use std::os::unix::fs::MetadataExt;
+    Ok(std::fs::metadata("/proc/self")
+        .context("Failed to determine current uid via /proc/self")?
+        .uid())
+}
+
+/// Create `p` with mode 0700, or verify an existing dir is ours with no group/other bits.
+pub fn ensure_private_dir(p: &std::path::Path) -> Result<()> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(p)
+        .with_context(|| format!("Failed to create directory {}", p.display()))?;
+    let md = std::fs::metadata(p)?;
+    if md.uid() != current_uid()? || md.mode() & 0o077 != 0 {
+        anyhow::bail!(
+            "{} must be owned by the current user with mode 0700",
+            p.display()
+        );
+    }
+    Ok(())
+}
+
 pub async fn run_cli() -> Result<()> {
     let args = Cli::parse();
     let config = load_config();
-    let socket_path = "/tmp/swayve.sock";
+    // Resolved lazily: init-shell and panel never touch the socket.
+    let socket_path = if matches!(args.command, Commands::InitShell | Commands::Panel { .. }) {
+        String::new()
+    } else if let Ok(p) = env::var("SWAYVE_SOCKET") {
+        p
+    } else {
+        let dir = swayve_runtime_dir()?;
+        ensure_private_dir(&dir)?;
+        dir.join("swayve.sock").to_string_lossy().into_owned()
+    };
+    let socket_path = socket_path.as_str();
 
     // Set dry_run from CLI flag or environment
     let dry_run = args.dry_run || env::var("SWAYVE_DRY_RUN").is_ok();
@@ -239,9 +287,11 @@ fi
             );
 
             if !dry_run {
-                std::fs::create_dir_all("/tmp/swayve/logs")
-                    .context("Failed to create log directory /tmp/swayve/logs")?;
-                let log_path = format!("/tmp/swayve/logs/{}.log", agent_id);
+                let runtime_dir = swayve_runtime_dir()?;
+                ensure_private_dir(&runtime_dir)?;
+                let logs_dir = runtime_dir.join("logs");
+                ensure_private_dir(&logs_dir)?;
+                let log_path = format!("{}/{}.log", logs_dir.display(), agent_id);
                 let log_file = std::fs::File::create(&log_path)
                     .with_context(|| format!("Failed to create log file at {}", log_path))?;
                 let err_file = log_file
@@ -570,6 +620,17 @@ mod tests {
         assert_eq!(next_flat_agent_index(&[(1, false), (2, false), (3, true)]), Some(0));
         assert_eq!(next_flat_agent_index(&[(1, false), (2, false)]), Some(0));
         assert_eq!(next_flat_agent_index(&[(1, true)]), Some(0));
+    }
+
+    #[test]
+    fn test_runtime_dir_requires_xdg_runtime_dir() {
+        let msg = "XDG_RUNTIME_DIR is not set; refusing to use a shared location";
+        assert_eq!(runtime_dir_from(None).unwrap_err().to_string(), msg);
+        assert_eq!(runtime_dir_from(Some("")).unwrap_err().to_string(), msg);
+        assert_eq!(
+            runtime_dir_from(Some("/run/user/1000")).unwrap(),
+            std::path::PathBuf::from("/run/user/1000/swayve")
+        );
     }
 
     #[test]
