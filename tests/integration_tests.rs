@@ -5,7 +5,7 @@ use swayve::types::{AgentId, AgentIPCMessage, AgentStatus, ProjectId, RegisterPa
 use std::path::Path;
 use std::time::Duration;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
@@ -22,6 +22,23 @@ async fn wait_for_socket(path: &str) {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     panic!("socket {path} not ready after 2s");
+}
+
+/// Polls `daemon.subscribe` on fresh connections until the agent list (its first line)
+/// contains `want`. Waits for a registration to reach the daemon state.
+async fn wait_for_listed(socket_path: &str, want: &str) {
+    for _ in 0..200 {
+        if let Ok(mut s) = UnixStream::connect(socket_path).await {
+            s.write_all(b"{\"method\":\"daemon.subscribe\"}\n").await.unwrap();
+            let (r, _) = s.into_split();
+            let first = timeout(Duration::from_millis(100), BufReader::new(r).lines().next_line()).await;
+            if let Ok(Ok(Some(line))) = first && line.contains(want) {
+                return;
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("agent {want} not listed after 2s");
 }
 
 #[tokio::test]
@@ -166,8 +183,8 @@ async fn test_subagent_layout_routing() {
     stream.write_all((serde_json::to_string(&reg_child1).unwrap() + "\n").as_bytes()).await.unwrap();
     stream.flush().await.unwrap();
 
-    // Allow time for daemon socket task to process registration messages
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    // Wait until the daemon lists the registered agent
+    wait_for_listed(socket_path, "child-1").await;
 
     // Simulate window creation events in daemon loop
     let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated { con_id: 1000, app_id: "agent.pi.parent-1".to_string(), pid: None })).await;
@@ -222,8 +239,8 @@ async fn test_subagent_layout_routing() {
     stream.write_all((serde_json::to_string(&reg_child2).unwrap() + "\n").as_bytes()).await.unwrap();
     stream.flush().await.unwrap();
 
-    // Allow time for daemon socket task to process registration message
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    // Wait until the daemon lists the registered agent
+    wait_for_listed(socket_path, "child-2").await;
 
     // Window creation for child 2
     let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated { con_id: 1002, app_id: "agent.pi.child-2".to_string(), pid: None })).await;
@@ -312,8 +329,8 @@ async fn test_dynamic_process_tree_auditing() {
     stream.write_all((serde_json::to_string(&reg_child).unwrap() + "\n").as_bytes()).await.unwrap();
     stream.flush().await.unwrap();
 
-    // Allow time for daemon socket task to process registration messages
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    // Wait until the daemon lists the registered agent
+    wait_for_listed(socket_path, "child-audit").await;
 
     // Window creation for parent
     let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated { con_id: 2000, app_id: "agent.pi.parent-audit".to_string(), pid: Some(test_ppid as i32) })).await;
@@ -406,7 +423,7 @@ async fn test_cli_parent_flag_to_layout() {
     stream.write_all((serde_json::to_string(&reg_child).unwrap() + "\n").as_bytes()).await.unwrap();
     stream.flush().await.unwrap();
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    wait_for_listed(socket_path, "child-cli").await;
 
     // Step 4: Send synthetic window-created event for parent
     let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated {
@@ -508,7 +525,7 @@ async fn test_focus_survives_parent_destruction() {
     }
     stream.flush().await.unwrap();
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    wait_for_listed(socket_path, "child-y").await;
 
     for (idx, (agent_id, _)) in agents.iter().enumerate() {
         let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated {
@@ -594,7 +611,7 @@ async fn test_focus_follows_sway_focus() {
     }
     stream.flush().await.unwrap();
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    wait_for_listed(socket_path, "child-b").await;
 
     for (idx, (agent_id, _)) in agents.iter().enumerate() {
         let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowCreated {
@@ -690,7 +707,7 @@ async fn test_cli_focus_with_hierarchy() {
     }
     stream.flush().await.unwrap();
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    wait_for_listed(socket_path, "child-b-focus").await;
 
     // Give each agent a window, ascending con_id so focus order is deterministic
     for (idx, (agent_id, _)) in agents.iter().enumerate() {
