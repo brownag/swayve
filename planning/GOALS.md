@@ -1,6 +1,6 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-08 (Orchestration 22 complete; G45 and G48 done; G46 circled; architecture review triaged into G54–G58)
+Last Updated: 2026-11-08 (Orchestration 22 complete; G45 and G48 done; G46, G47, G49, G50, G51, G54–G57 bundled in EXECUTION_PLAN_23.md, awaiting approval)
 Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero warnings, at `8a7f002`; ADRs 0012–0015 recorded). `origin/main` = `96f18af` = local `main` (Orchestration 22 pushed by the user).
 
 ## Circled Goal (Active)
@@ -9,6 +9,7 @@ Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero war
   - Why now: G45 is complete, so the test can use a unique socket path. The configured limit path (G48) lets the test set a small burst.
   - Exit criteria: a test in `tests/` sends more than 200 lines on one connection, then a valid `daemon.focus`, and asserts a `FocusWindow` command. `cargo test` passes.
   - First action: copy the connection setup from `tests/slow_consumer.rs`, with `common::unique_path`.
+  - Planned: `EXECUTION_PLAN_23.md`, task 23.1.1 (awaiting approval).
 
 ## Sequenced Goals (Dependency DAG)
 
