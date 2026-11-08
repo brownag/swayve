@@ -10,12 +10,25 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::mpsc;
 
+pub enum SubMode {
+    Full,
+    Diff {
+        needs_snapshot: bool,
+        sent: HashMap<AgentId, AgentWindow>,
+    },
+}
+
+pub struct Subscriber {
+    pub tx: mpsc::Sender<String>,
+    pub mode: SubMode,
+}
+
 pub struct DaemonState {
     pub config: Config,
     pub agents: HashMap<AgentId, AgentWindow>,
     pub pid_to_agent: HashMap<u32, AgentId>,
     pub con_to_agent: HashMap<i64, AgentId>,
-    pub subscribers: Vec<mpsc::Sender<String>>,
+    pub subscribers: Vec<Subscriber>,
 }
 
 impl DaemonState {
@@ -27,6 +40,17 @@ impl DaemonState {
             con_to_agent: HashMap::new(),
             subscribers: Vec::new(),
         }
+    }
+
+    pub fn push_full_subscriber(&mut self, tx: mpsc::Sender<String>) {
+        self.subscribers.push(Subscriber { tx, mode: SubMode::Full });
+    }
+
+    pub fn push_diff_subscriber(&mut self, tx: mpsc::Sender<String>) {
+        self.subscribers.push(Subscriber {
+            tx,
+            mode: SubMode::Diff { needs_snapshot: true, sent: HashMap::new() },
+        });
     }
 
     pub fn broadcast_status(&mut self) {
@@ -45,11 +69,66 @@ impl DaemonState {
             }
         };
 
-        self.subscribers.retain(|tx| {
-            match tx.try_send(json.clone()) {
+        self.subscribers.retain(|sub| {
+            if !matches!(sub.mode, SubMode::Full) {
+                return true;
+            }
+            match sub.tx.try_send(json.clone()) {
                 Ok(()) => true,
                 Err(mpsc::error::TrySendError::Full(_)) => {
                     eprintln!("[daemon] Subscriber channel full; retaining subscriber");
+                    true
+                }
+                Err(mpsc::error::TrySendError::Closed(_)) => false,
+            }
+        });
+        self.broadcast_diff();
+    }
+
+    fn broadcast_diff(&mut self) {
+        let agents = &self.agents;
+        self.subscribers.retain_mut(|sub| {
+            let SubMode::Diff { needs_snapshot, sent } = &mut sub.mode else {
+                return true;
+            };
+            let (snapshot, upsert, remove): (bool, Vec<&AgentWindow>, Vec<&AgentId>) = if *needs_snapshot {
+                (true, agents.values().collect(), Vec::new())
+            } else {
+                let up = agents
+                    .iter()
+                    .filter(|(id, a)| {
+                        sent.get(*id).is_none_or(|old| {
+                            serde_json::to_value(old).ok() != serde_json::to_value(a).ok()
+                        })
+                    })
+                    .map(|(_, a)| a)
+                    .collect();
+                let rm = sent.keys().filter(|id| !agents.contains_key(*id)).collect();
+                (false, up, rm)
+            };
+            if !snapshot && upsert.is_empty() && remove.is_empty() {
+                return true;
+            }
+            let json = match serde_json::to_string(&serde_json::json!({
+                "snapshot": snapshot,
+                "upsert": upsert,
+                "remove": remove,
+            })) {
+                Ok(j) => j,
+                Err(e) => {
+                    eprintln!("[daemon] Failed to serialize diff broadcast: {:?}", e);
+                    return true;
+                }
+            };
+            match sub.tx.try_send(json) {
+                Ok(()) => {
+                    *sent = agents.clone();
+                    *needs_snapshot = false;
+                    true
+                }
+                Err(mpsc::error::TrySendError::Full(_)) => {
+                    eprintln!("[daemon] Diff subscriber channel full; will send snapshot next");
+                    *needs_snapshot = true;
                     true
                 }
                 Err(mpsc::error::TrySendError::Closed(_)) => false,
@@ -194,6 +273,7 @@ pub enum DaemonEvent {
     Sway(SwayEvent),
     Focus,
     Subscribe(mpsc::Sender<String>),
+    SubscribeDiff(mpsc::Sender<String>),
 }
 
 pub async fn start_daemon_ipc(
@@ -337,6 +417,8 @@ pub async fn run_daemon_loops(
                     AgentIPCMessage::Focus => {}
                     // Routed to DaemonEvent::Subscribe by handle_client; never arrives here.
                     AgentIPCMessage::SubscribeStatus => {}
+                    // Will route to DaemonEvent::SubscribeDiff in handle_client (task 20.3.1).
+                    AgentIPCMessage::SubscribeDiff => {}
                 }
             }
             DaemonEvent::Sway(sway_event) => {
@@ -453,7 +535,11 @@ pub async fn run_daemon_loops(
                     }
             }
             DaemonEvent::Subscribe(sub_tx) => {
-                state.subscribers.push(sub_tx);
+                state.push_full_subscriber(sub_tx);
+                state.broadcast_status();
+            }
+            DaemonEvent::SubscribeDiff(sub_tx) => {
+                state.push_diff_subscriber(sub_tx);
                 state.broadcast_status();
             }
         }
@@ -870,8 +956,8 @@ mod tests {
         let (tx1, mut rx1) = mpsc::channel(10);
         let (tx2, mut rx2) = mpsc::channel(10);
 
-        state.subscribers.push(tx1);
-        state.subscribers.push(tx2);
+        state.push_full_subscriber(tx1);
+        state.push_full_subscriber(tx2);
 
         let agent_id = AgentId("test_sub_agent".to_string());
         state.register_agent(
@@ -898,7 +984,7 @@ mod tests {
     fn test_daemon_broadcast_drops_newest_when_subscriber_full() {
         let mut state = DaemonState::new(Config::default());
         let (tx, mut rx) = mpsc::channel(32);
-        state.subscribers.push(tx);
+        state.push_full_subscriber(tx);
 
         state.register_agent(
             AgentId("full_sub_agent".to_string()),
@@ -946,7 +1032,7 @@ mod tests {
                 let mut rxs = Vec::new();
                 for _ in 0..k {
                     let (tx, rx) = mpsc::channel(10_000);
-                    state.subscribers.push(tx);
+                    state.push_full_subscriber(tx);
                     rxs.push(rx);
                 }
                 let start = std::time::Instant::now();

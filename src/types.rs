@@ -63,6 +63,9 @@ pub enum AgentIPCMessage {
     /// Subscribe to daemon agent status broadcast updates.
     #[serde(rename = "daemon.subscribe")]
     SubscribeStatus,
+    /// Subscribe to diff-based agent status updates (snapshot first, then deltas).
+    #[serde(rename = "daemon.subscribe_diff")]
+    SubscribeDiff,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
