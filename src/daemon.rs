@@ -135,7 +135,9 @@ impl DaemonState {
         });
     }
 
-    pub fn register_agent(&mut self, agent_id: AgentId, project_id: ProjectId, pid: u32, app_id: String, parent_id: Option<AgentId>) {
+    /// Registers an agent. Returns a monitor request when the auto-monitor rule applies; the
+    /// loop executes it (G54).
+    pub fn register_agent(&mut self, agent_id: AgentId, project_id: ProjectId, pid: u32, app_id: String, parent_id: Option<AgentId>) -> Option<MonitorRequest> {
         let is_subagent = if let Some(ref p_id) = parent_id {
             self.agents.contains_key(p_id)
         } else {
@@ -160,13 +162,96 @@ impl DaemonState {
         self.agents.insert(agent_id.clone(), agent);
         self.pid_to_agent.insert(pid, agent_id.clone());
 
-        if is_subagent && self.config.daemon.auto_monitor {
-            self.spawn_monitor_terminal(&agent_id);
-        }
-
         if let Some(ref hook) = self.config.hooks.on_agent_spawn {
             execute_lifecycle_hook(hook, &agent_id, "idle");
         }
+
+        self.auto_monitor_wanted(is_subagent)
+            .then_some(MonitorRequest { agent_id })
+    }
+
+    /// The one auto-monitor rule (D3). `subagent_evidence` is true when a parent is known,
+    /// either registered explicitly or found by process-tree auditing.
+    fn auto_monitor_wanted(&self, subagent_evidence: bool) -> bool {
+        subagent_evidence && self.config.daemon.auto_monitor
+    }
+
+    /// Window-created rules: the monitor-window route, the agent-window bind, process-tree
+    /// auditing and the auto-monitor decision. Returns the layout actions and monitor requests,
+    /// in the order the loop should run them (monitors first).
+    pub fn on_window_created(
+        &mut self,
+        con_id: i64,
+        app_id: &str,
+        pid: Option<i32>,
+    ) -> (Vec<LayoutAction>, Vec<MonitorRequest>) {
+        let mut actions = Vec::new();
+        let mut monitors = Vec::new();
+
+        if let Some(target) = app_id.strip_prefix("agent.monitor.") {
+            let target_id = AgentId(target.to_string());
+            if let Some(agent) = self.agents.get(&target_id) {
+                println!("[daemon] Sway monitor window created for agent {}: con_id={}", target_id.0, con_id);
+                actions.push(LayoutAction::WindowCreated {
+                    con_id,
+                    app_id: app_id.to_string(),
+                    project_id: agent.project.clone(),
+                    parent_id: agent.parent_id.clone(),
+                });
+            }
+            return (actions, monitors);
+        }
+
+        if !app_id.starts_with("agent.") {
+            return (actions, monitors);
+        }
+        let Some(agent_id) = register_agent_window(app_id, con_id, self) else {
+            return (actions, monitors);
+        };
+
+        if self.config.daemon.process_tree_audit_enabled
+            && let Some(con_pid) = pid
+        {
+            let found = match self.agents.get_mut(&agent_id) {
+                Some(agent) => apply_process_tree_auditing(
+                    agent,
+                    con_pid as u32,
+                    &self.pid_to_agent,
+                    self.config.daemon.max_ancestry_depth,
+                ),
+                None => false,
+            };
+            if self.auto_monitor_wanted(found) {
+                monitors.push(MonitorRequest { agent_id: agent_id.clone() });
+            }
+        }
+
+        // Read parent_id after auditing so an auto-detected parent reaches the layout on this event.
+        if let Some(agent) = self.agents.get(&agent_id) {
+            println!("[daemon] Sway window created for agent {}: con_id={}", agent_id.0, con_id);
+            actions.push(LayoutAction::WindowCreated {
+                con_id,
+                app_id: app_id.to_string(),
+                project_id: agent.project.clone(),
+                parent_id: agent.parent_id.clone(),
+            });
+        }
+        (actions, monitors)
+    }
+
+    /// Window-destroyed rules: unbind the window, remove the agent, promote its children to
+    /// roots, and return the layout action. Returns nothing when no agent owned the window.
+    pub fn on_window_destroyed(&mut self, con_id: i64) -> Vec<LayoutAction> {
+        let Some(agent_id) = self.con_to_agent.remove(&con_id) else {
+            return Vec::new();
+        };
+        println!("[daemon] Sway window destroyed for agent: {}", agent_id.0);
+        let parent_id = self.agents.get(&agent_id).and_then(|a| a.parent_id.clone());
+        if self.agents.remove(&agent_id).is_some() {
+            self.pid_to_agent.retain(|_, id| id != &agent_id);
+        }
+        promote_orphans(self, &agent_id);
+        vec![LayoutAction::WindowDestroyed { agent_id, parent_id }]
     }
 
     pub fn spawn_monitor_terminal(&self, agent_id: &AgentId) {
@@ -265,6 +350,13 @@ impl AgentRegistry for DaemonState {
     fn agents(&self) -> &HashMap<AgentId, AgentWindow> {
         &self.agents
     }
+}
+
+/// A request for the loop to spawn a monitor terminal for an agent (G54). `DaemonState` decides;
+/// the loop executes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MonitorRequest {
+    pub agent_id: AgentId,
 }
 
 pub enum DaemonEvent {
@@ -433,13 +525,16 @@ pub async fn run_daemon_loops(
                 match msg {
                     AgentIPCMessage::Register { id: _, params } => {
                         println!("[daemon] Registering agent: {} (parent: {:?})", params.agent_id.0, params.parent_agent_id);
-                        state.register_agent(
+                        let monitor = state.register_agent(
                             params.agent_id.clone(),
                             params.project_id.clone(),
                             params.pid,
                             params.app_id.clone(),
                             params.parent_agent_id.clone(),
                         );
+                        if let Some(req) = monitor {
+                            state.spawn_monitor_terminal(&req.agent_id);
+                        }
                         state.broadcast_status();
                     }
                     AgentIPCMessage::UpdateStatus { params } => {
@@ -477,93 +572,20 @@ pub async fn run_daemon_loops(
             DaemonEvent::Sway(sway_event) => {
                 match sway_event {
                     SwayEvent::WindowCreated { con_id, app_id, pid } => {
-                        if let Some(target_agent_id_str) = app_id.strip_prefix("agent.monitor.") {
-                            let target_agent_id = AgentId(target_agent_id_str.to_string());
-                            if let Some(agent) = state.agents.get(&target_agent_id) {
-                                let project_id = agent.project.clone();
-                                let parent_id = agent.parent_id.clone();
-
-                                println!(
-                                    "[daemon] Sway monitor window created for agent {}: con_id={}",
-                                    target_agent_id.0, con_id
-                                );
-
-                                delegate_to_layout(
-                                    LayoutAction::WindowCreated {
-                                        con_id,
-                                        app_id: app_id.clone(),
-                                        project_id,
-                                        parent_id,
-                                    },
-                                    &layout_manager,
-                                    &state,
-                                    &sway_cmd_tx,
-                                )
-                                .await;
-                            }
-                        } else if app_id.starts_with("agent.")
-                            && let Some(agent_id) = register_agent_window(&app_id, con_id, &mut state) {
-                                if state.config.daemon.process_tree_audit_enabled
-                                    && let (Some(con_pid), Some(agent)) =
-                                        (pid, state.agents.get_mut(&agent_id))
-                                        && apply_process_tree_auditing(
-                                            agent,
-                                            con_pid as u32,
-                                            &state.pid_to_agent,
-                                            state.config.daemon.max_ancestry_depth,
-                                        )
-                                            && state.config.daemon.auto_monitor {
-                                                state.spawn_monitor_terminal(&agent_id);
-                                            }
-
-                                // Read parent_id after auditing so an auto-detected
-                                // parent reaches the layout on this same event.
-                                if let Some(agent) = state.agents.get(&agent_id) {
-                                    let project_id = agent.project.clone();
-                                    let parent_id = agent.parent_id.clone();
-
-                                    println!(
-                                        "[daemon] Sway window created for agent {}: con_id={}",
-                                        agent_id.0, con_id
-                                    );
-
-                                    delegate_to_layout(
-                                        LayoutAction::WindowCreated {
-                                            con_id,
-                                            app_id: app_id.clone(),
-                                            project_id,
-                                            parent_id,
-                                        },
-                                        &layout_manager,
-                                        &state,
-                                        &sway_cmd_tx,
-                                    )
-                                    .await;
-                                }
-                            }
+                        let (actions, monitors) = state.on_window_created(con_id, &app_id, pid);
+                        for req in monitors {
+                            state.spawn_monitor_terminal(&req.agent_id);
+                        }
+                        for action in actions {
+                            delegate_to_layout(action, &layout_manager, &state, &sway_cmd_tx).await;
+                        }
                     }
                     SwayEvent::WindowDestroyed { con_id } => {
-                        if let Some(agent_id) = state.con_to_agent.remove(&con_id) {
-                            println!("[daemon] Sway window destroyed for agent: {}", agent_id.0);
-                            let parent_id =
-                                state.agents.get(&agent_id).and_then(|a| a.parent_id.clone());
-
-                            if state.agents.remove(&agent_id).is_some() {
-                                state.pid_to_agent.retain(|_, id| id != &agent_id);
+                        let actions = state.on_window_destroyed(con_id);
+                        if !actions.is_empty() {
+                            for action in actions {
+                                delegate_to_layout(action, &layout_manager, &state, &sway_cmd_tx).await;
                             }
-                            promote_orphans(&mut state, &agent_id);
-
-                            delegate_to_layout(
-                                LayoutAction::WindowDestroyed {
-                                    agent_id: agent_id.clone(),
-                                    parent_id,
-                                },
-                                &layout_manager,
-                                &state,
-                                &sway_cmd_tx,
-                            )
-                            .await;
-
                             state.broadcast_status();
                         }
                     }
@@ -1057,6 +1079,48 @@ mod tests {
         );
 
         assert!(state.agents.contains_key(&child));
+    }
+
+    #[test]
+    fn test_auto_monitor_request_only_for_subagent() {
+        let mut config = Config::default();
+        config.daemon.auto_monitor = true;
+        let mut state = DaemonState::new(config);
+        let parent = AgentId("p".to_string());
+        let child = AgentId("c".to_string());
+        let project = ProjectId("proj".to_string());
+        let root = state.register_agent(parent.clone(), project.clone(), 1, "agent.p".to_string(), None);
+        assert_eq!(root, None);
+        let sub = state.register_agent(child.clone(), project, 2, "agent.c".to_string(), Some(parent));
+        assert_eq!(sub, Some(MonitorRequest { agent_id: child }));
+    }
+
+    #[test]
+    fn test_auto_monitor_off_gives_no_request() {
+        let mut state = DaemonState::new(Config::default());
+        let parent = AgentId("p".to_string());
+        let project = ProjectId("proj".to_string());
+        state.register_agent(parent.clone(), project.clone(), 1, "agent.p".to_string(), None);
+        let sub = state.register_agent(AgentId("c".to_string()), project, 2, "agent.c".to_string(), Some(parent));
+        assert_eq!(sub, None);
+    }
+
+    #[test]
+    fn test_window_destroyed_promotes_children() {
+        let mut state = DaemonState::new(Config::default());
+        let project = ProjectId("proj".to_string());
+        let parent = AgentId("p".to_string());
+        let child = AgentId("c".to_string());
+        state.register_agent(parent.clone(), project.clone(), 1, "agent.p".to_string(), None);
+        state.register_agent(child.clone(), project, 2, "agent.c".to_string(), Some(parent.clone()));
+        state.con_to_agent.insert(10, parent.clone());
+        let actions = state.on_window_destroyed(10);
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(
+            &actions[0],
+            LayoutAction::WindowDestroyed { agent_id, parent_id: None } if *agent_id == parent
+        ));
+        assert_eq!(state.agents.get(&child).unwrap().parent_id, None);
     }
 
     #[test]
