@@ -1,7 +1,7 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-08
-Source State: STATE_25.md (Orchestration 25 closed at `9a91b55`; `make all` green; `main` local, nothing pushed since `805fcea`). Backlog from the 2026-11-08 full workspace audit (Magic Wand).
+Source State: STATE_26.md (Orchestration 26 closed at `00a4675`; `make all` green; pushed to `origin/main`). Correction 2026-11-08: the architecture review candidates G67–G70 were already done in earlier orchestrations; the earlier ranking missed git history and is withdrawn.
 
 ## Circled Goal (Active)
 
@@ -13,15 +13,28 @@ Source State: STATE_25.md (Orchestration 25 closed at `9a91b55`; `make all` gree
 
 ## Independent Backlog
 
-- None open.
+- **[G73]** `npm run build` (or a `typecheck` script) type-checks `integrations/pi/tests/`. Today `tsconfig` includes only `src/`, and `tsx --test` skips type checks. Found during Orchestration 26 (task 26.1.1).
+- **[G74]** Lifecycle hooks (`on_agent_spawn`, `on_agent_status_change`) have a test that checks argument order and status string. `execute_lifecycle_hook` (`src/daemon.rs`) has no test today.
+- **[G75]** The planning design docs (`planning/Sway Multi Agent Architecture Design.md`, `planning/Sway Multi-Agent Viewer Architecture.md`) carry a header that marks them historical and points to the ADRs and the current protocol.
 
 ## Deferred
 
 - **[G66]** The two timing benchmarks in `src/daemon.rs` (`measure_broadcast_cost`, `measure_broadcast_cost_diff`) run in a gate, or are retired.
   - Trigger: a suspected broadcast performance regression, or a decision to add a perf gate.
 
+- **[G77]** A Waybar module for agent status (design doc section "Ambient Desktop Awareness").
+  - Trigger: a request for a Waybar module. No code or README exists in the repo.
+- **[G78]** `src/daemon.rs` tests move out of the 1365-line file.
+  - Trigger: the next change to `daemon.rs` that needs more room. Size alone is not a defect.
+
 ## Blocked / Pruned
 
+- **[G76]** The design doc's JSON-RPC 2.0 envelope and its four methods (`agent.heartbeat`, `agent.request_window_action`, `orchestrator.interrupt`, `orchestrator.focus_changed`) are adopted.
+  - Status: Pruned
+  - Reason: ADR 0004 rejected the envelope, and none of the four methods has a code hit in `src/` or `tests/`. If a client later needs one, open a new goal for that method.
+- **[G71]** Name the spawn plan as a pure function extracted from the CLI arm (review candidate 5).
+  - Status: Pruned
+  - Reason: already delivered. G60 (Orchestration 25) moved the plan into the pure `spawn_plan`, and G64 (Orchestration 26) gave it a request struct.
 - **[G65]** Daemon-launched monitor terminals get the same child env as `swayve spawn`.
   - Status: Pruned
   - Reason: `spawn_monitor_terminal` (`src/daemon.rs`, around line 287) runs the monitor with `.args(...)` and no env, and nothing in the repo reads `SWAYVE_SOCKET`, `SWAYVE_AGENT_ID`, or `SWAYVE_PROJECT_ID` from that process (Orchestration 26, D3).
@@ -42,6 +55,11 @@ Source State: STATE_25.md (Orchestration 25 closed at `9a91b55`; `make all` gree
 
 ## Completed
 
+- **[G72]** `make check` runs `cargo clippy --all-targets -- -D warnings`, so `make all` fails on any lint warning (Orchestration 27, `1f79de0`; `make all` serial exit 0, zero warnings).
+- **[G70]** One typed `DiffFrame` is shared by the daemon and the CLI for the status diff wire shape (`9843d6f`).
+- **[G69]** `find_registered_parent_ancestor` takes a `parent_of` closure, so the depth-limit test runs against a fake tree (`8460157`).
+- **[G68]** The focus cycle is a `FocusCycle` struct with `observe()` and `next()` (`1012fd5`, G58).
+- **[G67]** The auto-monitor rule lives in one `DaemonState` method (`auto_monitor_wanted`) that returns a `MonitorRequest`; the loop executes the spawn (`55489c7`, G54).
 - **[G64]** `spawn_plan` takes a `SpawnRequest<'a>` struct, and the `too_many_arguments` allow is removed (Orchestration 26, `9b31e73`; the 7 `spawn_plan` tests pass).
 - **[G63]** Pi tests leave no socket files in the package directory. `dummy.sock` goes into a per-run `mkdtemp` dir, and the `test.sock` cleanup test is removed (Orchestration 26, `bf5feaf`; Pi `npm test` 6/6).
 - **[G59]** `swayve spawn --parent X` sets `SWAYVE_PARENT_ID=X` in the child env, and the variable is unset without `--parent` (Orchestration 25, `7b72405`; test `test_spawn_plan_sets_parent_env_when_given` and `test_spawn_plan_omits_parent_env_when_absent`).
