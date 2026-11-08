@@ -43,7 +43,7 @@ Process note: all six worktrees were created from a stale base (`298d6db`). Four
 ### Post-wave
 - [x] ADR 0012 amendment: foreign-owner paths tested via injected uid (`docs/decisions/0012-runtime-socket-private-dir-contract.md`).
 - [x] ADR 0013 amendment: `to_value` outcome per D3 (kept; measured 621 µs at N=50 K=10 in release).
-- [ ] adr-distillation: G35 skip policy, if it qualifies. **Not run in this orchestration.** It is a candidate, so it stays open.
+- [x] adr-distillation: G35 skip policy recorded as ADR 0014 (`docs/decisions/0014-skip-undecodable-ipc-lines-keep-client.md`); catalog row added.
 - [x] GOALS.md: G29–G37 moved to Completed with SHAs; G32 recorded as "not included".
 
 ### Process notes
