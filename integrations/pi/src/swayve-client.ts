@@ -20,7 +20,7 @@ export class SwayveClient {
     this.socketPath = config.socketPath || process.env.SWAYVE_SOCKET || '';
     this.agentId = config.agentId || process.env.SWAYVE_AGENT_ID || 'unknown-agent';
     this.projectId = config.projectId || process.env.SWAYVE_PROJECT_ID || 'default-project';
-    this.parentAgentId = config.parentAgentId ?? process.env.SWAYVE_PARENT_ID ?? null;
+    this.parentAgentId = config.parentAgentId || process.env.SWAYVE_PARENT_ID || null;
   }
 
   private async _send(payload: Record<string, any>): Promise<void> {

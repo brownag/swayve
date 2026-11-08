@@ -81,4 +81,9 @@ describe('SwayveClient', () => {
     const params = await captureRegister({}, 'env-parent');
     assert.strictEqual(params.parent_agent_id, 'env-parent');
   });
+
+  test('register sends null parent_agent_id when SWAYVE_PARENT_ID is empty', async () => {
+    const params = await captureRegister({}, '');
+    assert.strictEqual(params.parent_agent_id, null);
+  });
 });
