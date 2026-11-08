@@ -54,6 +54,8 @@ graph TD
 - Framing: one JSON object per line, with a `method` field (see `docs/decisions/0004-newline-delimited-json-ipc.md`). It is not a JSON-RPC 2.0 envelope.
 - `SWAYVE_SOCKET` overrides the path and skips the directory check.
 - `daemon.subscribe` streams the full agent list as one JSON array per line. `daemon.subscribe_diff` streams `{"snapshot","upsert","remove"}` objects; the first line is a snapshot. A subscriber whose channel fills receives a snapshot on its next line.
+- Each client connection is rate-limited: `[daemon] ipc_lines_per_sec` (default 100, sustained) and `ipc_burst` (default 200, burst). See [ADR 0016](docs/decisions/0016-configurable-ipc-rate-limit.md).
+- A line over the limit is dropped and logged as `[daemon] Rate limit exceeded; dropping IPC line`. The client stays connected, and the daemon sends no error reply.
 
 ---
 
