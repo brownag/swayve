@@ -29,8 +29,8 @@ By delegating window management directly to Sway/Wayland:
 graph TD
     subgraph Host OS Sway Session
         subgraph Sub-Agents
-            A["Pi Agent"] -- "JSON-RPC (agent.register)" --> S["Unix Socket: $XDG_RUNTIME_DIR/swayve/swayve.sock"]
-            B["Claude Code"] -- "JSON-RPC (agent.update_status)" --> S
+            A["Pi Agent"] -- "JSON (newline-delimited, method field)" --> S["Unix Socket: $XDG_RUNTIME_DIR/swayve/swayve.sock"]
+            B["Claude Code"] -- "JSON (newline-delimited, method field)" --> S
         end
 
         subgraph swayve["swayve Daemon"]
@@ -46,6 +46,13 @@ graph TD
         end
     end
 ```
+
+### Socket Contract
+
+- Default socket: `$XDG_RUNTIME_DIR/swayve/swayve.sock`. Requires `XDG_RUNTIME_DIR`; the daemon refuses to start without it.
+- The directory is created with mode 0700 and must be owned by the current user.
+- Framing: one JSON object per line, with a `method` field (see `docs/decisions/0004-newline-delimited-json-ipc.md`). It is not a JSON-RPC 2.0 envelope.
+- `SWAYVE_SOCKET` overrides the path and skips the directory check.
 
 ---
 
