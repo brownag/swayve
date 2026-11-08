@@ -1122,7 +1122,7 @@ async fn test_diff_stream_matches_daemon_state() {
     let mut diff_lines = BufReader::new(diff_reader).lines();
 
     let mut client = UnixStream::connect(socket_path).await.expect("connect client");
-    let mut send = |msg: AgentIPCMessage| serde_json::to_string(&msg).unwrap() + "\n";
+    let send = |msg: AgentIPCMessage| serde_json::to_string(&msg).unwrap() + "\n";
     for (i, n) in [1, 2, 3].iter().enumerate() {
         let id = format!("diff-a{n}");
         let payload = send(AgentIPCMessage::Register {
