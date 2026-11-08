@@ -14,6 +14,16 @@ async fn recv_command(rx: &mut mpsc::Receiver<SwayCommand>, timeout_ms: u64) -> 
     timeout(Duration::from_millis(timeout_ms), rx.recv()).await.ok().flatten()
 }
 
+async fn wait_for_socket(path: &str) {
+    for _ in 0..200 {
+        if UnixStream::connect(path).await.is_ok() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("socket {path} not ready after 2s");
+}
+
 #[tokio::test]
 async fn test_daemon_registration_and_status() {
     let socket_path = "/tmp/swayve_test.sock";
@@ -38,7 +48,7 @@ async fn test_daemon_registration_and_status() {
     });
 
     // Wait a brief moment for socket to bind
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_socket(socket_path).await;
 
     // Connect to the socket and send registration message
     let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect to test socket");
@@ -123,7 +133,7 @@ async fn test_subagent_layout_routing() {
         run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
     });
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_socket(socket_path).await;
 
     let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect");
 
@@ -266,7 +276,7 @@ async fn test_dynamic_process_tree_auditing() {
         run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
     });
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_socket(socket_path).await;
 
     let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect");
 
@@ -363,7 +373,7 @@ async fn test_cli_parent_flag_to_layout() {
         run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
     });
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_socket(socket_path).await;
 
     let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect");
 
@@ -473,7 +483,7 @@ async fn test_focus_survives_parent_destruction() {
         run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
     });
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_socket(socket_path).await;
 
     let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect");
 
@@ -559,7 +569,7 @@ async fn test_focus_follows_sway_focus() {
         run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
     });
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_socket(socket_path).await;
 
     let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect");
 
@@ -654,7 +664,7 @@ async fn test_cli_focus_with_hierarchy() {
         run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
     });
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_socket(socket_path).await;
 
     let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect");
 
@@ -748,7 +758,7 @@ async fn test_multiple_agents_same_wave_unique_app_id() {
         run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
     });
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_socket(socket_path).await;
 
     let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect to test socket");
 
@@ -882,7 +892,7 @@ async fn test_hooks_and_monitoring() {
         run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
     });
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_socket(socket_path).await;
 
     let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect to socket");
 
@@ -984,7 +994,7 @@ async fn test_dashboard_subscription_stream() {
         run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
     });
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_socket(socket_path).await;
 
     // Connect subscriber stream and subscribe to status updates
     let mut sub_stream = UnixStream::connect(socket_path)
@@ -1101,7 +1111,7 @@ async fn test_diff_stream_matches_daemon_state() {
     let daemon_handle = tokio::spawn(async move {
         run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
     });
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_socket(socket_path).await;
 
     let mut diff_stream = UnixStream::connect(socket_path).await.expect("connect diff client");
     diff_stream
