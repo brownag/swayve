@@ -272,6 +272,8 @@ pub enum DaemonEvent {
     Focus,
     Subscribe(mpsc::Sender<String>),
     SubscribeDiff(mpsc::Sender<String>),
+    /// Internal barrier: the loop replies once every earlier event has been applied. Not on the wire.
+    Sync(tokio::sync::oneshot::Sender<()>),
 }
 
 pub(crate) async fn prepare_socket_path(path: &Path, expected_uid: u32) -> Result<()> {
@@ -591,6 +593,9 @@ pub async fn run_daemon_loops(
             DaemonEvent::SubscribeDiff(sub_tx) => {
                 state.push_diff_subscriber(sub_tx);
                 state.broadcast_status();
+            }
+            DaemonEvent::Sync(done) => {
+                let _ = done.send(());
             }
         }
     }

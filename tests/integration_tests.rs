@@ -16,6 +16,14 @@ async fn recv_command(rx: &mut mpsc::Receiver<SwayCommand>, timeout_ms: u64) -> 
     timeout(Duration::from_millis(timeout_ms), rx.recv()).await.ok().flatten()
 }
 
+/// Waits until the daemon loop has applied every event sent before this call (G49).
+/// The loop replies to `Sync` in order, so the reply means the earlier events are done.
+async fn sync_events(event_tx: &mpsc::Sender<DaemonEvent>) {
+    let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+    let _ = event_tx.send(DaemonEvent::Sync(done_tx)).await;
+    let _ = done_rx.await;
+}
+
 async fn wait_for_socket(path: &str) {
     for _ in 0..200 {
         if UnixStream::connect(path).await.is_ok() {
@@ -632,12 +640,12 @@ async fn test_focus_follows_sway_focus() {
             // Manual focus on child-b: the cycle continues from there
             2 => {
                 let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowFocused { con_id: 6002 })).await;
-                tokio::time::sleep(Duration::from_millis(50)).await;
+                sync_events(&event_tx).await;
             }
             // Not an agent: ignored
             3 => {
                 let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowFocused { con_id: 9999 })).await;
-                tokio::time::sleep(Duration::from_millis(50)).await;
+                sync_events(&event_tx).await;
             }
             _ => {}
         }
