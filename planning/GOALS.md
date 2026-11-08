@@ -1,32 +1,21 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-08 (Orchestration 22 complete; backlog re-derived by Magic Wand; G48 decided in ADR 0016; architecture review triaged into G54–G58)
+Last Updated: 2026-11-08 (Orchestration 22 complete; G45 and G48 done; G46 circled; architecture review triaged into G54–G58)
 Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero warnings, at `8a7f002`; ADRs 0012–0015 recorded). `origin/main` = `96f18af` = local `main` (Orchestration 22 pushed by the user).
 
 ## Circled Goal (Active)
 
-- **[G45]** Every test socket and flag path is unique per run, under a temp directory. No fixed `/tmp/swayve_test*` name remains in `tests/` or `src/`.
-  - Why now: 18 fixed paths in four test files (`tests/integration_tests.rs`, `tests/slow_consumer.rs`, `tests/subscribe_golden.rs`, plus one hook output file in `src/daemon.rs`). Two runs at once, or a leftover socket, collide. It is the prerequisite for G46 and every new socket test.
-  - Exit criteria: `grep -rn '"/tmp/' tests src` finds nothing test-owned; `make all` passes; two `cargo test --test integration_tests` runs in parallel both pass; zero warnings.
-  - First action: add a helper that builds `$TMPDIR`-style paths from `std::process::id()` and the test name, and switch one test to it. Then convert the rest.
+- **[G46]** A socket-level test shows that an over-limit IPC line is dropped and logged, the client stays connected, and the next valid line is still processed.
+  - Why now: G45 is complete, so the test can use a unique socket path. The configured limit path (G48) lets the test set a small burst.
+  - Exit criteria: a test in `tests/` sends more than 200 lines on one connection, then a valid `daemon.focus`, and asserts a `FocusWindow` command. `cargo test` passes.
+  - First action: copy the connection setup from `tests/slow_consumer.rs`, with `common::unique_path`.
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G46]** A socket-level test shows that an over-limit IPC line is dropped and logged, the client stays connected, and the next valid line is still processed.
-  - Depends on: G45 (unique socket path).
-  - Exit criteria: a test in `tests/` sends more than 200 lines on one connection, then a valid `daemon.focus`, and asserts a `FocusWindow` command. `cargo test` passes.
-  - First action: copy the connection setup from `tests/slow_consumer.rs`.
 - **[G47]** The README Socket Contract documents the per-client limit: 100 lines/s sustained, burst 200, over-limit lines dropped and logged, and the client kept connected.
   - Depends on: G46 (the docs describe behavior a test has verified).
   - Exit criteria: the README section matches `src/ratelimit.rs`. ADR 0015 links to it.
   - First action: add three bullets under Socket Contract in `README.md`.
-- **[G48]** Per-client rate-limit values are configurable in `~/.config/swayve/config.toml`, with the current 100/200 values as defaults.
-  - Depends on: G46 (a test must show the configured limit takes effect).
-  - Reverses: Orchestration 22 D1 ("constants, not config"). The user asked for this change.
-  - Decision: [ADR 0016](../docs/decisions/0016-configurable-ipc-rate-limit.md) (accepted) supersedes ADR 0015. Keys `[daemon] ipc_lines_per_sec` and `ipc_burst`; invalid values fall back to defaults with a `[config]` warning; no off switch.
-  - Exit criteria: config keys load with serde defaults; an invalid value falls back with a warning; config tests cover defaults and each invalid case; G46 shows a configured limit takes effect; `make all` passes.
-  - First action: `plan-wave` for this goal, using ADR 0016.
-
 ## Independent Backlog
 
 - **[G49]** The two focus-ordering sleeps at `tests/integration_tests.rs` 633 and 638 are replaced with a barrier event.
@@ -91,6 +80,8 @@ Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero war
 
 ## Completed
 
+- **[G48]** Per-client IPC rate limit is configurable: `[daemon] ipc_lines_per_sec` (default 100) and `ipc_burst` (default 200). Invalid values fall back with a `[config]` warning. ADR 0016 supersedes ADR 0015 (`5664429`). The socket-level check moved to G46. Unit tests cover config defaults, sanitizing, and a configured burst reaching `handle_client`.
+- **[G45]** Test socket and flag paths are unique per process, under the temp dir, through `tests/common::unique_path` (`0a6d0e6`). No `/tmp` literal remains in `tests/` or `src/`. Two integration runs in parallel pass.
 - **[G44]** Backlog close-out: G39–G43 are complete, `make all` green with zero warnings. Orchestration 22 (`EXECUTION_PLAN_22.md`, `STATE_22.md`). Pushed to `origin/main` (`fb34936..96f18af`) by the user.
 - **[G43]** Per-client IPC rate limit, wired on: a token bucket per connection (100 lines/s sustained, burst 200); over-limit lines are dropped and logged, and the client stays connected (`src/ratelimit.rs`, `5d7ef87`, 22.2.1). ADR 0015 (`8a7f002`). Orchestration 22.
 - **[G42]** `AgentWindow` derives `PartialEq`; the diff broadcast compares with `==` (`446d93c`, 22.1.1). Release N=1000 K=10 = 2339.6 µs, against 11.5 ms with `to_value`, so the 10 ms bar is met. ADR 0013 amended (`8a7f002`). Orchestration 22.
