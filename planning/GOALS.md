@@ -1,15 +1,11 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-08 (Orchestration 22 drafted)
-Source State: STATE_21.md (Orchestration 21 complete; `make all` green, zero warnings, at `dc2c4e5`; ADRs 0012–0014 recorded). `origin/main` = `fb34936` = local `main`.
+Last Updated: 2026-11-08 (Orchestration 22 complete)
+Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero warnings, at `8a7f002`; ADRs 0012–0015 recorded). `origin/main` = `fb34936`; local `main` is ahead by the Orchestration 22 commits (not pushed).
 
 ## Circled Goal (Active)
 
-- **[G44]** Close out the planned backlog: G39, G40, G41, G42 and G43 are each either done or deliberately deferred with a recorded reason, and `make all` stays green with zero warnings.
-  - Why now: it is the root of the open work. Every open item in the backlog is in its scope. Nothing outside it is open.
-  - Exit criteria: each of G39–G43 has a Completed entry (with SHA) or a Deferred entry (with trigger). `make all` passes, zero warnings. `origin/main` contains the work.
-  - First action: run the N=1000 diff-broadcast measurement for G42, which decides whether `PartialEq` is tested.
-  - Plan: `planning/EXECUTION_PLAN_22.md` (approved 2026-11-08, not yet executed). Waves: 1 (22.1.1 to 22.1.3), 2 (22.2.1), 3 (22.3.1), then the orchestrator closes G41.
+- None open. G44 (backlog close-out) is complete; see Completed.
 
 ## Sequenced Goals (Dependency DAG)
 
@@ -17,31 +13,7 @@ Source State: STATE_21.md (Orchestration 21 complete; `make all` green, zero war
 
 ## Independent Backlog
 
-- **[G39]** The `status --watch --diff` fold is covered by an end-to-end test, not only by parse tests.
-  - Status: Planned, Orchestration 22, task 22.1.2 (pure helper `fold_diff_line`, tests in `src/cli.rs`).
-  - Why: the fold in `run_status_watch` (`src/cli.rs`) is the only diff consumer in this repo, and it has no behavioural test.
-  - Exit criteria: a test feeds a snapshot, an upsert and a remove line through the fold and asserts the rendered agent list. Refactor the fold into a pure helper only if needed to test it.
-  - First action: read `run_status_watch` and decide between a pure helper and a test that drives the socket.
-  - Depends on: none.
-- **[G40]** The event-ordering sleeps left in `tests/integration_tests.rs` (G37, D8) are replaced with polls of daemon state.
-  - Status: Planned, Orchestration 22, task 22.1.3 (7 sleeps polled; 3 kept by design).
-  - Why: those sleeps are the remaining flake risk in the integration suite.
-  - Exit criteria: no fixed sleep orders daemon events in `tests/integration_tests.rs`; `cargo test --test integration_tests` passes 5 runs in a row.
-  - First action: decide whether the daemon needs an ack message, or whether each sleep can poll an observable state (the status query on a second connection, as in `tests/slow_consumer.rs`).
-  - Depends on: none. May need a `src/` change, so it needs its own plan.
-- **[G41]** Delete the three merged local branches `docs/adr-distillation`, `docs/agents-md-structure` and `docs/task-4.1-checkoff`.
-  - Status: Planned, Orchestration 22, orchestrator step after Wave 3.
-  - Why: all three are fully merged into `main` (verified 2026-11-08). They are leftover clutter.
-  - Exit criteria: `git branch --list` shows only `main`.
-  - First action: `git branch -d` each one; `-d` refuses if any is unmerged.
-  - Depends on: none.
-
-## Planned in Orchestration 22 (formerly Deferred)
-
-- **[G42]** `AgentWindow` derives `PartialEq` and the diff broadcast compares with `==` (revisit of G32).
-  - Status: Planned, Orchestration 22, task 22.1.1. Measured 2026-11-08: N=1000 K=10 release is 11.5 ms with `to_value` (misses the 10 ms bar) and 2.2 ms with `PartialEq`. Landing `PartialEq`.
-- **[G43]** Per-client rate limit on IPC lines (ADR 0014 negative consequence; good practice).
-  - Status: Planned, Orchestration 22, task 22.2.1. Wired on: 100 lines/s sustained, burst 200, over-limit lines dropped and logged (ADR 0015).
+- None open. G39, G40 and G41 are complete; see Completed.
 
 ## Blocked / Pruned
 
@@ -56,6 +28,13 @@ Source State: STATE_21.md (Orchestration 21 complete; `make all` green, zero war
   - Reason: ADR 0004 rejected it; the newline-delimited JSON protocol is in use.
 
 ## Completed
+
+- **[G44]** Backlog close-out: G39–G43 are complete, `make all` green with zero warnings. Orchestration 22 (`EXECUTION_PLAN_22.md`, `STATE_22.md`). Open exit item: the Orchestration 22 commits are local and not pushed to `origin/main`; a push needs the user's go-ahead.
+- **[G43]** Per-client IPC rate limit, wired on: a token bucket per connection (100 lines/s sustained, burst 200); over-limit lines are dropped and logged, and the client stays connected (`src/ratelimit.rs`, `5d7ef87`, 22.2.1). ADR 0015 (`8a7f002`). Orchestration 22.
+- **[G42]** `AgentWindow` derives `PartialEq`; the diff broadcast compares with `==` (`446d93c`, 22.1.1). Release N=1000 K=10 = 2339.6 µs, against 11.5 ms with `to_value`, so the 10 ms bar is met. ADR 0013 amended (`8a7f002`). Orchestration 22.
+- **[G41]** The three merged local branches are deleted: `docs/adr-distillation`, `docs/agents-md-structure`, `docs/task-4.1-checkoff` (no commit; `git branch -d` after `git branch --merged main`). Orchestration 22.
+- **[G40]** Seven registration sleeps in `tests/integration_tests.rs` are polls of the daemon agent list (`ddb9ed2`, 22.1.3). Three sleeps are kept by design: 616 and 621 (Sway event ordering) and 931 (spawned hooks and process execution). Orchestration 22.
+- **[G39]** The `status --watch --diff` fold is a pure helper, `fold_diff_line` in `src/cli.rs`, with behavioural tests for snapshot, upsert/remove and non-JSON lines (`d5eac18`, 22.1.2). Orchestration 22.
 
 - **[G38]** Local commits published to `origin/main` (`fb34936`). Verified 2026-11-08: `origin/main` and local `main` are equal.
 - **[G29]** `daemon.subscribe` bytes are pinned by a golden test (`tests/subscribe_golden.rs`, `cab1daf`, 21.1.5). The test accepts the two byte-exact orderings because the daemon's `HashMap` order is not stable. Orchestration 21.
