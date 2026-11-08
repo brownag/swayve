@@ -955,7 +955,7 @@ mod tests {
 
     #[test]
     fn test_lifecycle_hooks_execution() {
-        let out_path = format!("/tmp/test_swayve_hook_{}.txt", std::process::id());
+        let out_path = std::env::temp_dir().join(format!("swayve-{}-lifecycle-hook.txt", std::process::id())).to_string_lossy().into_owned();
         let _ = std::fs::remove_file(&out_path);
 
         let mut config = Config::default();

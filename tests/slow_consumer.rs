@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+mod common;
+
 use std::time::Duration;
 use swayve::config::Config;
 use swayve::daemon::{DaemonEvent, run_daemon_loops, start_daemon_ipc};
@@ -37,7 +39,7 @@ async fn daemon_list(path: &str) -> Vec<serde_json::Value> {
 
 #[tokio::test]
 async fn test_stalled_diff_subscriber_recovers_with_snapshot() {
-    let socket_path = "/tmp/swayve_test_slow.sock";
+    let socket_path = common::unique_path("slow", ".sock");
     let _ = fs::remove_file(socket_path).await;
 
     let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);

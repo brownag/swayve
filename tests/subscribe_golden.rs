@@ -1,4 +1,6 @@
 use std::path::Path;
+mod common;
+
 use std::time::Duration;
 use swayve::config::Config;
 use swayve::daemon::{run_daemon_loops, start_daemon_ipc, DaemonEvent};
@@ -39,7 +41,7 @@ async fn subscribe_first_line(path: &str) -> String {
 
 #[tokio::test]
 async fn test_subscribe_full_list_golden_bytes() {
-    let socket_path = "/tmp/swayve_test_golden.sock";
+    let socket_path = common::unique_path("golden", ".sock");
     let _ = fs::remove_file(Path::new(socket_path)).await;
 
     let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);

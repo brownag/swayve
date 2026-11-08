@@ -1,4 +1,6 @@
 use swayve::config::Config;
+mod common;
+
 use swayve::daemon::{run_daemon_loops, start_daemon_ipc, DaemonEvent};
 use swayve::sway::{SwayCommand, SwayEvent};
 use swayve::types::{AgentId, AgentIPCMessage, AgentStatus, ProjectId, RegisterParams, UpdateStatusParams};
@@ -43,7 +45,7 @@ async fn wait_for_listed(socket_path: &str, want: &str) {
 
 #[tokio::test]
 async fn test_daemon_registration_and_status() {
-    let socket_path = "/tmp/swayve_test.sock";
+    let socket_path = common::unique_path("main", ".sock");
     let path = Path::new(socket_path);
     if path.exists() {
         let _ = fs::remove_file(path).await;
@@ -130,7 +132,7 @@ async fn test_daemon_registration_and_status() {
 
 #[tokio::test]
 async fn test_subagent_layout_routing() {
-    let socket_path = "/tmp/swayve_test_sub.sock";
+    let socket_path = common::unique_path("sub", ".sock");
     let path = Path::new(socket_path);
     if path.exists() {
         let _ = fs::remove_file(path).await;
@@ -273,7 +275,7 @@ fn get_test_ppid() -> u32 {
 
 #[tokio::test]
 async fn test_dynamic_process_tree_auditing() {
-    let socket_path = "/tmp/swayve_test_audit.sock";
+    let socket_path = common::unique_path("audit", ".sock");
     let path = Path::new(socket_path);
     if path.exists() {
         let _ = fs::remove_file(path).await;
@@ -370,7 +372,7 @@ async fn test_dynamic_process_tree_auditing() {
 
 #[tokio::test]
 async fn test_cli_parent_flag_to_layout() {
-    let socket_path = "/tmp/swayve_test_parent_cli.sock";
+    let socket_path = common::unique_path("parent_cli", ".sock");
     let path = Path::new(socket_path);
     if path.exists() {
         let _ = fs::remove_file(path).await;
@@ -480,7 +482,7 @@ async fn test_cli_parent_flag_to_layout() {
 
 #[tokio::test]
 async fn test_focus_survives_parent_destruction() {
-    let socket_path = "/tmp/swayve_test_focus_orphan.sock";
+    let socket_path = common::unique_path("focus_orphan", ".sock");
     let path = Path::new(socket_path);
     if path.exists() {
         let _ = fs::remove_file(path).await;
@@ -566,7 +568,7 @@ async fn test_focus_survives_parent_destruction() {
 
 #[tokio::test]
 async fn test_focus_follows_sway_focus() {
-    let socket_path = "/tmp/swayve_test_focus_follows.sock";
+    let socket_path = common::unique_path("focus_follows", ".sock");
     let path = Path::new(socket_path);
     if path.exists() {
         let _ = fs::remove_file(path).await;
@@ -661,7 +663,7 @@ async fn test_focus_follows_sway_focus() {
 
 #[tokio::test]
 async fn test_cli_focus_with_hierarchy() {
-    let socket_path = "/tmp/swayve_test_focus_hierarchy.sock";
+    let socket_path = common::unique_path("focus_hierarchy", ".sock");
     let path = Path::new(socket_path);
     if path.exists() {
         let _ = fs::remove_file(path).await;
@@ -756,7 +758,7 @@ async fn test_cli_focus_with_hierarchy() {
 
 #[tokio::test]
 async fn test_multiple_agents_same_wave_unique_app_id() {
-    let socket_path = "/tmp/swayve_test_unique_appid.sock";
+    let socket_path = common::unique_path("unique_appid", ".sock");
     let path = Path::new(socket_path);
     if path.exists() {
         let _ = fs::remove_file(path).await;
@@ -861,25 +863,25 @@ async fn test_multiple_agents_same_wave_unique_app_id() {
 async fn test_hooks_and_monitoring() {
     use std::os::unix::fs::PermissionsExt;
 
-    let socket_path = "/tmp/swayve_test_hooks_mon.sock";
+    let socket_path = common::unique_path("hooks_mon", ".sock");
     let socket_p = Path::new(socket_path);
     if socket_p.exists() {
         let _ = fs::remove_file(socket_p).await;
     }
 
-    let spawn_flag_path = "/tmp/swayve_test_spawn_flag.txt";
+    let spawn_flag_path = common::unique_path("spawn_flag", ".txt");
     let spawn_p = Path::new(spawn_flag_path);
     if spawn_p.exists() {
         let _ = fs::remove_file(spawn_p).await;
     }
 
-    let monitor_flag_path = "/tmp/swayve_test_monitor_flag.txt";
+    let monitor_flag_path = common::unique_path("monitor_flag", ".txt");
     let monitor_p = Path::new(monitor_flag_path);
     if monitor_p.exists() {
         let _ = fs::remove_file(monitor_p).await;
     }
 
-    let mock_term_path = "/tmp/swayve_test_mock_term.sh";
+    let mock_term_path = common::unique_path("mock_term", ".sh");
     let mock_term_p = Path::new(mock_term_path);
     if mock_term_p.exists() {
         let _ = fs::remove_file(mock_term_p).await;
@@ -992,7 +994,7 @@ async fn test_dashboard_subscription_stream() {
     use tokio::io::{AsyncBufReadExt, BufReader};
     use swayve::types::AgentWindow;
 
-    let socket_path = "/tmp/swayve_test_dashboard_stream.sock";
+    let socket_path = common::unique_path("dashboard_stream", ".sock");
     let path = Path::new(socket_path);
     if path.exists() {
         let _ = fs::remove_file(path).await;
@@ -1116,7 +1118,7 @@ async fn test_diff_stream_matches_daemon_state() {
     use std::collections::HashMap;
     use tokio::io::{AsyncBufReadExt, BufReader};
 
-    let socket_path = "/tmp/swayve_test_diff_stream.sock";
+    let socket_path = common::unique_path("diff_stream", ".sock");
     let _ = fs::remove_file(socket_path).await;
 
     let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
