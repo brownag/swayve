@@ -16,6 +16,7 @@ Ordered by dependency: each record depends only on records above it.
 | [0010](0010-toml-config-in-home-config-dir.md) | TOML Configuration at ~/.config/swayve/config.toml with Serde Defaults | Accepted | 2026-07-28 | - | - | Wave 1 (`46e5c13`) |
 | [0011](0011-focus-state-from-sway-window-events.md) | Focus Cycle State Is Fed by Sway Window-Focus Events | Accepted | 2026-11-02 | - | - | Orchestration 13 |
 | [0012](0012-runtime-socket-private-dir-contract.md) | Runtime Socket Lives in a Private XDG Runtime Directory; SWAYVE_SOCKET Is an Explicit Override | Accepted | 2026-11-08 | - | - | Orchestration 19 |
+| [0013](0013-opt-in-diff-status-subscription.md) | Opt-In Diff Status Subscription Alongside the Full-List Stream | Accepted | 2026-11-08 | - | - | Orchestration 20 |
 
 ## Not recorded as ADRs
 
