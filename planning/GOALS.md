@@ -1,6 +1,6 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-08 (Orchestration 22 complete; backlog re-derived by Magic Wand)
+Last Updated: 2026-11-08 (Orchestration 22 complete; backlog re-derived by Magic Wand; G48 decided in ADR 0016; architecture review triaged into G54–G58)
 Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero warnings, at `8a7f002`; ADRs 0012–0015 recorded). `origin/main` = `96f18af` = local `main` (Orchestration 22 pushed by the user).
 
 ## Circled Goal (Active)
@@ -23,8 +23,9 @@ Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero war
 - **[G48]** Per-client rate-limit values are configurable in `~/.config/swayve/config.toml`, with the current 100/200 values as defaults.
   - Depends on: G46 (a test must show the configured limit takes effect).
   - Reverses: Orchestration 22 D1 ("constants, not config"). The user asked for this change.
-  - Exit criteria: config keys load with serde defaults; a malformed value falls back to the default with a warning (as ADR 0010 does for config); ADR 0015 is amended or superseded by a new ADR; `make all` passes.
-  - First action: `plan-wave` for this goal. It needs an ADR decision on amend versus supersede first.
+  - Decision: [ADR 0016](../docs/decisions/0016-configurable-ipc-rate-limit.md) (accepted) supersedes ADR 0015. Keys `[daemon] ipc_lines_per_sec` and `ipc_burst`; invalid values fall back to defaults with a `[config]` warning; no off switch.
+  - Exit criteria: config keys load with serde defaults; an invalid value falls back with a warning; config tests cover defaults and each invalid case; G46 shows a configured limit takes effect; `make all` passes.
+  - First action: `plan-wave` for this goal, using ADR 0016.
 
 ## Independent Backlog
 
@@ -43,7 +44,29 @@ Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero war
   - Exit criteria: a `.github/workflows` file that runs `make all` on Linux with Sway-free tests. The workflow is valid YAML, and the workflow file is committed locally. No push.
   - Depends on: none. Needs `github-actions-ci` skill conventions.
 
+- **[G54]** Window lifecycle rules live in `DaemonState`, behind two methods: `on_window_created(con_id, app_id, pid)` and `on_window_destroyed(con_id)`. Each returns `Vec<LayoutAction>` and `Vec<MonitorRequest>`. The run loop only executes spawns.
+  - Source: architecture review, top recommendation. Confirmed in code: the auto-monitor rule appears in `register_agent` (`src/daemon.rs` ~162, gated on `is_subagent`) and in the WindowCreated arm (~500, gated on process-tree auditing also succeeding). The gates differ, so the refactor must make that difference explicit, not merge it silently.
+  - Exit criteria: one method owns the auto-monitor decision; `test_auto_monitor_subagent_registration` tests it without a channel; `LayoutAction` shape unchanged (ADR 0005); `make all` passes.
+  - Depends on: none. Plan-wave before any change.
+- **[G55]** The process-tree depth-limit test proves `max_depth` is respected.
+  - Source: architecture review, confirmed. `test_early_termination_at_depth_limit` (`src/daemon.rs` ~819) starts at PID 1 and asserts `None`, which passes even if `max_depth` is ignored.
+  - Approach: pass the parent lookup as a closure to `find_registered_parent_ancestor`. The `/proc` read stays as the production adapter. The test uses a map-backed chain longer than the limit, and asserts the walk stops at the limit.
+  - Exit criteria: the test fails if the depth check is removed; `make all` passes.
+  - Depends on: none.
+- **[G56]** The diff frame has one shared type, `DiffFrame { snapshot, upsert, remove }`, used by the daemon to build frames and by `fold_diff_line` to read them.
+  - Source: architecture review. Confirmed: the daemon builds the JSON with `serde_json::json!` (`src/daemon.rs` ~112) and the CLI indexes raw `Value`s.
+  - Constraint: the wire bytes must not change. Add a golden test for `daemon.subscribe_diff` lines first. The existing golden pins only `daemon.subscribe`.
+  - Depends on: a `subscribe_diff` golden test (part of this goal).
+- **[G57]** The `spawn` command's plan (prompt escaping, `bash -c` wrapping, ID and title derivation) is a pure function, `spawn_plan(args, now_ms)`, and the command executes it.
+  - Source: architecture review. Not fully verified: the review read only the first ~40 lines of the `Commands::Spawn` arm (`src/cli.rs` ~222). Read the whole arm before planning.
+  - Exit criteria: the plan function has unit tests for escaping and ID shape; `make all` passes.
+  - Depends on: none.
+
 ## Deferred
+
+- **[G58]** The focus cycle owns its cursor: `FocusCycle { last }` with `.next(&agents)` and `.observe(con_id)`, replacing the `last_focused` local in `run_daemon_loops` (`src/daemon.rs` ~413).
+  - Source: architecture review. The reviewer judged the gain small: the cycle rule is already one tested function (`next_focus_target`). Do not merge the daemon and CLI focus paths (ADR 0003 keeps the flat fallback).
+  - Trigger: the next change to the focus cycle rules, or G54 landing (it would touch the same loop).
 
 - **[G52]** The daemon sends a delivery ack for each IPC message.
   - Trigger: a client needs to know its line was applied (for example, a CLI that must wait for registration before it spawns a window), or a wire-format change is approved in an ADR review.
