@@ -7,21 +7,11 @@ Source State: STATE_19.md (Orchestration 19 complete; `make all` passes at each 
 
 Two orthogonal goals, circled together at the user's request for parallel work (2026-11-08). Public release is the reason; both are in scope for it.
 
-- **[G9]** Full-state broadcast cost is reduced to diffs for subscribers that opt in (ADR 0008 upgrade path). The existing full-list stream stays unchanged.
-  - Why now: public release. The trigger was "measurable HUD lag, or agent counts that make full-list pushes noticeable." The user has decided to proceed; the measurement in Wave 1 records the numbers.
-  - Exit criteria:
-    - Baseline numbers for broadcast time and payload size at 5, 20, 50 and 200 agents are recorded in `planning/STATE_20.md`.
-    - `daemon.subscribe_diff` streams upserts and removals. A test applies the stream to a client map and matches the daemon's state.
-    - A subscriber whose channel fills receives a full snapshot on its next send.
-    - `daemon.subscribe` output is byte-identical to before.
-    - `make all` passes.
-  - First action: run the Wave 1 measurement task (`20.1.1`).
-
+- None open. G9 and G10 are complete (see Completed).
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G9 phase 2]** Diff protocol and daemon broadcast. Depends on: G9 measurement (`20.1.1`) reviewed.
-- **[G9 phase 3]** Integration test and docs. Depends on: G9 phase 2.
+- None open.
 
 ## Independent Backlog
 
@@ -41,6 +31,7 @@ Two orthogonal goals, circled together at the user's request for parallel work (
 
 ## Completed
 
+- **[G9]** Diff subscriptions for opt-in clients. `daemon.subscribe_diff` streams snapshot and delta lines; a subscriber whose channel fills gets a snapshot on its next line. Measured baseline recorded in `STATE_20.md` (20.1.1, release N=50 K=10 = 27 µs). Routing `8d6ec67`; integration test `b016cbc` replays the stream against daemon state; docs `53ae8c9`. `daemon.subscribe` keeps its bare-array format; the existing subscription tests pass. Orchestration 20. ADR 0013 pending the post-wave distillation.
 - **[G10]** `XDG_CONFIG_HOME` is honored for the config path when absolute; `$HOME/.config` is the fallback. `config_path_from` in `src/config.rs` (`c6c483a`, 20.1.2); README Configuration note and ADR 0010 amendment (`f4e9e33`, 20.1.3). Orchestration 20.
 - **[G28]** No README text in this repo describes the daemon IPC as JSON-RPC, except the deliberate correction at `README.md:54`. The `src/types.rs` link description now names newline-delimited JSON framing (one-line edit at `README.md:178`; `make all` passes).
 - **[G22]** The daemon's runtime socket path is enforced by tests and documented as the external client contract. Tests `cc3c7b3` (ensure_private_dir), `30f576e` (stale socket, malformed line). README Socket Contract `40c2777`. Recorded as ADR 0012 (`b6d76b3`). Orchestration 19.
