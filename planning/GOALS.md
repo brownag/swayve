@@ -1,11 +1,15 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-08
-Source State: STATE_21.md (Orchestration 21 complete; `make all` green, zero warnings, at `dc2c4e5`; ADRs 0012–0014 recorded)
+Source State: STATE_21.md (Orchestration 21 complete; `make all` green, zero warnings, at `dc2c4e5`; ADRs 0012–0014 recorded). `origin/main` = `fb34936` = local `main`.
 
 ## Circled Goal (Active)
 
-- None open. No remaining goal has downstream dependents, so there is no root to circle. The highest-leverage item is **[G38]**, and it needs your approval (remote write).
+- **[G44]** Close out the planned backlog: G39, G40, G41, G42 and G43 are each either done or deliberately deferred with a recorded reason, and `make all` stays green with zero warnings.
+  - Why now: it is the root of the open work. Every open item in the backlog is in its scope. Nothing outside it is open.
+  - Exit criteria: each of G39–G43 has a Completed entry (with SHA) or a Deferred entry (with trigger). `make all` passes, zero warnings. `origin/main` contains the work.
+  - First action: run the N=1000 diff-broadcast measurement for G42, which decides whether `PartialEq` is tested.
+  - Plan: `planning/EXECUTION_PLAN_22.md` (in progress, via plan-wave).
 
 ## Sequenced Goals (Dependency DAG)
 
@@ -38,9 +42,6 @@ Source State: STATE_21.md (Orchestration 21 complete; `make all` green, zero war
 
 ## Blocked / Pruned
 
-- **[G38]** Publish the local commits to `origin/main`. `origin/main` is 59 commits behind `main`.
-  - Status: Blocked / User Approval
-  - Reason: a remote write needs your explicit go-ahead (CLAUDE.md: no remote write operations). Nothing in the repo blocks it. Say the word and I will push.
 - **[G25]** The external Antigravity sidecar ships against the documented socket contract.
   - Status: Blocked / External Watch
   - Reason: the sidecar is built and owned outside this repo. Its internal prerequisites, G22 and G24, are complete.
@@ -53,6 +54,7 @@ Source State: STATE_21.md (Orchestration 21 complete; `make all` green, zero war
 
 ## Completed
 
+- **[G38]** Local commits published to `origin/main` (`fb34936`). Verified 2026-11-08: `origin/main` and local `main` are equal.
 - **[G29]** `daemon.subscribe` bytes are pinned by a golden test (`tests/subscribe_golden.rs`, `cab1daf`, 21.1.5). The test accepts the two byte-exact orderings because the daemon's `HashMap` order is not stable. Orchestration 21.
 - **[G30]** A stalled diff subscriber recovers with a snapshot at socket level (`tests/slow_consumer.rs`, `b78343b`, 21.1.6). Orchestration 21.
 - **[G31]** The diff path is measured on the G9 grid (`measure_broadcast_cost_diff`, `3c2475f`, 21.1.1). Release N=50 K=10 = 621 µs, below the 1 ms threshold. Full grid in `STATE_21.md`. Orchestration 21.
