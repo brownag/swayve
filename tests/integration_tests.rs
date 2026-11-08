@@ -1248,3 +1248,71 @@ async fn test_diff_stream_matches_daemon_state() {
     daemon_handle.abort();
     let _ = fs::remove_file(socket_path).await;
 }
+
+async fn next_agents(
+    l: &mut tokio::io::Lines<BufReader<tokio::net::unix::OwnedReadHalf>>,
+) -> Vec<swayve::types::AgentWindow> {
+    let line = timeout(Duration::from_secs(2), l.next_line())
+        .await
+        .expect("timeout waiting for subscriber line")
+        .unwrap()
+        .expect("stream closed");
+    serde_json::from_str(&line).unwrap()
+}
+
+#[tokio::test]
+async fn subscriber_sees_bound_container() {
+    let socket_path = common::unique_path("bound_container", ".sock");
+    let _ = fs::remove_file(socket_path).await;
+
+    let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
+    let (sway_cmd_tx, _sway_cmd_rx) = mpsc::channel::<SwayCommand>(64);
+
+    let ipc_tx = event_tx.clone();
+    let listener_handle = tokio::spawn(async move { start_daemon_ipc(socket_path, ipc_tx).await });
+    let config = Config::default();
+    let daemon_handle = tokio::spawn(async move {
+        run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
+    });
+    wait_for_socket(socket_path).await;
+
+    let mut sub = UnixStream::connect(socket_path).await.unwrap();
+    sub.write_all(b"{\"method\":\"daemon.subscribe\"}\n").await.unwrap();
+    let (sub_reader, _) = sub.into_split();
+    let mut lines = BufReader::new(sub_reader).lines();
+    assert!(next_agents(&mut lines).await.is_empty());
+
+    let id = AgentId("bind-agent-1".to_string());
+    let mut client = UnixStream::connect(socket_path).await.unwrap();
+    let reg = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: id.clone(),
+            agent_type: "pi".to_string(),
+            project_id: ProjectId("bind-proj".to_string()),
+            pid: 30002,
+            app_id: "agent.pi.bind-agent-1".to_string(),
+            parent_agent_id: None,
+        },
+    };
+    client.write_all((serde_json::to_string(&reg).unwrap() + "\n").as_bytes()).await.unwrap();
+    let registered = next_agents(&mut lines).await;
+    assert_eq!(registered[0].id, id);
+    assert_eq!(registered[0].container_id, None);
+
+    event_tx
+        .send(DaemonEvent::Sway(SwayEvent::WindowCreated {
+            con_id: 4242,
+            app_id: "agent.pi.bind-agent-1".to_string(),
+            pid: None,
+        }))
+        .await
+        .unwrap();
+    let bound = next_agents(&mut lines).await;
+    assert_eq!(bound[0].id, id);
+    assert_eq!(bound[0].container_id, Some(4242));
+
+    listener_handle.abort();
+    daemon_handle.abort();
+    let _ = fs::remove_file(socket_path).await;
+}

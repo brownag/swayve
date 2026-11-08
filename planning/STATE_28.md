@@ -22,7 +22,7 @@ Last Updated: 2026-11-08
 - [x] **Task 28.1.3**: Pi client `app_id` matches the CLI format; Rust format pin
 
 ### Wave 4: binding and creation publish to subscribers (G79)
-- [ ] **Task 28.1.4**: `run_daemon_loops` publishes after a window bind
+- [x] **Task 28.1.4**: `run_daemon_loops` publishes after a window bind
 
 ### Wave 5: unchanged diff subscriber with a closed channel is removed (G81)
 - [ ] **Task 28.2.1**: `broadcast_diff` detects a closed channel before the unchanged-state return
@@ -40,8 +40,8 @@ Last Updated: 2026-11-08
 - [ ] **Task 28.3.3**: panel argv uses separate entries
 
 ### Wave gates
-- [ ] After wave 1: `make all` serial, exit 0, zero warnings.
-- [ ] After wave 4: `make all` serial, exit 0, zero warnings. G79 exit criteria checked.
+- [x] After wave 1: `make all` serial, exit 0, zero warnings.
+- [x] After wave 4: `make all` serial, exit 0, zero warnings. G79 exit criteria checked.
 - [ ] After wave 6: `make all` serial, exit 0, zero warnings. G81 exit criteria checked.
 - [ ] After wave 9: `make all` serial, exit 0, zero warnings. G80 exit criteria checked.
 
@@ -68,4 +68,10 @@ Last Updated: 2026-11-08
 - Status: done. Direction changed from the spec's hyphen-to-dot transform (lossy for hyphenated agent names) to lossless: CLI `app_id = "agent.{agent_id}"` (`src/cli.rs:547`). Pi code unchanged except a pointer comment (`swayve-client.ts:70`).
 - Tests: Pi `npm test` 8/8 (two new pins passed first run). `cargo test --lib test_spawn_plan` 8 passed after a red step on the old assertion at line 771. New `test_spawn_plan_app_id_pin` (`agent.claude-w2-7`). `make check` exit 0, zero warnings.
 - Deviations: `test_spawn_plan_substitutes_app_id_and_title` (`src/cli.rs:795`) also updated to the new format (outside the plan, required).
+
+### 28.1.4 (done) and wave 4 gate
+- Status: done. `src/daemon.rs` `run_daemon_loops` `WindowCreated` arm calls `broadcast_status()` when actions are non-empty (~588). New test `subscriber_sees_bound_container` in `tests/integration_tests.rs`.
+- Red: test timed out waiting for the bind broadcast before the fix. Green after the fix.
+- Gate: `make all` serial exit 0, zero warnings; unit 77 passed / 2 ignored; integration 12 passed; subscribe_golden and slow_consumer green.
+- G79 exit criteria (a) registration→binding→re-registration (28.1.1), (b) rebinding→old-window close (28.1.2), (c) binding→subscriber observation (28.1.4) are covered.
 

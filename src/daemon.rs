@@ -585,8 +585,12 @@ pub async fn run_daemon_loops(
                         for req in monitors {
                             state.spawn_monitor_terminal(&req.agent_id);
                         }
+                        let changed = !actions.is_empty();
                         for action in actions {
                             delegate_to_layout(action, &layout_manager, &state, &sway_cmd_tx).await;
+                        }
+                        if changed {
+                            state.broadcast_status();
                         }
                     }
                     SwayEvent::WindowDestroyed { con_id } => {
