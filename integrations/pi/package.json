@@ -7,7 +7,8 @@
   "module": "dist/swayve-client.js",
   "types": "dist/swayve-client.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run typecheck",
+    "typecheck": "tsc -p tsconfig.test.json",
     "dev:run-agent": "tsx src/run-agent.ts",
     "test": "tsx --test tests/*.test.ts"
   },
