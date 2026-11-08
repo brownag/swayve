@@ -42,6 +42,35 @@ pub struct DaemonConfig {
     pub process_tree_audit_enabled: bool,
     #[serde(default = "default_auto_monitor")]
     pub auto_monitor: bool,
+    #[serde(default = "default_ipc_lines_per_sec")]
+    pub ipc_lines_per_sec: f64,
+    #[serde(default = "default_ipc_burst")]
+    pub ipc_burst: f64,
+}
+
+fn default_ipc_lines_per_sec() -> f64 {
+    crate::ratelimit::IPC_LINES_PER_SEC
+}
+
+fn default_ipc_burst() -> f64 {
+    crate::ratelimit::IPC_BURST
+}
+
+/// Replaces invalid rate-limit values with their defaults (ADR 0016). Returns one
+/// warning per replaced key. A value is invalid if it is not finite and positive,
+/// or, for the burst, below 1.
+pub fn sanitize_rate_limit(d: &mut DaemonConfig) -> Vec<String> {
+    let mut warnings = Vec::new();
+    let defaults = crate::ratelimit::IpcLimits::default();
+    if !(d.ipc_lines_per_sec.is_finite() && d.ipc_lines_per_sec > 0.0) {
+        warnings.push(format!("daemon.ipc_lines_per_sec must be a number above 0; using {}", defaults.lines_per_sec));
+        d.ipc_lines_per_sec = defaults.lines_per_sec;
+    }
+    if !(d.ipc_burst.is_finite() && d.ipc_burst >= 1.0) {
+        warnings.push(format!("daemon.ipc_burst must be a number of at least 1; using {}", defaults.burst));
+        d.ipc_burst = defaults.burst;
+    }
+    warnings
 }
 
 fn default_max_ancestry_depth() -> usize {
@@ -62,6 +91,8 @@ impl Default for DaemonConfig {
             max_ancestry_depth: 32,
             process_tree_audit_enabled: true,
             auto_monitor: false,
+            ipc_lines_per_sec: default_ipc_lines_per_sec(),
+            ipc_burst: default_ipc_burst(),
         }
     }
 }
@@ -135,7 +166,12 @@ pub fn load_config() -> Config {
         return Config::default();
     };
     match parse_config_file(&path) {
-        Ok(Some(c)) => c,
+        Ok(Some(mut c)) => {
+            for w in sanitize_rate_limit(&mut c.daemon) {
+                eprintln!("[config] {}", w);
+            }
+            c
+        }
         Ok(None) => Config::default(),
         Err(msg) => {
             eprintln!("[config] {}; using defaults", msg);
@@ -153,6 +189,38 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.hooks.on_agent_spawn, None);
         assert_eq!(config.hooks.on_agent_status_change, None);
+    }
+
+    #[test]
+    fn test_ipc_limits_default_when_keys_absent() {
+        let c: Config = toml::from_str("[border_colors]\nidle=\"#000\"\nthinking=\"#000\"\nexecuting_tool=\"#000\"\nawaiting_human_input=\"#000\"\ncompleted=\"#000\"\nfailed=\"#000\"\n[terminal]\ndefault_emulator=\"x\"\nargs=[]\n").unwrap();
+        assert_eq!(c.daemon.ipc_lines_per_sec, 100.0);
+        assert_eq!(c.daemon.ipc_burst, 200.0);
+    }
+
+    #[test]
+    fn test_sanitize_rate_limit_keeps_valid_values() {
+        let mut d = Config::default().daemon;
+        d.ipc_lines_per_sec = 5.0;
+        d.ipc_burst = 1.0;
+        assert!(sanitize_rate_limit(&mut d).is_empty());
+        assert_eq!((d.ipc_lines_per_sec, d.ipc_burst), (5.0, 1.0));
+    }
+
+    #[test]
+    fn test_sanitize_rate_limit_replaces_invalid_values() {
+        for bad in [0.0, -3.0, f64::NAN, f64::INFINITY] {
+            let mut d = Config::default().daemon;
+            d.ipc_lines_per_sec = bad;
+            assert_eq!(sanitize_rate_limit(&mut d).len(), 1, "rate {bad}");
+            assert_eq!(d.ipc_lines_per_sec, 100.0, "rate {bad}");
+        }
+        for bad in [0.5, 0.0, f64::NAN] {
+            let mut d = Config::default().daemon;
+            d.ipc_burst = bad;
+            assert_eq!(sanitize_rate_limit(&mut d).len(), 1, "burst {bad}");
+            assert_eq!(d.ipc_burst, 200.0, "burst {bad}");
+        }
     }
 
     #[test]

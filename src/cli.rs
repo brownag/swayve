@@ -1,5 +1,5 @@
 use crate::config::load_config;
-use crate::daemon::{run_daemon_loops, start_daemon_ipc, DaemonEvent};
+use crate::daemon::{run_daemon_loops, start_daemon_ipc_with_limits, DaemonEvent};
 use crate::sway::{run_event_listener, SwayCommand, SwayEvent, SwayManager};
 use crate::types::{AgentId, AgentIPCMessage, ProjectId, RegisterParams};
 use anyhow::{Context, Result};
@@ -210,8 +210,14 @@ fi
             });
 
             let socket_path_str = socket_path.to_string();
+            let ipc_lines_per_sec = config.daemon.ipc_lines_per_sec;
+            let ipc_burst = config.daemon.ipc_burst;
             tokio::spawn(async move {
-                if let Err(e) = start_daemon_ipc(&socket_path_str, event_tx).await {
+                let limits = crate::ratelimit::IpcLimits {
+                    lines_per_sec: ipc_lines_per_sec,
+                    burst: ipc_burst,
+                };
+                if let Err(e) = start_daemon_ipc_with_limits(&socket_path_str, event_tx, limits).await {
                     eprintln!("[daemon] Socket server error: {:?}", e);
                 }
             });

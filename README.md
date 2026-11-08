@@ -173,6 +173,16 @@ args = [
 ]
 ```
 
+Each client connection to the daemon is rate-limited. Lines over the limit are dropped and logged; the client stays connected:
+
+```toml
+[daemon]
+ipc_lines_per_sec = 100.0  # sustained lines per second, per client
+ipc_burst = 200.0          # lines a client may send at once; must be at least 1
+```
+
+A value that is not a number above 0 (or below 1 for `ipc_burst`) falls back to its default with a `[config]` warning at startup. The config file is read when the daemon starts, so restart the daemon to apply a change.
+
 ---
 
 ## 🛠 Project Structure

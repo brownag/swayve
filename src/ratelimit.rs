@@ -7,6 +7,19 @@ pub const IPC_LINES_PER_SEC: f64 = 100.0;
 /// Lines a client may send at once before the sustained rate applies.
 pub const IPC_BURST: f64 = 200.0;
 
+/// Per-client limits, from `[daemon]` config. `Default` is the built-in values.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct IpcLimits {
+    pub lines_per_sec: f64,
+    pub burst: f64,
+}
+
+impl Default for IpcLimits {
+    fn default() -> Self {
+        Self { lines_per_sec: IPC_LINES_PER_SEC, burst: IPC_BURST }
+    }
+}
+
 pub struct RateLimiter {
     capacity: f64,
     refill_per_sec: f64,

@@ -297,6 +297,14 @@ pub async fn start_daemon_ipc(
     socket_path: &str,
     event_tx: mpsc::Sender<DaemonEvent>,
 ) -> Result<()> {
+    start_daemon_ipc_with_limits(socket_path, event_tx, crate::ratelimit::IpcLimits::default()).await
+}
+
+pub async fn start_daemon_ipc_with_limits(
+    socket_path: &str,
+    event_tx: mpsc::Sender<DaemonEvent>,
+    limits: crate::ratelimit::IpcLimits,
+) -> Result<()> {
     let path = Path::new(socket_path);
     prepare_socket_path(path, crate::cli::current_uid()?).await?;
 
@@ -308,7 +316,7 @@ pub async fn start_daemon_ipc(
             Ok((stream, _)) => {
                 let event_tx = event_tx.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_client(stream, event_tx).await {
+                    if let Err(e) = handle_client(stream, event_tx, limits).await {
                         eprintln!("[daemon] Error handling client: {:?}", e);
                     }
                 });
@@ -320,14 +328,18 @@ pub async fn start_daemon_ipc(
     }
 }
 
-async fn handle_client(stream: UnixStream, event_tx: mpsc::Sender<DaemonEvent>) -> Result<()> {
+async fn handle_client(
+    stream: UnixStream,
+    event_tx: mpsc::Sender<DaemonEvent>,
+    limits: crate::ratelimit::IpcLimits,
+) -> Result<()> {
     let (reader, writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
     let mut writer_opt = Some(writer);
     let mut buf = Vec::new();
     let mut limiter = crate::ratelimit::RateLimiter::new(
-        crate::ratelimit::IPC_LINES_PER_SEC,
-        crate::ratelimit::IPC_BURST,
+        limits.lines_per_sec,
+        limits.burst,
         std::time::Instant::now(),
     );
 
@@ -763,11 +775,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_configured_limit_reaches_handle_client() {
+        use tokio::io::AsyncWriteExt;
+        let (mut client, server) = UnixStream::pair().unwrap();
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let limits = crate::ratelimit::IpcLimits { lines_per_sec: 1.0, burst: 2.0 };
+        tokio::spawn(handle_client(server, event_tx, limits));
+        // Burst of 2: the first two focus lines pass, the third is dropped.
+        for _ in 0..3 {
+            client.write_all(b"{\"method\":\"daemon.focus\"}\n").await.unwrap();
+        }
+        client.flush().await.unwrap();
+        let mut focus_events = 0;
+        while let Ok(Some(DaemonEvent::Focus)) = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            event_rx.recv(),
+        )
+        .await
+        {
+            focus_events += 1;
+        }
+        assert_eq!(focus_events, 2);
+    }
+
+    #[tokio::test]
     async fn test_malformed_ipc_line_keeps_client() {
         use tokio::io::AsyncWriteExt;
         let (mut client, server) = UnixStream::pair().unwrap();
         let (event_tx, mut event_rx) = mpsc::channel(4);
-        tokio::spawn(handle_client(server, event_tx));
+        tokio::spawn(handle_client(server, event_tx, crate::ratelimit::IpcLimits::default()));
         client.write_all(b"not json\n").await.unwrap();
         client.write_all(b"{\"method\":\"daemon.focus\"}\n").await.unwrap();
         let ev = tokio::time::timeout(std::time::Duration::from_secs(2), event_rx.recv())
@@ -781,7 +817,7 @@ mod tests {
         use tokio::io::AsyncWriteExt;
         let (mut client, server) = UnixStream::pair().unwrap();
         let (event_tx, mut event_rx) = mpsc::channel(4);
-        tokio::spawn(handle_client(server, event_tx));
+        tokio::spawn(handle_client(server, event_tx, crate::ratelimit::IpcLimits::default()));
         client.write_all(b"\xff\xfe\n").await.unwrap();
         client.write_all(b"{\"method\":\"daemon.focus\"}\n").await.unwrap();
         let ev = tokio::time::timeout(std::time::Duration::from_secs(2), event_rx.recv())

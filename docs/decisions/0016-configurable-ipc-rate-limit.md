@@ -39,9 +39,10 @@ Chosen option: option 2.
 * **Positive**: users can tune the limit to their agent mix without a rebuild.
 * **Positive**: the code path is unchanged. The limiter still takes its two numbers at connection time.
 * **Negative**: a user can set a limit that is too low for real bursts and lose lines. The log line shows each drop, so this is visible.
-* **Negative**: config changes apply to new connections only. The daemon does not reload config, so an existing connection keeps the limit it started with. A daemon restart applies a change to all connections.
+* **Negative**: config is read once, when the daemon starts. A change takes effect after a daemon restart, not on a running daemon. The daemon does not reload config.
 
 ## Validation & Compliance
-* Config tests in `src/config.rs`: defaults when the keys are absent; each invalid value falls back to its default.
+* Config tests in `src/config.rs`: defaults when the keys are absent; each invalid value falls back to its default. A value of the wrong TOML type (for example a string) fails the whole file and falls back to all defaults, as G3 does for any malformed config.
+* `src/daemon.rs` `test_configured_limit_reaches_handle_client`: a configured burst of 2 passes two lines and drops the third.
 * `src/ratelimit.rs` tests are unchanged; the constructor still takes plain numbers.
 * G46 (socket-level test) uses a configured limit to show that the value takes effect.
