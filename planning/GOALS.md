@@ -13,10 +13,6 @@ None. No open goal depends on another.
 
 ## Independent Backlog
 
-- **[G83]** `cargo audit` reports no unsound or vulnerable crate in `Cargo.lock`. Today it reports RUSTSEC-2026-0386 ("`AsyncFd::new` and related constructors violate I/O safety") against `tokio 1.53.1`, which swayve depends on directly. Found during the 2026-11-08 audit. Not verified: whether the advisory's code path is reachable from swayve, and whether a patched tokio release exists.
-  - First action: read RUSTSEC-2026-0386 for the patched version and affected constructors. If a patched tokio exists, bump it and run `make all`. If none exists or the path is unreachable, record that in this entry and ignore the advisory with a reason in the audit configuration.
-- **[G73]** `npm run build` (or a `typecheck` script) type-checks `integrations/pi/tests/`. Today `tsconfig` includes only `src/`, and `tsx --test` skips type checks. Found during Orchestration 26 (task 26.1.1).
-- **[G75]** The planning design docs (`planning/Sway Multi Agent Architecture Design.md`, `planning/Sway Multi-Agent Viewer Architecture.md`) carry a header that marks them historical and points to the ADRs and the current protocol.
 
 ## Deferred
 
@@ -59,6 +55,10 @@ None. No open goal depends on another.
   - Reason: ADR 0004 rejected it; the newline-delimited JSON protocol is in use.
 
 ## Completed
+
+- **[G83]** `cargo audit` is clean for `Cargo.lock`. `tokio` moved from 1.53.1 to 1.53.3 (lockfile only), which clears RUSTSEC-2026-0386 (`AsyncFd` constructors; swayve makes no direct `AsyncFd` call) (`cfab81d`; Orchestration 32; `make all` serial exit 0, zero warnings).
+- **[G73]** `npm run build` type-checks `integrations/pi/tests/`. `tsconfig.test.json` (no emit) and a `typecheck` script run after `tsc` in `build`. A red probe (`TS2322`) confirmed the check fails on a type error (`e0ef35b`; Orchestration 32; `make all` serial exit 0, zero warnings).
+- **[G75]** Both early design docs carry a historical header pointing to ADRs 0003, 0004, 0009 and the README socket contract. Body text is unchanged (`200524b`; Orchestration 32; `make all` serial exit 0, zero warnings).
 
 - **[G82]** The daemon reaps the children it launches. `spawn_reaped` (`src/daemon.rs`) hands each `Child` to a detached thread that waits on it. Hook commands and monitor terminals both route through it. Test `test_spawned_child_is_reaped` checks the pid leaves `/proc` (`907588d`; Orchestration 31; `make all` serial exit 0, zero warnings). Monitor path covered by routing, not a process-level test (D3).
 - **[G74]** Lifecycle hooks are tested. `lifecycle_hook_command` (pure builder, `src/daemon.rs`) pins the `sh -c` argv and the `SWAYVE_AGENT_ID`/`SWAYVE_AGENT_STATUS` env pair; `agent_status_to_str` covers all six variants; `test_lifecycle_status_hook_order` runs the daemon and asserts status-change lines arrive in `UpdateStatus` order (`43b183b`, `3004dd6`; Orchestration 30; `make all` serial exit 0, zero warnings).
