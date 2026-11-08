@@ -25,7 +25,7 @@ Last Updated: 2026-11-08
 - [x] **Task 28.1.4**: `run_daemon_loops` publishes after a window bind
 
 ### Wave 5: unchanged diff subscriber with a closed channel is removed (G81)
-- [ ] **Task 28.2.1**: `broadcast_diff` detects a closed channel before the unchanged-state return
+- [x] **Task 28.2.1**: `broadcast_diff` detects a closed channel before the unchanged-state return
 
 ### Wave 6: full and diff writers share one lifetime owner (G81)
 - [ ] **Task 28.2.2**: one writer function for both subscription modes
@@ -74,4 +74,9 @@ Last Updated: 2026-11-08
 - Red: test timed out waiting for the bind broadcast before the fix. Green after the fix.
 - Gate: `make all` serial exit 0, zero warnings; unit 77 passed / 2 ignored; integration 12 passed; subscribe_golden and slow_consumer green.
 - G79 exit criteria (a) registration→binding→re-registration (28.1.1), (b) rebinding→old-window close (28.1.2), (c) binding→subscriber observation (28.1.4) are covered.
+
+### 28.2.1 (done)
+- Status: done. `src/daemon.rs` `broadcast_diff` (~108) early return is `!sub.tx.is_closed()`. New test `test_diff_subscriber_removed_when_unchanged`.
+- Red: subscriber count 1, expected 0. Green: `test_diff_subscriber` 3 passed; `slow_consumer` 1 passed; `make check` exit 0, zero warnings.
+- Deviations: none.
 

@@ -105,7 +105,7 @@ impl DaemonState {
                 (false, up, rm)
             };
             if !snapshot && upsert.is_empty() && remove.is_empty() {
-                return true;
+                return !sub.tx.is_closed();
             }
             let frame = DiffFrame {
                 snapshot,
@@ -1311,6 +1311,19 @@ mod tests {
         assert_eq!(v["upsert"].as_array().unwrap().len(), 1);
         assert!(v["upsert"][0].to_string().contains("a1"));
         assert!(v["remove"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_diff_subscriber_removed_when_unchanged() {
+        let mut state = DaemonState::new(Config::default());
+        let (tx, mut rx) = mpsc::channel(32);
+        state.push_diff_subscriber(tx);
+        state.register_agent(AgentId("a1".to_string()), ProjectId("proj".to_string()), 1, "app.a1".to_string(), None);
+        state.broadcast_status();
+        assert!(rx.try_recv().unwrap().contains("\"snapshot\":true"));
+        drop(rx);
+        state.broadcast_status(); // no state change
+        assert_eq!(state.subscribers.len(), 0);
     }
 
     #[test]
