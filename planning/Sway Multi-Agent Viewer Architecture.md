@@ -1,3 +1,5 @@
+> **Historical design document.** This describes an early design (`sway-agentd`, JSON-RPC 2.0). The shipped daemon is `swayve`. The current protocol is newline-delimited JSON (see [ADR 0004](../docs/decisions/0004-newline-delimited-json-ipc.md)); the daemon owns agent state ([ADR 0003](../docs/decisions/0003-daemon-owns-agent-state.md)); integrations are thin socket clients ([ADR 0009](../docs/decisions/0009-thin-socket-integrations.md)). The current socket contract is in the [README](../README.md#socket-contract).
+
 # **Sway Multi-Agent Viewer Architecture**
 
 [https://gemini.google.com/app/25023afdb109c778](https://gemini.google.com/app/25023afdb109c778)
