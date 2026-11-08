@@ -210,7 +210,7 @@
 **Files-in-scope**: must edit `src/daemon.rs` (`broadcast_diff`, and the diff path of `broadcast_status` if it builds the JSON), `src/cli.rs` (`fold_diff_line`). New type goes in `src/types.rs` (append only).
 
 **Spec prose**:
-1. Add `#[derive(Debug, Serialize, Deserialize, PartialEq)] pub struct DiffFrame { pub snapshot: bool, pub upsert: Vec<AgentWindow>, pub remove: Vec<AgentId> }`. Field order must match the current JSON: `snapshot`, `upsert`, `remove`.
+1. Add `#[derive(Debug, Serialize, Deserialize, PartialEq)] pub struct DiffFrame { pub snapshot: bool, pub upsert: Vec<AgentWindow>, pub remove: Vec<AgentId> }`. **Correction (found at 23.3.2):** the current bytes have alphabetical keys (`remove`, `snapshot`, `upsert`), because the daemon builds frames through `serde_json::Value`. A derive writes declaration order and would change the bytes. So serialize the frame with `serde_json::to_value(&frame)` and then `to_string`. `tests/diff_golden.rs` catches any mismatch.
 2. Daemon builds `DiffFrame` and serializes it. `remove` serializes as the id string (use `AgentId`'s existing serde form, which is a string; confirm).
 3. `fold_diff_line` parses `DiffFrame`. A non-JSON line still returns `false` (H4 of Orchestration 22).
 4. `tests/diff_golden.rs` (23.3.2) must pass unchanged. If it fails, stop and report: the bytes changed.
