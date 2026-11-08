@@ -37,16 +37,16 @@ Last Updated: 2026-11-08
 - [x] **Task 28.3.2**: mock terminal writes one argument per line; exact argv assertions
 
 ### Wave 9: panel launch passes `status --watch` as argv (G80)
-- [ ] **Task 28.3.3**: panel argv uses separate entries
+- [x] **Task 28.3.3**: panel argv uses separate entries
 
 ### Wave gates
 - [x] After wave 1: `make all` serial, exit 0, zero warnings.
 - [x] After wave 4: `make all` serial, exit 0, zero warnings. G79 exit criteria checked.
 - [x] After wave 6: `make all` serial, exit 0, zero warnings. G81 exit criteria checked.
-- [ ] After wave 9: `make all` serial, exit 0, zero warnings. G80 exit criteria checked.
+- [x] After wave 9: `make all` serial, exit 0, zero warnings. G80 exit criteria checked.
 
 ### Orchestrator steps
-- [ ] `git status` clean at each wave end (planning files excepted). Nothing pushed.
+- [x] `git status` clean at each wave end (planning files excepted). Nothing pushed.
 
 ## Deviations
 - None yet.
@@ -98,4 +98,11 @@ Last Updated: 2026-11-08
 - Red: after the mock change alone, the old `contains` assertion failed. Green: `monitor` 1 passed; `make check` exit 0, zero warnings.
 - Integration count: 12 passed (plan expected 11; the wave-4 test already added one).
 - Discovered: the worker did not write `planning/tasks/28.3.2.todo.md`; the plan text is in the orchestrator's record only.
+
+### 28.3.3 (done), wave 9 gate, closing gate
+- Status: done. `src/cli.rs` `panel_terminal_args` (~533) feeds the orchestrator panel launch (~349). Before: `["-e","swayve status --watch"]`. After: `["-e","swayve","status","--watch",...]`.
+- Red: compile failure on missing helper. Green: `test_panel_argv` and `test_status_watch_cmd_parsing` pass.
+- Gate: serial `make all` exit 0, zero warnings; unit 83 passed / 2 ignored; integration 12 passed; Pi `npm test` 8/8.
+- Closing: GOALS.md moves G79, G81, G80 to Completed with commit hashes.
+- Discovered (open, not in this orchestration): `spawn_plan` still uses its own shlex loop instead of `expand_terminal_args`.
 
