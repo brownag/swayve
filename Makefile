@@ -9,7 +9,7 @@ help:
 	@echo "  all       : Run check, test, and build the release binary"
 	@echo "  build     : Compile the release executable"
 	@echo "  check     : Run cargo check for compilation sanity"
-	@echo "  test      : Execute integration and unit tests"
+	@echo "  test      : Run Rust, Pi and hook tests"
 	@echo "  clean     : Clean compile artifacts"
 	@echo "  run       : Run the debug binary"
 	@echo "  daemon    : Run the live background daemon (requires SWAYSOCK)"
@@ -32,6 +32,8 @@ check:
 # Run tests
 test:
 	cargo test
+	cd integrations/pi && npm test
+	bash integrations/claude/test-hooks.sh
 
 # Clean artifacts
 clean:
