@@ -36,4 +36,4 @@ Last Updated: 2026-11-08
 _Executed inline by the orchestrator, one commit per task (D6)._
 
 - **24.1.2 (G58)** `1012fd5`. `FocusCycle { last }` with `observe()` and `next()` in `src/daemon.rs`. Loop uses `focus.observe` and `focus.next`. 3 unit tests. Integration suite 5 of 5.
-- **24.1.1 (G52, re-scoped)** commit `git log --grep='spawn waits'`. `register_and_wait` in `src/cli.rs` writes the register line, then polls `daemon.subscribe` every 10 ms up to 2 s. `spawn` warns and launches on timeout. 1 unit test, 1 integration test (`tests/spawn_register.rs`), 5 of 5 runs.
+- **24.1.1 (G52, re-scoped)** commit `8c9c420`. `register_and_wait` in `src/cli.rs` writes the register line, then polls `daemon.subscribe` every 10 ms up to 2 s. `spawn` warns and launches on timeout. 1 unit test, 1 integration test (`tests/spawn_register.rs`), 5 of 5 runs.
