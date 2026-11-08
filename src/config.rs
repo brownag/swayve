@@ -115,9 +115,22 @@ pub fn config_path_from(xdg: Option<&str>, home: Option<&str>) -> Option<PathBuf
     }
 }
 
+/// Pure: warning text when `XDG_CONFIG_HOME` is set but relative or empty.
+pub fn xdg_config_warning(xdg: Option<&str>) -> Option<&'static str> {
+    match xdg {
+        Some(x) if x.is_empty() || !x.starts_with('/') => {
+            Some("XDG_CONFIG_HOME is relative or empty; ignoring and using $HOME/.config")
+        }
+        _ => None,
+    }
+}
+
 pub fn load_config() -> Config {
     let xdg = std::env::var("XDG_CONFIG_HOME").ok();
     let home = std::env::var("HOME").ok();
+    if let Some(msg) = xdg_config_warning(xdg.as_deref()) {
+        eprintln!("[config] {}", msg);
+    }
     let Some(path) = config_path_from(xdg.as_deref(), home.as_deref()) else {
         return Config::default();
     };
@@ -236,6 +249,26 @@ mod tests {
             Some(PathBuf::from("/home/u/.config/swayve/config.toml"))
         );
         assert_eq!(config_path_from(None, None), None);
+    }
+
+    #[test]
+    fn test_xdg_warning_absolute_is_none() {
+        assert_eq!(xdg_config_warning(Some("/x")), None);
+    }
+
+    #[test]
+    fn test_xdg_warning_relative_is_some() {
+        assert!(xdg_config_warning(Some("rel/dir")).is_some());
+    }
+
+    #[test]
+    fn test_xdg_warning_empty_is_some() {
+        assert!(xdg_config_warning(Some("")).is_some());
+    }
+
+    #[test]
+    fn test_xdg_warning_unset_is_none() {
+        assert_eq!(xdg_config_warning(None), None);
     }
 }
 
