@@ -1,17 +1,37 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-08
-Source State: STATE_26.md (Orchestration 26 closed at `00a4675`; `make all` green; pushed to `origin/main`). Correction 2026-11-08: the architecture review candidates G67–G70 were already done in earlier orchestrations; the earlier ranking missed git history and is withdrawn.
+Source State: STATE_27.md (Orchestration 27 closed at `1f79de0`). G79–G81 were added from `planning/ARCHITECTURE_REVIEW_2026-11-08_FOLLOWUP.md` (reviewed at `17c72ce`; static review, tests not run). Earlier: STATE_26.md (Orchestration 26 closed at `00a4675`; `make all` green; pushed to `origin/main`). Correction 2026-11-08: the architecture review candidates G67–G70 were already done in earlier orchestrations; the earlier ranking missed git history and is withdrawn.
 
 ## Circled Goal (Active)
 
-- None open.
+- **[G79]** Agent identity and window ownership live in one deep module. Registration, container binding, destruction and change publication keep the agent map, PID index and container index coherent.
+  - Why now: it is the root of the follow-up review's dependency chain. G81's publication consistency depends on it. Re-registration currently drops `container_id` and resets status to Idle (`src/daemon.rs:152–163`), and rebinding keeps stale container associations (`src/daemon.rs:642–647, 244–254`). The review rates it Strong.
+  - Exit criteria: tests through the registry interface pass for (a) registration → binding → re-registration, (b) rebinding → old-window close, and (c) binding → subscriber observation. Each asserts that the registry and the status stream agree. No caller coordinates the indexes directly. `make all` is green with zero warnings.
+  - First action: add a failing test for re-registration of an agent that already has a container binding. It asserts the binding is reconciled, not silently dropped. Put it in the `#[cfg(test)]` module in `src/daemon.rs`, or in `tests/spawn_register.rs` if it needs the socket.
+  - Scope: `src/daemon.rs`, `src/cli.rs` (registration derivation of `app_id`, `src/cli.rs:545–547`), `integrations/pi/src/swayve-client.ts` (`app_id` re-derivation, lines 61–71), `tests/integration_tests.rs`, `tests/spawn_register.rs`.
+  - Constraints: preserve ADR 0003, 0005, 0006 and 0009. Do not add a generic registry-backend seam; no second adapter exists.
+  - Source: `planning/ARCHITECTURE_REVIEW_2026-11-08_FOLLOWUP.md` §1, reviewed at `17c72ce`. Tests were not run in that review.
 
 ## Sequenced Goals (Dependency DAG)
 
-- None open.
+- **[G81]** Subscription lifetime and delivery state live in one deep module. Unchanged diff state detects a closed subscriber channel, and the reader and writer share one lifetime.
+  - Depends on: G79 (for the publication-consistency part only). The unchanged-state disconnect fix below has no dependency and can ship first.
+  - Why now: unchanged diff delivery returns early before the send that detects a closed channel (`src/daemon.rs:107–108, 122–134`). The subscriber stays registered. The review rates it "Worth exploring".
+  - Exit criteria: a unit test shows a diff subscriber whose channel closed while its state is unchanged is removed on the next broadcast. Repeated-subscription and writer-cleanup tests pass. The existing overflow and slow-consumer tests (`tests/slow_consumer.rs`, `src/daemon.rs:1186–1283`) still pass. Both wire formats are unchanged. `subscribe_golden` passes.
+  - First action: write the failing unit test for the unchanged-state disconnect. It uses a bounded channel whose receiver is dropped, with no state change between broadcasts.
+  - Scope: `src/daemon.rs` (`463–497`, `611–617`), `src/cli.rs` (`593–614`), `tests/slow_consumer.rs`, `tests/subscribe_golden.rs`.
+  - Constraints: preserve ADR 0008 and 0013 (full-list compatibility, per-subscriber baselines, snapshot recovery). No new resync protocol.
+  - Source: follow-up review §3.
 
 ## Independent Backlog
+
+- **[G80]** Terminal launch semantics live in one deep module. Agent, monitor and panel launches share one template-expansion and argument-preservation implementation, and tests capture exact argv arrays without starting Sway.
+  - Why now: no dependency edges. The review rates it Strong. It fixes a real bug: the monitor log path is interpolated unquoted and split (`src/daemon.rs:267–285`), so whitespace in the path changes argument grouping. Also `src/cli.rs:350–361` passes `swayve status --watch` as one argument.
+  - Exit criteria: an argv-capture test covers all three launches, including a whitespace path, a quoted prompt and an explicit shell template. The current `echo "$@"` substring assertions (`tests/integration_tests.rs:898–903, 985–1000`) are replaced. `make all` is green.
+  - First action: add a failing argv-capture test for the monitor launch with a log path containing a space.
+  - Constraints: preserve ADR 0006 and 0010. Do not reopen G65 (monitor env parity, pruned). Keep the existing spawn-plan extraction (G60, G64). Only the process-spawn and argument-capture adapters are needed.
+  - Source: follow-up review §2.
 
 - **[G73]** `npm run build` (or a `typecheck` script) type-checks `integrations/pi/tests/`. Today `tsconfig` includes only `src/`, and `tsx --test` skips type checks. Found during Orchestration 26 (task 26.1.1).
 - **[G74]** Lifecycle hooks (`on_agent_spawn`, `on_agent_status_change`) have a test that checks argument order and status string. `execute_lifecycle_hook` (`src/daemon.rs`) has no test today.
@@ -26,6 +46,7 @@ Source State: STATE_26.md (Orchestration 26 closed at `00a4675`; `make all` gree
   - Trigger: a request for a Waybar module. No code or README exists in the repo.
 - **[G78]** `src/daemon.rs` tests move out of the 1365-line file.
   - Trigger: the next change to `daemon.rs` that needs more room. Size alone is not a defect.
+  - Note: G79 and G81 both edit `daemon.rs`. If either adds more than a few hundred lines, reconsider G78 first.
 
 ## Blocked / Pruned
 
