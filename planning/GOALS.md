@@ -1,56 +1,19 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-08 (Orchestration 22 complete; G45 and G48 done; G46, G47, G49, G50, G51, G54–G57 bundled in EXECUTION_PLAN_23.md, awaiting approval)
+Last Updated: 2026-11-08 (Orchestration 23 complete locally; G45–G57 done except deferred G52 and G58; nothing pushed)
 Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero warnings, at `8a7f002`; ADRs 0012–0015 recorded). `origin/main` = `96f18af` = local `main` (Orchestration 22 pushed by the user).
 
 ## Circled Goal (Active)
 
-- **[G46]** A socket-level test shows that an over-limit IPC line is dropped and logged, the client stays connected, and the next valid line is still processed.
-  - Why now: G45 is complete, so the test can use a unique socket path. The configured limit path (G48) lets the test set a small burst.
-  - Exit criteria: a test in `tests/` sends more than 200 lines on one connection, then a valid `daemon.focus`, and asserts a `FocusWindow` command. `cargo test` passes.
-  - First action: copy the connection setup from `tests/slow_consumer.rs`, with `common::unique_path`.
-  - Planned: `EXECUTION_PLAN_23.md`, task 23.1.1 (awaiting approval).
+- None open. Orchestration 23 closed its bundle (G46–G57). Deferred: G52, G58.
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G47]** The README Socket Contract documents the per-client limit: 100 lines/s sustained, burst 200, over-limit lines dropped and logged, and the client kept connected.
-  - Depends on: G46 (the docs describe behavior a test has verified).
-  - Exit criteria: the README section matches `src/ratelimit.rs`. ADR 0015 links to it.
-  - First action: add three bullets under Socket Contract in `README.md`.
+- None open.
+
 ## Independent Backlog
 
-- **[G49]** The two focus-ordering sleeps at `tests/integration_tests.rs` 633 and 638 are replaced with a barrier event.
-  - Why: the test sends a `WindowFocused` event and then a `daemon.focus` over the socket. Both reach the daemon through the same channel, but from different tasks. The sleep only guesses the order.
-  - Approach: add an internal `DaemonEvent::Sync(oneshot::Sender<()>)`. The daemon replies when it reaches the event. The test sends `Sync` after the focus event and awaits it. No wire change, no IPC ack. The enum is internal (`src/daemon.rs`).
-  - Rejected alternative: a daemon ack on the socket. Clients are fire-and-forget (ADR 0009, ADR 0014), so an ack would change the protocol. That is deferred as G52.
-  - Exit criteria: no `sleep` orders events in `test_focus_follows_sway_focus`; `subscribe_golden` unchanged; integration suite passes 5 runs.
-  - Depends on: none.
-- **[G50]** The 300 ms sleep at `tests/integration_tests.rs` 948 (spawned hooks and auto-monitor) is replaced with a poll of the flag files the test already asserts on.
-  - Why: this sleep was counted as unobservable in D2. It is observable. The test reads `spawn_flag_path` and `monitor_flag_path` after the sleep, so it can poll them with a timeout.
-  - Exit criteria: no fixed sleep in `test_hooks_and_monitoring`; the same assertions run unchanged; suite passes 5 runs.
-  - Depends on: none.
-- **[G51]** CI runs `make all` on every push.
-  - Why: AGENTS.md says there is no CI. The workflow file can be written locally. It runs only after a push, which needs your go-ahead.
-  - Exit criteria: a `.github/workflows` file that runs `make all` on Linux with Sway-free tests. The workflow is valid YAML, and the workflow file is committed locally. No push.
-  - Depends on: none. Needs `github-actions-ci` skill conventions.
-
-- **[G54]** Window lifecycle rules live in `DaemonState`, behind two methods: `on_window_created(con_id, app_id, pid)` and `on_window_destroyed(con_id)`. Each returns `Vec<LayoutAction>` and `Vec<MonitorRequest>`. The run loop only executes spawns.
-  - Source: [architecture review](ARCHITECTURE_REVIEW_2026-11-08.md), candidate 1. Confirmed in code: the auto-monitor rule appears in `register_agent` (`src/daemon.rs` ~162, gated on `is_subagent`) and in the WindowCreated arm (~500, gated on process-tree auditing also succeeding). The gates differ, so the refactor must make that difference explicit, not merge it silently.
-  - Exit criteria: one method owns the auto-monitor decision; `test_auto_monitor_subagent_registration` tests it without a channel; `LayoutAction` shape unchanged (ADR 0005); `make all` passes.
-  - Depends on: none. Plan-wave before any change.
-- **[G55]** The process-tree depth-limit test proves `max_depth` is respected.
-  - Source: [architecture review](ARCHITECTURE_REVIEW_2026-11-08.md), candidate 2, confirmed. `test_early_termination_at_depth_limit` (`src/daemon.rs` ~819) starts at PID 1 and asserts `None`, which passes even if `max_depth` is ignored.
-  - Approach: pass the parent lookup as a closure to `find_registered_parent_ancestor`. The `/proc` read stays as the production adapter. The test uses a map-backed chain longer than the limit, and asserts the walk stops at the limit.
-  - Exit criteria: the test fails if the depth check is removed; `make all` passes.
-  - Depends on: none.
-- **[G56]** The diff frame has one shared type, `DiffFrame { snapshot, upsert, remove }`, used by the daemon to build frames and by `fold_diff_line` to read them.
-  - Source: [architecture review](ARCHITECTURE_REVIEW_2026-11-08.md), candidate 3. Confirmed: the daemon builds the JSON with `serde_json::json!` (`src/daemon.rs` ~112) and the CLI indexes raw `Value`s.
-  - Constraint: the wire bytes must not change. Add a golden test for `daemon.subscribe_diff` lines first. The existing golden pins only `daemon.subscribe`.
-  - Depends on: a `subscribe_diff` golden test (part of this goal).
-- **[G57]** The `spawn` command's plan (prompt escaping, `bash -c` wrapping, ID and title derivation) is a pure function, `spawn_plan(args, now_ms)`, and the command executes it.
-  - Source: [architecture review](ARCHITECTURE_REVIEW_2026-11-08.md), candidate 5. Not fully verified: the review read only the first ~40 lines of the `Commands::Spawn` arm (`src/cli.rs` ~222). Read the whole arm before planning.
-  - Exit criteria: the plan function has unit tests for escaping and ID shape; `make all` passes.
-  - Depends on: none.
+- None open.
 
 ## Deferred
 
@@ -81,6 +44,15 @@ Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero war
 
 ## Completed
 
+- **[G54]** Completed in Orchestration 23 (`55489c7`). See `EXECUTION_PLAN_23.md` task for this goal; `STATE_23.md` has the gate results.
+- **[G56]** Completed in Orchestration 23 (`1b1c3b0, 9843d6f`). See `EXECUTION_PLAN_23.md` task for this goal; `STATE_23.md` has the gate results.
+- **[G55]** Completed in Orchestration 23 (`8460157`). See `EXECUTION_PLAN_23.md` task for this goal; `STATE_23.md` has the gate results.
+- **[G57]** Completed in Orchestration 23 (`fe98801`). See `EXECUTION_PLAN_23.md` task for this goal; `STATE_23.md` has the gate results.
+- **[G51]** Completed in Orchestration 23 (`602ffa1`). See `EXECUTION_PLAN_23.md` task for this goal; `STATE_23.md` has the gate results.
+- **[G50]** Completed in Orchestration 23 (`0d985c7`). See `EXECUTION_PLAN_23.md` task for this goal; `STATE_23.md` has the gate results.
+- **[G49]** Completed in Orchestration 23 (`51c62ca`). See `EXECUTION_PLAN_23.md` task for this goal; `STATE_23.md` has the gate results.
+- **[G47]** Completed in Orchestration 23 (`f1b5a37`). See `EXECUTION_PLAN_23.md` task for this goal; `STATE_23.md` has the gate results.
+- **[G46]** Completed in Orchestration 23 (`b4dd9fa`). See `EXECUTION_PLAN_23.md` task for this goal; `STATE_23.md` has the gate results.
 - **[G48]** Per-client IPC rate limit is configurable: `[daemon] ipc_lines_per_sec` (default 100) and `ipc_burst` (default 200). Invalid values fall back with a `[config]` warning. ADR 0016 supersedes ADR 0015 (`5664429`). The socket-level check moved to G46. Unit tests cover config defaults, sanitizing, and a configured burst reaching `handle_client`.
 - **[G45]** Test socket and flag paths are unique per process, under the temp dir, through `tests/common::unique_path` (`0a6d0e6`). No `/tmp` literal remains in `tests/` or `src/`. Two integration runs in parallel pass.
 - **[G44]** Backlog close-out: G39–G43 are complete, `make all` green with zero warnings. Orchestration 22 (`EXECUTION_PLAN_22.md`, `STATE_22.md`). Pushed to `origin/main` (`fb34936..96f18af`) by the user.
