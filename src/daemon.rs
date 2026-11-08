@@ -351,6 +351,24 @@ async fn handle_client(stream: UnixStream, event_tx: mpsc::Sender<DaemonEvent>) 
                     });
                 }
             }
+            Ok(AgentIPCMessage::SubscribeDiff) => {
+                let (sub_tx, mut sub_rx) = mpsc::channel::<String>(32);
+                if event_tx.send(DaemonEvent::SubscribeDiff(sub_tx)).await.is_err() {
+                    return Ok(());
+                }
+                if let Some(mut writer) = writer_opt.take() {
+                    tokio::spawn(async move {
+                        use tokio::io::AsyncWriteExt;
+                        while let Some(msg) = sub_rx.recv().await {
+                            if writer.write_all(msg.as_bytes()).await.is_err()
+                                || writer.write_all(b"\n").await.is_err()
+                            {
+                                break;
+                            }
+                        }
+                    });
+                }
+            }
             Ok(msg) => {
                 let _ = event_tx.send(DaemonEvent::AgentIPC(msg)).await;
             }
@@ -417,7 +435,7 @@ pub async fn run_daemon_loops(
                     AgentIPCMessage::Focus => {}
                     // Routed to DaemonEvent::Subscribe by handle_client; never arrives here.
                     AgentIPCMessage::SubscribeStatus => {}
-                    // Will route to DaemonEvent::SubscribeDiff in handle_client (task 20.3.1).
+                    // Routed to DaemonEvent::SubscribeDiff by handle_client; never arrives here.
                     AgentIPCMessage::SubscribeDiff => {}
                 }
             }
@@ -1011,6 +1029,43 @@ mod tests {
         state.broadcast_status();
         let msg = rx.try_recv().unwrap();
         assert!(msg.contains("full_sub_agent"));
+        assert_eq!(state.subscribers.len(), 1);
+    }
+
+    #[test]
+    fn test_diff_subscriber_gets_snapshot_then_diffs() {
+        let mut state = DaemonState::new(Config::default());
+        let (tx, mut rx) = mpsc::channel(32);
+        state.push_diff_subscriber(tx);
+        for n in ["a1", "a2"] {
+            state.register_agent(AgentId(n.to_string()), ProjectId("proj".to_string()), 1, format!("app.{n}"), None);
+        }
+        state.broadcast_status();
+        assert!(rx.try_recv().unwrap().contains("\"snapshot\":true"));
+
+        state.update_status(&AgentId("a1".to_string()), AgentStatus::Thinking);
+        state.broadcast_status();
+        let v: serde_json::Value = serde_json::from_str(&rx.try_recv().unwrap()).unwrap();
+        assert_eq!(v["snapshot"], false);
+        assert_eq!(v["upsert"].as_array().unwrap().len(), 1);
+        assert!(v["upsert"][0].to_string().contains("a1"));
+        assert!(v["remove"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_diff_subscriber_recovers_with_snapshot_after_drop() {
+        let mut state = DaemonState::new(Config::default());
+        let (tx, mut rx) = mpsc::channel(1);
+        state.push_diff_subscriber(tx);
+        state.register_agent(AgentId("a1".to_string()), ProjectId("proj".to_string()), 1, "app.a1".to_string(), None);
+        state.broadcast_status(); // snapshot fills the channel
+        state.update_status(&AgentId("a1".to_string()), AgentStatus::Thinking);
+        state.broadcast_status(); // diff dropped
+        assert!(rx.try_recv().unwrap().contains("\"snapshot\":true"));
+        assert!(rx.try_recv().is_err());
+
+        state.broadcast_status();
+        assert!(rx.try_recv().unwrap().contains("\"snapshot\":true"));
         assert_eq!(state.subscribers.len(), 1);
     }
 
