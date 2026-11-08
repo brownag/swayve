@@ -10,14 +10,15 @@ Google Antigravity orchestrates AI coding workflows across agents and subagent t
 
 ## Environment Variables
 
-When Swayve launches an agent container or window, or when an Antigravity subagent is spawned, the following environment variables are passed down:
+These variables are supplied by the launcher, not by the swayve daemon. `swayve spawn` sets `SWAYVE_SOCKET`, `SWAYVE_AGENT_ID`, `SWAYVE_PROJECT_ID` and, for a subagent, `SWAYVE_PARENT_ID` (`src/cli.rs:564-570`). The daemon does not set `SWAYVE_PARENT_ID`, `SWAYVE_AGENT_PID`, or any other variable below.
 
 | Variable | Description | Example |
 | :--- | :--- | :--- |
-| `SWAYVE_SOCKET` | Path to the active Swayve IPC Unix domain socket. Default: $XDG_RUNTIME_DIR/swayve/swayve.sock. Set SWAYVE_SOCKET to override. | `$XDG_RUNTIME_DIR/swayve/swayve.sock` |
-| `SWAYVE_AGENT_ID` | Unique ID of the agent instance | `agy-agent-8f3a` |
-| `SWAYVE_PROJECT_ID` | Project / workspace ID | `swayve-dev` |
-| `SWAYVE_PARENT_ID` | Agent ID of the spawning parent agent (if subagent). Not set by the swayve daemon today; the Antigravity sidecar must supply it | `parent-agent-001` |
+| `SWAYVE_SOCKET` | Path to the active Swayve IPC Unix domain socket. Empty counts as unset. Default: $XDG_RUNTIME_DIR/swayve/swayve.sock (`src/cli.rs:118-126`, `src/cli.rs:73-82`). Set SWAYVE_SOCKET to override. | `$XDG_RUNTIME_DIR/swayve/swayve.sock` |
+| `SWAYVE_AGENT_ID` | Unique ID of the agent instance. Supplied by the launcher. Required by the sidecar; when missing, the sidecar logs and sends nothing. | `agy-agent-8f3a` |
+| `SWAYVE_PROJECT_ID` | Project / workspace ID. Supplied by the launcher. | `swayve-dev` |
+| `SWAYVE_PARENT_ID` | Agent ID of the spawning parent agent (if subagent). Supplied by the launcher. Empty or unset means a root agent (`parent_agent_id: null`). | `parent-agent-001` |
+| `SWAYVE_AGENT_PID` | PID reported in `agent.register`. Supplied by the launcher. Must be a positive integer. If unset or invalid, the sidecar falls back to `process.ppid`. The fallback is unverified and is checked by the live test. | `48201` |
 
 ---
 
@@ -44,6 +45,8 @@ Upon initializing a new agent window or subagent process, the Antigravity sideca
 ```
 
 This enables Swayve to match the window container in Sway (`app_id`) and track process ancestry.
+
+Notes: `parent_agent_id` is `null` for a root agent. `app_id` is always `agent.<agent_id>`.
 
 ---
 
@@ -96,6 +99,23 @@ Antigravity keybindings or CLI triggers can request Swayve to cycle focus throug
 Swayve processes this request via its internal hierarchical focus algorithm, navigating between parent and child agent windows.
 
 ---
+
+## Run and test
+
+The sidecar is `integrations/antigravity/sidecar.mjs` (Node 22, no dependencies).
+
+```bash
+cd integrations/antigravity && node --test sidecar.test.mjs
+```
+
+Send one message by hand (the launcher normally sets the env vars):
+
+```bash
+SWAYVE_SOCKET=/run/user/1000/swayve/swayve.sock SWAYVE_AGENT_ID=a-33-1 SWAYVE_PROJECT_ID=swayve \
+  node integrations/antigravity/sidecar.mjs register
+```
+
+Subcommands: `register`, `status <value>`, `focus`. The sidecar writes one line and does not read a reply. If no socket path or `SWAYVE_AGENT_ID` is set, it writes one line to stderr and exits 0. Socket errors also log one line and exit 0. Status reporting is best-effort, so the sidecar never fails a hook.
 
 ## Example Shell Injection
 
