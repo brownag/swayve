@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  make-all:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Node for the Pi client
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Pi client dependencies
+        run: npm ci --prefix integrations/pi
+
+      - name: Run the full gate
+        run: make all
