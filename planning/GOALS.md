@@ -5,10 +5,7 @@ Source State: magic-wand re-rank on 2026-11-08 (after Orchestration 30, HEAD `8d
 
 ## Circled Goal (Active)
 
-- **[G82]** Daemon-spawned children are reaped. The daemon drops every `Child` it launches: lifecycle hook commands (`execute_lifecycle_hook`, `src/daemon.rs:~323`) and monitor terminals (`spawn_monitor_terminal`, `src/daemon.rs:~276`). The daemon is long-lived, so each exited child stays a zombie until the daemon exits. Scope widened from hooks alone during the 2026-11-08 audit.
-  - Why now: it is a reproducible leak in the long-running process, and the fix is local. It is the only open defect the audit confirmed in the daemon. It also touches `daemon.rs`, so it is the change that G78 names as a trigger; the added lines are few, so G78 stays deferred.
-  - Exit criteria: a test runs a daemon-spawned hook (`exit 0`) and a monitor launch, waits for them, and asserts neither is left as a zombie child of the test process (for example by reading `/proc/self/task/*/children` or the child's `/proc/<pid>/stat` state). Targeted `cargo test --lib` and `cargo test --test integration_tests` pass; serial `make all` exit 0, zero warnings.
-  - First action: write the failing zombie test for the hook path in `src/daemon.rs`'s test module, then reap the `Child` (a waiter thread or a `tokio::process::Child`) in one helper that both launch paths call.
+None. G82 closed in Orchestration 31 (see Completed). The next open goal is G83 (backlog).
 
 ## Sequenced Goals (Dependency DAG)
 
@@ -63,6 +60,7 @@ None. No open goal depends on another.
 
 ## Completed
 
+- **[G82]** The daemon reaps the children it launches. `spawn_reaped` (`src/daemon.rs`) hands each `Child` to a detached thread that waits on it. Hook commands and monitor terminals both route through it. Test `test_spawned_child_is_reaped` checks the pid leaves `/proc` (`907588d`; Orchestration 31; `make all` serial exit 0, zero warnings). Monitor path covered by routing, not a process-level test (D3).
 - **[G74]** Lifecycle hooks are tested. `lifecycle_hook_command` (pure builder, `src/daemon.rs`) pins the `sh -c` argv and the `SWAYVE_AGENT_ID`/`SWAYVE_AGENT_STATUS` env pair; `agent_status_to_str` covers all six variants; `test_lifecycle_status_hook_order` runs the daemon and asserts status-change lines arrive in `UpdateStatus` order (`43b183b`, `3004dd6`; Orchestration 30; `make all` serial exit 0, zero warnings).
 
 - **[G80]** Agent, monitor and panel terminal launches share one argv path. `spawn_plan` shlex-splits the command and calls `expand_terminal_args`. An integration test runs the real binary and pins the agent argv (whitespace path, quoted prompt, shell template) (`bcbe4a0`, `c2ce284`; Orchestration 29; `make all` serial exit 0, zero warnings).
