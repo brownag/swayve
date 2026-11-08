@@ -67,6 +67,7 @@ export class SwayveClient {
         project_id: this.projectId,
         parent_agent_id: this.parentAgentId,
         pid: process.pid,
+        // Must match the CLI: see test_spawn_plan_app_id_pin in src/cli.rs.
         app_id: `agent.${this.agentId}`,
       }
     });

@@ -19,7 +19,7 @@ Last Updated: 2026-11-08
 - [x] **Task 28.1.2**: `register_agent_window` releases the old mapping; `on_window_destroyed` removes only the current owner
 
 ### Wave 3: CLI and Pi derive the same `app_id` (G79)
-- [ ] **Task 28.1.3**: Pi client `app_id` matches the CLI format; Rust format pin
+- [x] **Task 28.1.3**: Pi client `app_id` matches the CLI format; Rust format pin
 
 ### Wave 4: binding and creation publish to subscribers (G79)
 - [ ] **Task 28.1.4**: `run_daemon_loops` publishes after a window bind
@@ -63,4 +63,9 @@ Last Updated: 2026-11-08
 - Status: done. Files: `src/daemon.rs` `register_agent_window` (~652) drops the old `con_to_agent` entry; `on_window_destroyed` (~249) returns early for `Some(other)` owner; new test `test_rebind_releases_old_container`.
 - Tests: `cargo test --lib test_rebind` 1 passed; `test_window_destroyed` 4 passed. `make all` serial exit 0, zero warnings, unit 76 passed / 2 ignored.
 - Deviations: red run skipped (test written and run only after the fix). Q1 answered: `container_id == None` counts as owned.
+
+### 28.1.3 (done)
+- Status: done. Direction changed from the spec's hyphen-to-dot transform (lossy for hyphenated agent names) to lossless: CLI `app_id = "agent.{agent_id}"` (`src/cli.rs:547`). Pi code unchanged except a pointer comment (`swayve-client.ts:70`).
+- Tests: Pi `npm test` 8/8 (two new pins passed first run). `cargo test --lib test_spawn_plan` 8 passed after a red step on the old assertion at line 771. New `test_spawn_plan_app_id_pin` (`agent.claude-w2-7`). `make check` exit 0, zero warnings.
+- Deviations: `test_spawn_plan_substitutes_app_id_and_title` (`src/cli.rs:795`) also updated to the new format (outside the plan, required).
 

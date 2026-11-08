@@ -76,4 +76,21 @@ describe('SwayveClient', () => {
     const params = await captureRegister({}, '');
     assert.strictEqual(params.parent_agent_id, null);
   });
+
+  // Pins the app_id format; the CLI side is pinned by test_spawn_plan_app_id_pin in src/cli.rs.
+  test('register sends app_id agent.<agentId>', async () => {
+    const params = await captureRegister({ agentId: 'pi-w1-12345' });
+    assert.strictEqual(params.app_id, 'agent.pi-w1-12345');
+  });
+
+  test('register app_id falls back to agent.unknown-agent', async () => {
+    const prev = process.env.SWAYVE_AGENT_ID;
+    delete process.env.SWAYVE_AGENT_ID;
+    try {
+      const params = await captureRegister({});
+      assert.strictEqual(params.app_id, 'agent.unknown-agent');
+    } finally {
+      if (prev !== undefined) process.env.SWAYVE_AGENT_ID = prev;
+    }
+  });
 });

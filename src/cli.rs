@@ -544,7 +544,7 @@ pub fn spawn_plan(req: SpawnRequest<'_>) -> SpawnPlan {
     };
     let suffix = now_ms % 100000;
     let agent_id = format!("{}-{}-{}", agent, wave, suffix);
-    let app_id = format!("agent.{}.{}.{}", agent, wave, suffix);
+    let app_id = format!("agent.{}", agent_id);
     let title = format!("Agent [{}]: {}", agent, wave);
 
     let mut term_args = Vec::new();
@@ -764,11 +764,19 @@ mod tests {
         assert_eq!(plan.term_args, vec!["bash", "-c", "pi \"it's\""]);
     }
 
+    // Pi's register() derives `agent.<agentId>`; keep this in sync (swayve-client.ts).
+    #[test]
+    fn test_spawn_plan_app_id_pin() {
+        let plan = spawn_plan(SpawnRequest { agent: "claude", wave: "w2", now_ms: 100007, ..base() });
+        assert_eq!(plan.agent_id, "claude-w2-7");
+        assert_eq!(plan.app_id, "agent.claude-w2-7");
+    }
+
     #[test]
     fn test_spawn_plan_ids_follow_clock_suffix() {
         let plan = spawn_plan(SpawnRequest { now_ms: 12345, ..base() });
         assert_eq!(plan.agent_id, "pi-w1-12345");
-        assert_eq!(plan.app_id, "agent.pi.w1.12345");
+        assert_eq!(plan.app_id, "agent.pi-w1-12345");
         assert_eq!(plan.title, "Agent [pi]: w1");
     }
 
@@ -784,7 +792,7 @@ mod tests {
     fn test_spawn_plan_substitutes_app_id_and_title() {
         let tmpl: Vec<String> = ["--app-id", "{app_id}", "--title", "{title}"].iter().map(|s| s.to_string()).collect();
         let plan = spawn_plan(SpawnRequest { term_template: &tmpl, now_ms: 7, ..base() });
-        assert_eq!(plan.term_args, vec!["--app-id", "agent.pi.w1.7", "--title", "Agent [pi]: w1"]);
+        assert_eq!(plan.term_args, vec!["--app-id", "agent.pi-w1-7", "--title", "Agent [pi]: w1"]);
     }
 
     #[test]
