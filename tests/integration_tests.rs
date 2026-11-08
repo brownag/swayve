@@ -184,11 +184,10 @@ async fn test_subagent_layout_routing() {
                         mark_children_received = true;
                     }
                 }
-                SwayCommand::SetLayoutTabbed { mark } => {
-                    if mark == "mark_children_parent_1" {
+                SwayCommand::SetLayoutTabbed { mark }
+                    if mark == "mark_children_parent_1" => {
                         layout_tabbed_received = true;
                     }
-                }
                 _ => {}
             }
         }
@@ -222,13 +221,11 @@ async fn test_subagent_layout_routing() {
     // Expecting MoveToContainer command for child 2
     let mut move_to_container_received = false;
     for _ in 0..5 {
-        if let Some(cmd) = recv_command(&mut sway_cmd_rx, 500).await {
-            if let SwayCommand::MoveToContainer { con_id, target_mark } = cmd {
-                if con_id == 1002 && target_mark == "mark_children_parent_1" {
+        if let Some(cmd) = recv_command(&mut sway_cmd_rx, 500).await
+            && let SwayCommand::MoveToContainer { con_id, target_mark } = cmd
+                && con_id == 1002 && target_mark == "mark_children_parent_1" {
                     move_to_container_received = true;
                 }
-            }
-        }
     }
     assert!(move_to_container_received, "MoveToContainer not received for child-2");
 
@@ -325,11 +322,10 @@ async fn test_dynamic_process_tree_auditing() {
                         split_received = true;
                     }
                 }
-                SwayCommand::MarkWindow { con_id, mark } => {
-                    if mark == "mark_children_parent_audit" && con_id == 2001 {
+                SwayCommand::MarkWindow { con_id, mark }
+                    if mark == "mark_children_parent_audit" && con_id == 2001 => {
                         mark_children_received = true;
                     }
-                }
                 _ => {}
             }
         }
@@ -434,11 +430,10 @@ async fn test_cli_parent_flag_to_layout() {
                         mark_children_received = true;
                     }
                 }
-                SwayCommand::SetLayoutTabbed { mark } => {
-                    if mark == "mark_children_parent_cli" {
+                SwayCommand::SetLayoutTabbed { mark }
+                    if mark == "mark_children_parent_cli" => {
                         layout_tabbed_received = true;
                     }
-                }
                 _ => {}
             }
         }

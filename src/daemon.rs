@@ -63,12 +63,11 @@ impl DaemonState {
         } else {
             false
         };
-        if let Some(ref p_id) = parent_id {
-            if !is_subagent {
+        if let Some(ref p_id) = parent_id
+            && !is_subagent {
                 // Usually a bare name passed where the full agent ID is needed.
                 eprintln!("[daemon] Parent {} is not registered; {} is not linked to it", p_id.0, agent_id.0);
             }
-        }
 
         let mark = agent_id.to_mark();
         let agent = AgentWindow {
@@ -343,8 +342,7 @@ pub async fn run_daemon_loops(
             DaemonEvent::Sway(sway_event) => {
                 match sway_event {
                     SwayEvent::WindowCreated { con_id, app_id, pid } => {
-                        if app_id.starts_with("agent.monitor.") {
-                            let target_agent_id_str = &app_id["agent.monitor.".len()..];
+                        if let Some(target_agent_id_str) = app_id.strip_prefix("agent.monitor.") {
                             let target_agent_id = AgentId(target_agent_id_str.to_string());
                             if let Some(agent) = state.agents.get(&target_agent_id) {
                                 let project_id = agent.project.clone();
@@ -368,24 +366,20 @@ pub async fn run_daemon_loops(
                                 )
                                 .await;
                             }
-                        } else if app_id.starts_with("agent.") {
-                            if let Some(agent_id) = register_agent_window(&app_id, con_id, &mut state) {
-                                if state.config.daemon.process_tree_audit_enabled {
-                                    if let (Some(con_pid), Some(agent)) =
+                        } else if app_id.starts_with("agent.")
+                            && let Some(agent_id) = register_agent_window(&app_id, con_id, &mut state) {
+                                if state.config.daemon.process_tree_audit_enabled
+                                    && let (Some(con_pid), Some(agent)) =
                                         (pid, state.agents.get_mut(&agent_id))
-                                    {
-                                        if apply_process_tree_auditing(
+                                        && apply_process_tree_auditing(
                                             agent,
                                             con_pid as u32,
                                             &state.pid_to_agent,
                                             state.config.daemon.max_ancestry_depth,
-                                        ) {
-                                            if state.config.daemon.auto_monitor {
+                                        )
+                                            && state.config.daemon.auto_monitor {
                                                 state.spawn_monitor_terminal(&agent_id);
                                             }
-                                        }
-                                    }
-                                }
 
                                 // Read parent_id after auditing so an auto-detected
                                 // parent reaches the layout on this same event.
@@ -412,7 +406,6 @@ pub async fn run_daemon_loops(
                                     .await;
                                 }
                             }
-                        }
                     }
                     SwayEvent::WindowDestroyed { con_id } => {
                         if let Some(agent_id) = state.con_to_agent.remove(&con_id) {
@@ -449,8 +442,8 @@ pub async fn run_daemon_loops(
             }
             DaemonEvent::Focus => {
                 // Focus event handler: hierarchical sibling cycling
-                if let Some(target) = next_focus_target(&state.agents, last_focused.as_ref()) {
-                    if let Some(agent) = state.agents.get(&target) {
+                if let Some(target) = next_focus_target(&state.agents, last_focused.as_ref())
+                    && let Some(agent) = state.agents.get(&target) {
                         let _ = sway_cmd_tx
                             .send(SwayCommand::FocusWindow {
                                 mark: agent.mark.clone(),
@@ -458,7 +451,6 @@ pub async fn run_daemon_loops(
                             .await;
                         last_focused = Some(target);
                     }
-                }
             }
             DaemonEvent::Subscribe(sub_tx) => {
                 state.subscribers.push(sub_tx);
@@ -571,17 +563,15 @@ fn next_focus_target(
 
 fn get_parent_pid(pid: u32) -> Option<u32> {
     let stat_path = format!("/proc/{}/stat", pid);
-    if let Ok(contents) = std::fs::read_to_string(stat_path) {
-        if let Some(r_paren) = contents.rfind(')') {
+    if let Ok(contents) = std::fs::read_to_string(stat_path)
+        && let Some(r_paren) = contents.rfind(')') {
             let rest = &contents[r_paren + 1..];
             let fields: Vec<&str> = rest.split_whitespace().collect();
-            if fields.len() >= 2 {
-                if let Ok(ppid) = fields[1].parse::<u32>() {
+            if fields.len() >= 2
+                && let Ok(ppid) = fields[1].parse::<u32>() {
                     return Some(ppid);
                 }
-            }
         }
-    }
     None
 }
 

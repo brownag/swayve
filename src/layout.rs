@@ -35,8 +35,7 @@ impl LayoutManager {
                 project_id,
                 parent_id,
             } => {
-                if app_id.starts_with("agent.monitor.") {
-                    let target_id_str = &app_id["agent.monitor.".len()..];
+                if let Some(target_id_str) = app_id.strip_prefix("agent.monitor.") {
                     let target_id = AgentId(target_id_str.to_string());
                     if let Some(target_agent) = state.agents().get(&target_id) {
                         commands.push(SwayCommand::MoveToWorkspace {
@@ -122,6 +121,12 @@ impl LayoutManager {
             }
         }
         commands
+    }
+}
+
+impl Default for LayoutManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

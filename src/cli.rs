@@ -328,11 +328,10 @@ fi
 
                 // Search for orchestrator window recursively
                 fn find_orchestrator(node: &swayipc_async::Node) -> bool {
-                    if let Some(app_id) = &node.app_id {
-                        if app_id == "agent.orchestrator" {
+                    if let Some(app_id) = &node.app_id
+                        && app_id == "agent.orchestrator" {
                             return true;
                         }
-                    }
                     for child in &node.nodes {
                         if find_orchestrator(child) {
                             return true;
@@ -354,7 +353,7 @@ fi
                     println!("[panel] Orchestrator panel not found. Spawning...");
                     // Template args for orchestrator panel
                     let mut term_args = Vec::new();
-                    let status_cmd = format!("swayve status --watch");
+                    let status_cmd = "swayve status --watch".to_string();
                     for arg in &config.terminal.args {
                         let replaced = arg
                             .replace("{app_id}", "agent.orchestrator")
@@ -400,12 +399,11 @@ fi
                 let tree = conn.get_tree().await?;
 
                 fn collect_agents(node: &swayipc_async::Node, agents: &mut Vec<(String, String)>) {
-                    if let Some(app_id) = &node.app_id {
-                        if app_id.starts_with("agent.") {
+                    if let Some(app_id) = &node.app_id
+                        && app_id.starts_with("agent.") {
                             let title = node.name.clone().unwrap_or_else(|| "Unknown".to_string());
                             agents.push((app_id.clone(), title));
                         }
-                    }
                     for child in &node.nodes {
                         collect_agents(child, agents);
                     }
@@ -474,11 +472,10 @@ async fn focus_cycle_standalone() -> Result<()> {
     let tree = conn.get_tree().await?;
 
     fn collect_agents_focus(node: &swayipc_async::Node, agents: &mut Vec<(i64, bool)>) {
-        if let Some(app_id) = &node.app_id {
-            if app_id.starts_with("agent.") {
+        if let Some(app_id) = &node.app_id
+            && app_id.starts_with("agent.") {
                 agents.push((node.id, node.focused));
             }
-        }
         for child in &node.nodes {
             collect_agents_focus(child, agents);
         }
