@@ -276,26 +276,31 @@ pub enum DaemonEvent {
     SubscribeDiff(mpsc::Sender<String>),
 }
 
-pub async fn start_daemon_ipc(
-    socket_path: &str,
-    event_tx: mpsc::Sender<DaemonEvent>,
-) -> Result<()> {
-    let path = Path::new(socket_path);
+pub(crate) async fn prepare_socket_path(path: &Path, expected_uid: u32) -> Result<()> {
     match fs::symlink_metadata(path).await {
         Ok(md) => {
             use std::os::unix::fs::{FileTypeExt, MetadataExt};
-            if md.file_type().is_socket() && md.uid() == crate::cli::current_uid()? {
+            if md.file_type().is_socket() && md.uid() == expected_uid {
                 fs::remove_file(path).await?;
             } else {
                 anyhow::bail!(
                     "{} exists and is not a socket owned by the current user; refusing to remove it",
-                    socket_path
+                    path.display()
                 );
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(e.into()),
     }
+    Ok(())
+}
+
+pub async fn start_daemon_ipc(
+    socket_path: &str,
+    event_tx: mpsc::Sender<DaemonEvent>,
+) -> Result<()> {
+    let path = Path::new(socket_path);
+    prepare_socket_path(path, crate::cli::current_uid()?).await?;
 
     let listener = UnixListener::bind(path)?;
     println!("[daemon] Listening on Unix socket: {}", socket_path);
@@ -319,16 +324,24 @@ pub async fn start_daemon_ipc(
 
 async fn handle_client(stream: UnixStream, event_tx: mpsc::Sender<DaemonEvent>) -> Result<()> {
     let (reader, writer) = stream.into_split();
-    let reader = BufReader::new(reader);
-    let mut lines = reader.lines();
+    let mut reader = BufReader::new(reader);
     let mut writer_opt = Some(writer);
+    let mut buf = Vec::new();
 
-    while let Some(line) = lines.next_line().await? {
+    loop {
+        buf.clear();
+        if reader.read_until(b'\n', &mut buf).await? == 0 {
+            break;
+        }
+        let Ok(line) = std::str::from_utf8(&buf) else {
+            eprintln!("[daemon] Skipping non-UTF-8 IPC line");
+            continue;
+        };
         if line.trim().is_empty() {
             continue;
         }
 
-        match serde_json::from_str::<AgentIPCMessage>(&line) {
+        match serde_json::from_str::<AgentIPCMessage>(line) {
             // Focus is a daemon-level request, not agent bookkeeping.
             Ok(AgentIPCMessage::Focus) => {
                 let _ = event_tx.send(DaemonEvent::Focus).await;
@@ -754,6 +767,45 @@ mod tests {
             .await
             .expect("timed out waiting for event");
         assert!(matches!(ev, Some(DaemonEvent::Focus)));
+    }
+
+    #[tokio::test]
+    async fn test_non_utf8_ipc_line_is_skipped() {
+        use tokio::io::AsyncWriteExt;
+        let (mut client, server) = UnixStream::pair().unwrap();
+        let (event_tx, mut event_rx) = mpsc::channel(4);
+        tokio::spawn(handle_client(server, event_tx));
+        client.write_all(b"\xff\xfe\n").await.unwrap();
+        client.write_all(b"{\"method\":\"daemon.focus\"}\n").await.unwrap();
+        let ev = tokio::time::timeout(std::time::Duration::from_secs(2), event_rx.recv())
+            .await
+            .expect("timed out waiting for event");
+        assert!(matches!(ev, Some(DaemonEvent::Focus)));
+    }
+
+    #[tokio::test]
+    async fn test_prepare_socket_path_refuses_foreign_uid() {
+        let p = std::env::temp_dir().join(format!("swayve_foreign_{}", std::process::id()));
+        let _ = std::fs::remove_file(&p);
+        drop(std::os::unix::net::UnixListener::bind(&p).unwrap());
+        let uid = crate::cli::current_uid().unwrap();
+        let r = prepare_socket_path(&p, uid.wrapping_add(1)).await;
+        let still = p.exists();
+        let _ = std::fs::remove_file(&p);
+        assert!(r.is_err());
+        assert!(still);
+    }
+
+    #[tokio::test]
+    async fn test_prepare_socket_path_removes_matching_socket() {
+        let p = std::env::temp_dir().join(format!("swayve_match_{}", std::process::id()));
+        let _ = std::fs::remove_file(&p);
+        drop(std::os::unix::net::UnixListener::bind(&p).unwrap());
+        let r = prepare_socket_path(&p, crate::cli::current_uid().unwrap()).await;
+        let gone = !p.exists();
+        let _ = std::fs::remove_file(&p);
+        assert!(r.is_ok());
+        assert!(gone);
     }
 
     #[test]
