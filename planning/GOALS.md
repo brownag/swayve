@@ -1,6 +1,6 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-08
+Last Updated: 2026-11-08 (Orchestration 22 drafted)
 Source State: STATE_21.md (Orchestration 21 complete; `make all` green, zero warnings, at `dc2c4e5`; ADRs 0012–0014 recorded). `origin/main` = `fb34936` = local `main`.
 
 ## Circled Goal (Active)
@@ -9,7 +9,7 @@ Source State: STATE_21.md (Orchestration 21 complete; `make all` green, zero war
   - Why now: it is the root of the open work. Every open item in the backlog is in its scope. Nothing outside it is open.
   - Exit criteria: each of G39–G43 has a Completed entry (with SHA) or a Deferred entry (with trigger). `make all` passes, zero warnings. `origin/main` contains the work.
   - First action: run the N=1000 diff-broadcast measurement for G42, which decides whether `PartialEq` is tested.
-  - Plan: `planning/EXECUTION_PLAN_22.md` (in progress, via plan-wave).
+  - Plan: `planning/EXECUTION_PLAN_22.md` (drafted, awaiting approval). Waves: 1 (22.1.1 to 22.1.3), 2 (22.2.1), 3 (22.3.1), then the orchestrator closes G41.
 
 ## Sequenced Goals (Dependency DAG)
 
@@ -18,27 +18,30 @@ Source State: STATE_21.md (Orchestration 21 complete; `make all` green, zero war
 ## Independent Backlog
 
 - **[G39]** The `status --watch --diff` fold is covered by an end-to-end test, not only by parse tests.
+  - Status: Planned, Orchestration 22, task 22.1.2 (pure helper `fold_diff_line`, tests in `src/cli.rs`).
   - Why: the fold in `run_status_watch` (`src/cli.rs`) is the only diff consumer in this repo, and it has no behavioural test.
   - Exit criteria: a test feeds a snapshot, an upsert and a remove line through the fold and asserts the rendered agent list. Refactor the fold into a pure helper only if needed to test it.
   - First action: read `run_status_watch` and decide between a pure helper and a test that drives the socket.
   - Depends on: none.
-- **[G40]** The 10 event-ordering sleeps left in `tests/integration_tests.rs` (G37, D8) are replaced with explicit daemon acknowledgements.
+- **[G40]** The event-ordering sleeps left in `tests/integration_tests.rs` (G37, D8) are replaced with polls of daemon state.
+  - Status: Planned, Orchestration 22, task 22.1.3 (7 sleeps polled; 3 kept by design).
   - Why: those sleeps are the remaining flake risk in the integration suite.
   - Exit criteria: no fixed sleep orders daemon events in `tests/integration_tests.rs`; `cargo test --test integration_tests` passes 5 runs in a row.
   - First action: decide whether the daemon needs an ack message, or whether each sleep can poll an observable state (the status query on a second connection, as in `tests/slow_consumer.rs`).
   - Depends on: none. May need a `src/` change, so it needs its own plan.
 - **[G41]** Delete the three merged local branches `docs/adr-distillation`, `docs/agents-md-structure` and `docs/task-4.1-checkoff`.
+  - Status: Planned, Orchestration 22, orchestrator step after Wave 3.
   - Why: all three are fully merged into `main` (verified 2026-11-08). They are leftover clutter.
   - Exit criteria: `git branch --list` shows only `main`.
   - First action: `git branch -d` each one; `-d` refuses if any is unmerged.
   - Depends on: none.
 
-## Deferred
+## Planned in Orchestration 22 (formerly Deferred)
 
 - **[G42]** `AgentWindow` derives `PartialEq` and the diff broadcast compares with `==` (revisit of G32).
-  - Trigger: the release N=50 K=10 measurement passes 1 ms, or the fleet grows past about 50 agents with 10 subscribers. Current: 621 µs at N=50 K=10, 2.4 ms at N=200 K=10 (`STATE_21.md`).
-- **[G43]** Per-client rate limit on undecodable or malformed IPC lines (ADR 0014 negative consequence).
-  - Trigger: a real client is observed flooding bad lines, or a log shows a noisy skip.
+  - Status: Planned, Orchestration 22, task 22.1.1. Measured 2026-11-08: N=1000 K=10 release is 11.5 ms with `to_value` (misses the 10 ms bar) and 2.2 ms with `PartialEq`. Landing `PartialEq`.
+- **[G43]** Per-client rate limit on IPC lines (ADR 0014 negative consequence; good practice).
+  - Status: Planned, Orchestration 22, task 22.2.1. Wired on: 100 lines/s sustained, burst 200, over-limit lines dropped and logged (ADR 0015).
 
 ## Blocked / Pruned
 
