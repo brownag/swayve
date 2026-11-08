@@ -45,7 +45,7 @@ Last Updated: 2026-11-08 (Orchestration 22 complete)
 - [x] G41: `git branch --merged main` confirms the three branches, then `git branch -d` each. Actual: deleted `docs/adr-distillation` (was 2d8dcc7), `docs/agents-md-structure` (was f706a3b), `docs/task-4.1-checkoff` (was b30672c).
 - [x] GOALS.md: G39–G43 moved to Completed with SHAs; G44 moved to Completed, with its push item still open (see below).
 - [x] `git status` clean; `git worktree list` shows only `main`.
-- [ ] Push to `origin/main`: not done. No remote writes without the user's go-ahead.
+- [x] Push to `origin/main`: done by the user (`fb34936..96f18af`).
 
 ### Deferred (manual, not gated)
 - None.
