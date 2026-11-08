@@ -34,7 +34,7 @@ Last Updated: 2026-11-08
 - [x] **Task 28.3.1**: `spawn_monitor_terminal` builds argv from a list; spaced log path stays one argument
 
 ### Wave 8: argv-capture test replaces substring assertions (G80)
-- [ ] **Task 28.3.2**: mock terminal writes one argument per line; exact argv assertions
+- [x] **Task 28.3.2**: mock terminal writes one argument per line; exact argv assertions
 
 ### Wave 9: panel launch passes `status --watch` as argv (G80)
 - [ ] **Task 28.3.3**: panel argv uses separate entries
@@ -92,4 +92,10 @@ Last Updated: 2026-11-08
 - Red: compile failure on missing helpers. Green: `test_monitor_argv` 2 passed; `test_spawn_plan` 8 passed (spec said 7; the filter matches 8).
 - Gate: `make check` exit 0, zero warnings. Full `make all` runs at wave 9.
 - Deviations: none.
+
+### 28.3.2 (done)
+- Status: done. `tests/integration_tests.rs` mock now `printf '%s\n' "$@"`; monitor assertions are one exact `assert_eq!` on argv lines (~986-1003). Spawn-hook assertions unchanged.
+- Red: after the mock change alone, the old `contains` assertion failed. Green: `monitor` 1 passed; `make check` exit 0, zero warnings.
+- Integration count: 12 passed (plan expected 11; the wave-4 test already added one).
+- Discovered: the worker did not write `planning/tasks/28.3.2.todo.md`; the plan text is in the orchestrator's record only.
 

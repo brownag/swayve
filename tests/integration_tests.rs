@@ -896,7 +896,7 @@ async fn test_hooks_and_monitoring() {
     }
 
     // Create mock terminal emulator script that writes its arguments to monitor_flag_path
-    let mock_term_content = format!("#!/bin/sh\necho \"$@\" > {}\n", monitor_flag_path);
+    let mock_term_content = format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\n", monitor_flag_path);
     fs::write(mock_term_path, mock_term_content).await.expect("Failed to write mock term script");
     let mut perms = fs::metadata(mock_term_path).await.unwrap().permissions();
     perms.set_mode(0o755);
@@ -986,18 +986,20 @@ async fn test_hooks_and_monitoring() {
     let monitor_flag_content = fs::read_to_string(monitor_flag_path)
         .await
         .expect("monitor flag file was not created by auto_monitor process");
-    assert!(
-        monitor_flag_content.contains("agent.monitor.subagent-hooks-1"),
-        "Monitor flag content missing monitor app_id: {}",
-        monitor_flag_content
-    );
-    assert!(
-        monitor_flag_content.contains(&format!(
-            "tail -f {}/swayve/logs/subagent-hooks-1.log",
-            std::env::var("XDG_RUNTIME_DIR").unwrap()
-        )),
-        "Monitor flag content missing log tail command: {}",
-        monitor_flag_content
+    let xdg = std::env::var("XDG_RUNTIME_DIR").unwrap();
+    let log = Path::new(&xdg).join("swayve/logs/subagent-hooks-1.log");
+    assert_eq!(
+        monitor_flag_content.lines().collect::<Vec<_>>(),
+        [
+            "--app-id",
+            "agent.monitor.subagent-hooks-1",
+            "--title",
+            "Monitor: subagent-hooks-1",
+            "-e",
+            "tail",
+            "-f",
+            log.to_str().unwrap(),
+        ]
     );
 
     // Clean up
