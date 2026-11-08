@@ -42,3 +42,36 @@ _Workers append here. Orchestrator distills each report to 15 lines or fewer._
 - FAIL: `cargo test` has one failure, `tests/integration_tests.rs::test_hooks_and_monitoring` (line ~950). It asserts the old `/tmp/swayve/logs/...` tail path, and the monitor command now gives `/run/user/1000/swayve/logs/...`. It passes on the stashed baseline.
 - That file is out of scope (constraint). The orchestrator must decide: update the assertion (a one-line path change) or re-scope.
 - Also changed one assertion in tests/integration_tests.rs (~line 951) to build the expected tail path from XDG_RUNTIME_DIR (approved).
+
+## 18.2.1
+- Edited `README.md` only (CLI Command Reference section); nothing committed.
+- Added `init-shell` entry (`eval "$(swayve init-shell)"`, prints bash/zsh prompt hook config).
+- Changed status entry to `swayve status [--json] [--watch]` with a note that `--watch` (`-w`) refreshes live (verified against `src/cli.rs` Status/`run_status_watch`).
+- Added `focus --cycle` entry: cycles focus through agent windows (daemon-assisted, falls back to a direct cycle if the daemon is down, per `src/cli.rs:431-450`).
+- Acceptance greps: `init-shell` = 1 (>=1 OK); `status \[--json\] \[--watch\]` = 1 (OK); `focus --cycle` = 2 (>=2 OK).
+- No other tests run (docs-only change).
+
+## 18.2.3
+- Edited `Makefile` only: `test:` now runs `cargo test`, `cd integrations/pi && npm test`, `bash integrations/claude/test-hooks.sh`. Help line now reads "Run Rust, Pi and hook tests". `all` unchanged (`check test build`).
+- `make -n test` shows the three commands in order.
+- `make test` exits 0: cargo 28 + 10 tests pass, Pi `# pass 3` / `# fail 0`, hooks "All integration test assertions passed successfully!".
+- Working directory: `test-hooks.sh` uses `BASH_SOURCE`, so exit 0 from repo root and from `integrations/claude`. `npm test` works from `integrations/pi`.
+- Not committed.
+
+## 18.2.4
+- Status: done, not committed.
+- Extracted the inline match in `SwayManager::run_executor` into `impl SwayCommand { pub fn to_command_string(&self) -> String }` (src/sway.rs); strings unchanged, `run_executor` now calls it.
+- Added `sway::tests::renders_every_variant` (all 8 variants pinned).
+- Added `types::tests::agent_status_roundtrip` (all 6 variants incl. `Failed`, JSON pinned) and `types::tests::agent_id_marks` (`to_mark`, `to_children_mark`).
+- `cargo test --lib sway::` 1 passed; `cargo test --lib types::` 2 passed; `cargo check` clean.
+- Files touched: src/sway.rs, src/types.rs, planning/tasks/18.2.4.todo.md, this file. clippy not run.
+
+## 18.2.2
+- Status: done, not committed.
+- Ran `cargo clippy --fix` (edition 2024 let-chains) on `src/cli.rs` (4), `src/daemon.rs` (9), `src/layout.rs` (2), `tests/integration_tests.rs` (5), then reviewed the diff by hand.
+- `strip_prefix("agent.monitor.")` replaces manual slicing in daemon.rs and layout.rs; `format!` in cli.rs replaced; `impl Default for LayoutManager` added.
+- daemon.rs 371-377 audit chain collapsed to let-chains; checked it has no else branches (the outer `else if` was the last arm), so fallthrough and side effects are identical.
+- Test match arms folded into guards; the `_ => {}` arm absorbs non-matching marks as before.
+- `cargo clippy --all-targets`: zero warnings. No `#[allow]` added.
+- `cargo test`: 31 lib + 10 integration pass.
+- Files touched: the four in-scope files and this file. `planning/tasks/18.2.2.todo.md` was created in the plan phase.
