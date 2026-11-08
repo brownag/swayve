@@ -1,20 +1,26 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-08
-Source State: STATE_27.md (Orchestration 27 closed at `1f79de0`). G79–G81 were added from `planning/ARCHITECTURE_REVIEW_2026-11-08_FOLLOWUP.md` (reviewed at `17c72ce`; static review, tests not run). Earlier: STATE_26.md (Orchestration 26 closed at `00a4675`; `make all` green; pushed to `origin/main`). Correction 2026-11-08: the architecture review candidates G67–G70 were already done in earlier orchestrations; the earlier ranking missed git history and is withdrawn.
+Source State: STATE_28.md (Orchestration 28 closed at `b37b0e2`). Correction 2026-11-08: G80 was marked Completed in error; its residual is reopened as the Circled Goal. Earlier: STATE_27.md (Orchestration 27 closed at `1f79de0`). G79–G81 were added from `planning/ARCHITECTURE_REVIEW_2026-11-08_FOLLOWUP.md` (reviewed at `17c72ce`; static review, tests not run). Earlier: STATE_26.md (Orchestration 26 closed at `00a4675`; `make all` green; pushed to `origin/main`). Correction 2026-11-08: the architecture review candidates G67–G70 were already done in earlier orchestrations; the earlier ranking missed git history and is withdrawn.
 
 ## Circled Goal (Active)
 
-None.
+- **[G80]** (residual) Terminal launches share one argv path for all three launches, and an argv-capture test covers each one. Reopened: Orchestration 28 closed the monitor and panel paths, but the agent launch (`spawn_plan`) still has its own inline `{command}` expansion, and no argv-capture test covers a whitespace path, a quoted prompt and a shell template.
+  - Why now: no upstream blockers. It closes the open item in STATE_28.md and the last G80 exit criterion, and it unblocks G74.
+  - Decision (2026-11-08): the shared helper keeps the bare-splice rule. A bare `{command}` entry splices the argv in, and `{app_id}`/`{title}` substitute in other entries. All documented templates use bare entries. `spawn_plan` shlex-splits the user command, then calls the helper.
+  - Exit criteria: an integration argv-capture test covers the agent launch with a whitespace path, a quoted prompt and a shell template, alongside the existing monitor and panel tests. `make all` serial exit 0, zero warnings.
+  - Scope: `src/cli.rs` (`spawn_plan` ~541, `expand_terminal_args` ~533), `tests/integration_tests.rs`, and `src/daemon.rs` only if the monitor path changes.
+  - Constraints: preserve ADR 0006 and 0010. Keep the existing spawn-plan extraction (G60, G64). Keep `terminal.args` unchanged.
+  - First action: write a failing argv-capture test for the agent launch with a quoted prompt and a shell template, and record what it produces today.
 
 ## Sequenced Goals (Dependency DAG)
 
-None.
+- **[G74]** Lifecycle hooks (`on_agent_spawn`, `on_agent_status_change`) have a test that checks argument order and status string. `execute_lifecycle_hook` (`src/daemon.rs`) has no test today.
+  - Depends on: G80 (reuses its argv-capture pattern).
 
 ## Independent Backlog
 
 - **[G73]** `npm run build` (or a `typecheck` script) type-checks `integrations/pi/tests/`. Today `tsconfig` includes only `src/`, and `tsx --test` skips type checks. Found during Orchestration 26 (task 26.1.1).
-- **[G74]** Lifecycle hooks (`on_agent_spawn`, `on_agent_status_change`) have a test that checks argument order and status string. `execute_lifecycle_hook` (`src/daemon.rs`) has no test today.
 - **[G75]** The planning design docs (`planning/Sway Multi Agent Architecture Design.md`, `planning/Sway Multi-Agent Viewer Architecture.md`) carry a header that marks them historical and points to the ADRs and the current protocol.
 
 ## Deferred
@@ -57,7 +63,6 @@ None.
 ## Completed
 
 - **[G81]** Subscription lifetime owned in one place. Unchanged diff broadcasts drop closed subscriber channels, and one `subscriber_writer` serves full and diff modes (`04da0d4`, `7726496`; Orchestration 28; `make all` serial exit 0, zero warnings).
-- **[G80]** Terminal launches share one argv helper, `expand_terminal_args` (`797f8db`, `078f1dd`, 1bc2e74; Orchestration 28). The monitor log path with a space stays one argument, and the panel passes `swayve status --watch` as separate entries. Exact argv is asserted in the integration test.
 - **[G79]** Agent identity and window ownership are coherent: re-registration keeps the container binding, rebinding releases the old window, the CLI and Pi derive the same `app_id` (lossless, `agent.<agent_id>`), and binding publishes to subscribers (`3bdc05c`, `b5932dd`, `de3fc7a`, `256974c`; Orchestration 28; `make all` serial exit 0, zero warnings).
 - **[G72]** `make check` runs `cargo clippy --all-targets -- -D warnings`, so `make all` fails on any lint warning (Orchestration 27, `1f79de0`; `make all` serial exit 0, zero warnings).
 - **[G70]** One typed `DiffFrame` is shared by the daemon and the CLI for the status diff wire shape (`9843d6f`).
