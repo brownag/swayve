@@ -17,7 +17,7 @@ Last Updated: 2026-11-08 (complete)
 - [x] **Task 23.1.4**: G51 CI workflow file (`.github/workflows/ci.yml`)
 
 ### Wave 1 end gate
-- [x] `make all` passes serially. Actual: exit 0; unit 64 / 2 ignored; integration 11; `rate_limit_socket` 1; `slow_consumer` 1; `subscribe_golden` 1 (`0d985c7`-era tree, at `602ffa1`).
+- [x] `make all` passes serially. Actual: exit 0; unit 64 / 2 ignored; integration 11; `rate_limit_socket` 1; `slow_consumer` 1; `subscribe_golden` 1 (at `602ffa1`).
 
 ### Wave 2: Depth Test, README
 - [x] **Task 23.2.1**: G55 depth-limit test can fail (`src/daemon.rs`)
