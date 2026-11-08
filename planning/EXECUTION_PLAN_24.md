@@ -73,7 +73,7 @@
    - Write `reg_line` on one connection and flush it.
    - Then poll every 10 ms until `timeout`: open a fresh connection, send `{"method":"daemon.subscribe"}\n`, read the first line with a 100 ms cap, and return `true` when that line contains `"id":"<agent_id>"`.
    - Return `false` when the timeout passes, or when the first connect fails.
-2. In the `Commands::Spawn` arm, replace `let _ = stream.write_all(payload.as_bytes()).await;` with a call to `register_and_wait(socket_path, &payload, &agent_id, Duration::from_secs(2))`. If it returns `false`, print one line: `[spawn] Warning: daemon did not list {agent_id} within 2s; launching anyway`. Then continue as before.
+2. In the `Commands::Spawn` arm, the `if let Ok(mut stream) = UnixStream::connect(socket_path)` block becomes `if UnixStream::connect(socket_path).await.is_ok() { ... }`. The probe connection is dropped at once; `register_and_wait` opens its own connections for the write and the polls. Inside the block, build `payload` as before, then call `register_and_wait(socket_path, &payload, &agent_id, Duration::from_secs(2))`. If it returns `false`, print one line: `[spawn] Warning: daemon did not list {agent_id} within 2s; launching anyway`.
 3. The `else` branch (connect failed, standalone mode) is unchanged.
 4. Do not change the register message, the terminal launch, or any output line other than the new warning.
 5. Test `tests/spawn_register.rs`:
