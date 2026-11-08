@@ -1083,3 +1083,119 @@ async fn test_dashboard_subscription_stream() {
 
 
 
+
+#[tokio::test]
+async fn test_diff_stream_matches_daemon_state() {
+    use std::collections::HashMap;
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let socket_path = "/tmp/swayve_test_diff_stream.sock";
+    let _ = fs::remove_file(socket_path).await;
+
+    let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
+    let (sway_cmd_tx, _sway_cmd_rx) = mpsc::channel::<SwayCommand>(64);
+
+    let ipc_tx = event_tx.clone();
+    let listener_handle = tokio::spawn(async move { start_daemon_ipc(socket_path, ipc_tx).await });
+    let config = Config::default();
+    let daemon_handle = tokio::spawn(async move {
+        run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
+    });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let mut diff_stream = UnixStream::connect(socket_path).await.expect("connect diff client");
+    diff_stream
+        .write_all(b"{\"method\":\"daemon.subscribe_diff\"}\n")
+        .await
+        .unwrap();
+    let (diff_reader, _) = diff_stream.into_split();
+    let mut diff_lines = BufReader::new(diff_reader).lines();
+
+    let mut client = UnixStream::connect(socket_path).await.expect("connect client");
+    let mut send = |msg: AgentIPCMessage| serde_json::to_string(&msg).unwrap() + "\n";
+    for (i, n) in [1, 2, 3].iter().enumerate() {
+        let id = format!("diff-a{n}");
+        let payload = send(AgentIPCMessage::Register {
+            id: None,
+            params: RegisterParams {
+                agent_id: AgentId(id.clone()),
+                agent_type: "pi".to_string(),
+                project_id: ProjectId("diff-proj".to_string()),
+                pid: 31000 + i as u32,
+                app_id: format!("agent.pi.{id}"),
+                parent_agent_id: None,
+            },
+        });
+        client.write_all(payload.as_bytes()).await.unwrap();
+    }
+    let payload = send(AgentIPCMessage::UpdateStatus {
+        params: UpdateStatusParams {
+            agent_id: AgentId("diff-a2".to_string()),
+            status: AgentStatus::AwaitingHumanInput,
+        },
+    });
+    client.write_all(payload.as_bytes()).await.unwrap();
+    client.flush().await.unwrap();
+
+    // Replay the diff stream until it converges (bounded; every read has a timeout).
+    let mut map: HashMap<String, serde_json::Value> = HashMap::new();
+    let mut converged = false;
+    let mut removal_sent = false;
+    for _ in 0..20 {
+        let line = timeout(Duration::from_secs(2), diff_lines.next_line())
+            .await
+            .expect("Timeout waiting for diff line")
+            .expect("read error")
+            .expect("diff stream closed");
+        let v: serde_json::Value = serde_json::from_str(&line).expect("diff line is JSON");
+        if v["snapshot"].as_bool().expect("snapshot flag") {
+            map.clear();
+        }
+        for a in v["upsert"].as_array().expect("upsert array") {
+            map.insert(a["id"].as_str().unwrap().to_string(), a.clone());
+        }
+        for id in v["remove"].as_array().expect("remove array") {
+            map.remove(id.as_str().unwrap());
+        }
+        // Once a3 is registered (seen in the stream), bind it to a window and destroy it.
+        if !removal_sent && map.contains_key("diff-a3") {
+            removal_sent = true;
+            let _ = event_tx
+                .send(DaemonEvent::Sway(SwayEvent::WindowCreated {
+                    con_id: 3000,
+                    app_id: "agent.pi.diff-a3".to_string(),
+                    pid: None,
+                }))
+                .await;
+            let _ = event_tx.send(DaemonEvent::Sway(SwayEvent::WindowDestroyed { con_id: 3000 })).await;
+        }
+        if map.len() == 2
+            && !map.contains_key("diff-a3")
+            && map.get("diff-a2").is_some_and(|a| a["status"] == serde_json::json!(AgentStatus::AwaitingHumanInput))
+        {
+            converged = true;
+            break;
+        }
+    }
+    assert!(converged, "diff stream never converged; map = {map:?}");
+
+    // Daemon state: first line of a fresh full `daemon.subscribe` stream.
+    let mut full_stream = UnixStream::connect(socket_path).await.expect("connect full client");
+    full_stream.write_all(b"{\"method\":\"daemon.subscribe\"}\n").await.unwrap();
+    let (full_reader, _) = full_stream.into_split();
+    let mut full_lines = BufReader::new(full_reader).lines();
+    let line = timeout(Duration::from_secs(2), full_lines.next_line())
+        .await
+        .expect("Timeout waiting for full agent list")
+        .expect("read error")
+        .expect("full stream closed");
+    let mut daemon_list: Vec<serde_json::Value> = serde_json::from_str(&line).expect("agent list JSON");
+    daemon_list.sort_by_key(|a| a["id"].as_str().unwrap().to_string());
+    let mut client_list: Vec<serde_json::Value> = map.into_values().collect();
+    client_list.sort_by_key(|a| a["id"].as_str().unwrap().to_string());
+    assert_eq!(client_list, daemon_list);
+
+    listener_handle.abort();
+    daemon_handle.abort();
+    let _ = fs::remove_file(socket_path).await;
+}
