@@ -112,3 +112,33 @@ mod tests {
         assert_eq!(id.to_children_mark(), "mark_children_a_b_c");
     }
 }
+
+/// One line of the `daemon.subscribe_diff` stream. The daemon builds it, and the CLI folds it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DiffFrame {
+    pub snapshot: bool,
+    pub upsert: Vec<AgentWindow>,
+    pub remove: Vec<AgentId>,
+}
+
+impl DiffFrame {
+    /// The wire line, without the trailing newline. Keys come out alphabetical (`remove`,
+    /// `snapshot`, `upsert`) because the frame goes through `serde_json::Value`. Declaration
+    /// order would change the bytes pinned in `tests/diff_golden.rs`.
+    pub fn to_line(&self) -> serde_json::Result<String> {
+        serde_json::to_string(&serde_json::to_value(self)?)
+    }
+
+    /// Applies the frame to folded state: a snapshot clears it, then upserts and removes apply.
+    pub fn fold_into(self, map: &mut std::collections::HashMap<String, AgentWindow>) {
+        if self.snapshot {
+            map.clear();
+        }
+        for a in self.upsert {
+            map.insert(a.id.0.clone(), a);
+        }
+        for id in self.remove {
+            map.remove(&id.0);
+        }
+    }
+}

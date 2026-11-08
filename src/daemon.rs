@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::layout::{LayoutAction, LayoutManager};
 use crate::sway::{SwayCommand, SwayEvent};
-use crate::types::{AgentId, AgentIPCMessage, AgentRegistry, AgentStatus, AgentWindow, ProjectId};
+use crate::types::{AgentId, AgentIPCMessage, AgentRegistry, AgentStatus, AgentWindow, DiffFrame, ProjectId};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::path::Path;
@@ -107,11 +107,12 @@ impl DaemonState {
             if !snapshot && upsert.is_empty() && remove.is_empty() {
                 return true;
             }
-            let json = match serde_json::to_string(&serde_json::json!({
-                "snapshot": snapshot,
-                "upsert": upsert,
-                "remove": remove,
-            })) {
+            let frame = DiffFrame {
+                snapshot,
+                upsert: upsert.into_iter().cloned().collect(),
+                remove: remove.into_iter().cloned().collect(),
+            };
+            let json = match frame.to_line() {
                 Ok(j) => j,
                 Err(e) => {
                     eprintln!("[daemon] Failed to serialize diff broadcast: {:?}", e);

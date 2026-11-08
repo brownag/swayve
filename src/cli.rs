@@ -483,21 +483,11 @@ async fn focus_cycle_standalone() -> Result<()> {
 
 /// Folds one `subscribe_diff` line into `map`. Returns `false`, changing nothing,
 /// when the line is not JSON.
-fn fold_diff_line(map: &mut std::collections::HashMap<String, serde_json::Value>, line: &str) -> bool {
-    let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+fn fold_diff_line(map: &mut std::collections::HashMap<String, crate::types::AgentWindow>, line: &str) -> bool {
+    let Ok(frame) = serde_json::from_str::<crate::types::DiffFrame>(line) else {
         return false;
     };
-    if v["snapshot"].as_bool() == Some(true) {
-        map.clear();
-    }
-    for a in v["upsert"].as_array().into_iter().flatten() {
-        if let Some(id) = a["id"].as_str() {
-            map.insert(id.to_string(), a.clone());
-        }
-    }
-    for id in v["remove"].as_array().into_iter().flatten().filter_map(|x| x.as_str()) {
-        map.remove(id);
-    }
+    frame.fold_into(map);
     true
 }
 
@@ -574,7 +564,7 @@ async fn run_status_watch(socket_path: &str, diff: bool) -> Result<()> {
     let (reader, _) = stream.into_split();
     let buf_reader = BufReader::new(reader);
     let mut lines = buf_reader.lines();
-    let mut map: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
+    let mut map: std::collections::HashMap<String, crate::types::AgentWindow> = std::collections::HashMap::new();
 
     while let Some(line) = lines.next_line().await? {
         if line.trim().is_empty() {
@@ -585,8 +575,7 @@ async fn run_status_watch(socket_path: &str, diff: bool) -> Result<()> {
             if !fold_diff_line(&mut map, &line) {
                 continue;
             }
-            let mut agents: Vec<crate::types::AgentWindow> =
-                map.values().filter_map(|a| serde_json::from_value(a.clone()).ok()).collect();
+            let mut agents: Vec<crate::types::AgentWindow> = map.values().cloned().collect();
             agents.sort_by(|a, b| a.id.0.cmp(&b.id.0));
             Some(agents)
         } else {
@@ -714,14 +703,18 @@ mod tests {
     fn diff_agent_json(id: &str) -> serde_json::Value {
         serde_json::json!({
             "id": id, "project": "proj", "parent_id": null, "container_id": 1,
-            "app_id": "app", "mark": null, "status": "Working"
+            "app_id": "app", "mark": "mark_x", "status": "thinking"
         })
+    }
+
+    fn diff_agent(id: &str) -> crate::types::AgentWindow {
+        serde_json::from_value(diff_agent_json(id)).unwrap()
     }
 
     #[test]
     fn test_fold_diff_snapshot_clears_then_upserts() {
         let mut map = std::collections::HashMap::new();
-        map.insert("a".to_string(), diff_agent_json("a"));
+        map.insert("a".to_string(), diff_agent("a"));
         let line = serde_json::json!({"snapshot": true, "upsert": [diff_agent_json("b")], "remove": []}).to_string();
         assert!(fold_diff_line(&mut map, &line));
         assert!(!map.contains_key("a"));
@@ -742,7 +735,7 @@ mod tests {
     #[test]
     fn test_fold_diff_skips_non_json() {
         let mut map = std::collections::HashMap::new();
-        map.insert("a".to_string(), diff_agent_json("a"));
+        map.insert("a".to_string(), diff_agent("a"));
         let before = map.clone();
         assert!(!fold_diff_line(&mut map, "not json"));
         assert_eq!(map, before);
