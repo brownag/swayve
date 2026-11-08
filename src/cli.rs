@@ -237,7 +237,7 @@ fi
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis();
-            let plan = spawn_plan(&agent, &wave, command, prompt.as_deref(), &config.terminal.args, socket_path, &project, now);
+            let plan = spawn_plan(&agent, &wave, command, prompt.as_deref(), &config.terminal.args, socket_path, &project, now, parent.as_deref());
             let agent_id = plan.agent_id.clone();
             let app_id = plan.app_id.clone();
 
@@ -505,7 +505,7 @@ pub struct SpawnPlan {
 
 /// Builds the spawn plan. `term_template` is `config.terminal.args`. `{command}` is replaced by
 /// the shell-split command; `{app_id}` and `{title}` are replaced by the derived values.
-// The task spec fixes these 8 parameters.
+// The task spec fixes these 9 parameters.
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_plan(
     agent: &str,
@@ -516,6 +516,7 @@ pub fn spawn_plan(
     socket_path: &str,
     project: &str,
     now_ms: u128,
+    parent: Option<&str>,
 ) -> SpawnPlan {
     let base_command = command.unwrap_or_else(|| agent.to_string());
     let actual_command = if let Some(p) = prompt {
@@ -546,11 +547,14 @@ pub fn spawn_plan(
             term_args.push(arg.replace("{app_id}", &app_id).replace("{title}", &title));
         }
     }
-    let env = vec![
+    let mut env = vec![
         ("SWAYVE_SOCKET".to_string(), socket_path.to_string()),
         ("SWAYVE_AGENT_ID".to_string(), agent_id.clone()),
         ("SWAYVE_PROJECT_ID".to_string(), project.to_string()),
     ];
+    if let Some(p) = parent {
+        env.push(("SWAYVE_PARENT_ID".to_string(), p.to_string()));
+    }
     SpawnPlan { agent_id, app_id, title, term_args, env }
 }
 
@@ -740,13 +744,13 @@ mod tests {
     #[test]
     fn test_spawn_plan_escapes_single_quote_in_prompt() {
         let tmpl = vec!["{command}".to_string()];
-        let plan = spawn_plan("pi", "w1", None, Some("it's"), &tmpl, "s", "p", 1);
+        let plan = spawn_plan("pi", "w1", None, Some("it's"), &tmpl, "s", "p", 1, None);
         assert_eq!(plan.term_args, vec!["bash", "-c", "pi \"it's\""]);
     }
 
     #[test]
     fn test_spawn_plan_ids_follow_clock_suffix() {
-        let plan = spawn_plan("pi", "w1", None, None, &[], "s", "p", 12345);
+        let plan = spawn_plan("pi", "w1", None, None, &[], "s", "p", 12345, None);
         assert_eq!(plan.agent_id, "pi-w1-12345");
         assert_eq!(plan.app_id, "agent.pi.w1.12345");
         assert_eq!(plan.title, "Agent [pi]: w1");
@@ -754,8 +758,8 @@ mod tests {
 
     #[test]
     fn test_spawn_plan_distinct_clock_gives_distinct_ids() {
-        let a = spawn_plan("pi", "w1", None, None, &[], "s", "p", 1);
-        let b = spawn_plan("pi", "w1", None, None, &[], "s", "p", 2);
+        let a = spawn_plan("pi", "w1", None, None, &[], "s", "p", 1, None);
+        let b = spawn_plan("pi", "w1", None, None, &[], "s", "p", 2, None);
         assert_ne!(a.agent_id, b.agent_id);
         assert_ne!(a.app_id, b.app_id);
     }
@@ -763,18 +767,30 @@ mod tests {
     #[test]
     fn test_spawn_plan_substitutes_app_id_and_title() {
         let tmpl: Vec<String> = ["--app-id", "{app_id}", "--title", "{title}"].iter().map(|s| s.to_string()).collect();
-        let plan = spawn_plan("pi", "w1", None, None, &tmpl, "s", "p", 7);
+        let plan = spawn_plan("pi", "w1", None, None, &tmpl, "s", "p", 7, None);
         assert_eq!(plan.term_args, vec!["--app-id", "agent.pi.w1.7", "--title", "Agent [pi]: w1"]);
     }
 
     #[test]
     fn test_spawn_plan_env_carries_socket_agent_project() {
-        let plan = spawn_plan("pi", "w1", None, None, &[], "/run/s.sock", "proj", 5);
+        let plan = spawn_plan("pi", "w1", None, None, &[], "/run/s.sock", "proj", 5, None);
         let e = |k: &str, v: &str| (k.to_string(), v.to_string());
         assert_eq!(
             plan.env,
             vec![e("SWAYVE_SOCKET", "/run/s.sock"), e("SWAYVE_AGENT_ID", "pi-w1-5"), e("SWAYVE_PROJECT_ID", "proj")]
         );
+    }
+
+    #[test]
+    fn test_spawn_plan_sets_parent_env_when_given() {
+        let plan = spawn_plan("pi", "w1", None, None, &[], "s", "p", 5, Some("A-c1-14404"));
+        assert!(plan.env.contains(&("SWAYVE_PARENT_ID".to_string(), "A-c1-14404".to_string())));
+    }
+
+    #[test]
+    fn test_spawn_plan_omits_parent_env_when_absent() {
+        let plan = spawn_plan("pi", "w1", None, None, &[], "s", "p", 5, None);
+        assert!(plan.env.iter().all(|(k, _)| k != "SWAYVE_PARENT_ID"));
     }
 
     fn diff_agent_json(id: &str) -> serde_json::Value {
