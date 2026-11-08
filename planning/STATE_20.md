@@ -31,7 +31,7 @@ Last Updated: 2026-11-08
 - [ ] **Task 20.3.3**: G9 docs (README Socket Contract, ADR 0008 amendment)
 
 ### Wave 3 end gate
-- [ ] `make all` passes serially; `make test` runs Rust, Pi and hook suites. Expect 41 unit, 11 integration. Actual: ___
+- [x] `make all` passes serially; `make test` runs Rust, Pi and hook suites. Expect 41 unit, 11 integration. Actual: 41 unit (1 ignored) / 11 integration / Pi 3/3 / hook test passed. Orchestrator note: the 20.3.2 worker's fixed 300 ms sleep was replaced by sending the Sway window events once a3 appears in the diff stream; the targeted test then passed 5 of 5 runs.
 
 ### Post-wave
 - [ ] adr-distillation: ADR 0013 (diff subscription protocol), index updated.
@@ -95,3 +95,29 @@ Deviations: none (also ran planned `cargo test --lib`). Gotchas: debug is serial
 - Commands: `cargo check` ok; `cargo test --lib broadcast` 2 passed 1 ignored; `cargo test --lib` 39 passed 0 failed 1 ignored; `grep -n SubscribeDiff src/types.rs` -> L68
 - Deviations: added a no-op `AgentIPCMessage::SubscribeDiff => {}` arm in the daemon event-loop match (~L421) because the match is exhaustive; `handle_client` untouched. No new tests (per orchestrator; belong to 20.3.1).
 - Gotchas: `broadcast_status` calls `broadcast_diff` at its end, so all 4 call sites cover diff subscribers. Diff compare uses `serde_json::to_value` (no PartialEq on AgentWindow).
+
+## 20.3.3
+- Status: done. Both acceptance greps pass (`daemon.subscribe_diff` in README count 1; `Amended 2026-11-08` in ADR 0008 count 1).
+- Files changed:
+  - `README.md` line 56: added the `daemon.subscribe` / `daemon.subscribe_diff` bullet as the last bullet of `### Socket Contract` (after the `SWAYVE_SOCKET` bullet, before `---`).
+  - `docs/decisions/0008-push-status-subscription-for-hud.md` line 39: added the `* Amended 2026-11-08 (Orchestration 20): ...` bullet after the "Slow subscribers" bullet (line 38).
+  - `planning/tasks/20.3.3.todo.md`: checkboxes flipped.
+- Commands: `grep -c 'daemon.subscribe_diff' README.md` -> 1; `grep -c 'Amended 2026-11-08' docs/decisions/0008-push-status-subscription-for-hud.md` -> 1.
+- Deviations: none.
+- Gotchas: the ADR 0013 reference dangles until the post-wave adr-distillation step (expected). The "Slow subscribers" bullet still describes the full-list behavior, which now applies only to `daemon.subscribe`; left unedited per spec. Nothing committed or pushed.
+
+## 20.3.1
+- Status: done
+- Files: src/daemon.rs: `handle_client` new `SubscribeDiff` arm (L354-371), event-loop no-op comment updated (L438), 2 new tests (L1035-1073); planning/tasks/20.3.1.todo.md
+- Commands: `cargo test --lib test_diff_subscriber` -> 2 passed, 0 failed. Full `cargo test --lib` not run (orchestrator runs at gate).
+- Deviations: none.
+- Gotchas: `push_diff_subscriber` sends nothing; tests call `broadcast_status()` for the first snapshot. Drop test: second broadcast's diff is dropped (channel full), the first snapshot is still queued; recovery snapshot is sent on the next broadcast. No bug seen in `broadcast_diff`. Nothing committed.
+
+## 20.3.2
+- Status: done
+- Files: tests/integration_tests.rs L1086-1200 (new test appended at end); planning/tasks/20.3.2.todo.md
+- Command: `cargo test --test integration_tests test_diff_stream_matches_daemon_state` -> 1 passed, 0 failed
+- Removal exercised: yes, via DaemonEvent::Sway WindowCreated (agent.pi.diff-a3) then WindowDestroyed (no deregister IPC exists)
+- Final state read: a fresh `daemon.subscribe` (full list) stream's first line, compared to the client map as id-sorted JSON; not the diff stream's own snapshot
+- Deviations: none
+- Gotchas: first run failed (diff read timeout) because the Sway WindowCreated event raced the socket Register; fixed with a 300ms sleep after registering. Every read uses timeout(2s); diff replay loop bounded to 20 lines. Nothing committed.
