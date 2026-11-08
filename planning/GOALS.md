@@ -1,6 +1,6 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-08 (Orchestration 23 complete locally; G45–G57 done except deferred G52 and G58; nothing pushed)
+Last Updated: 2026-11-08 (Orchestration 24 complete locally; G52 re-scoped and built, G58 built; no goals open; nothing pushed since 805fcea)
 Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero warnings, at `8a7f002`; ADRs 0012–0015 recorded). `origin/main` = `96f18af` = local `main` (Orchestration 22 pushed by the user).
 
 ## Circled Goal (Active)
@@ -17,13 +17,7 @@ Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero war
 
 ## Deferred
 
-- **[G58]** The focus cycle owns its cursor: `FocusCycle { last }` with `.next(&agents)` and `.observe(con_id)`, replacing the `last_focused` local in `run_daemon_loops` (`src/daemon.rs` ~413).
-  - Source: [architecture review](ARCHITECTURE_REVIEW_2026-11-08.md), candidate 4. The reviewer judged the gain small: the cycle rule is already one tested function (`next_focus_target`). Do not merge the daemon and CLI focus paths (ADR 0003 keeps the flat fallback).
-  - Trigger: the next change to the focus cycle rules, or G54 landing (it would touch the same loop).
-
-- **[G52]** The daemon sends a delivery ack for each IPC message.
-  - Trigger: a client needs to know its line was applied (for example, a CLI that must wait for registration before it spawns a window), or a wire-format change is approved in an ADR review.
-  - Why deferred: it changes the fire-and-forget contract (ADR 0009, 0014). No current client needs it. G49 covers the test-ordering need without it.
+- None open.
 
 ## Blocked / Pruned
 
@@ -44,6 +38,8 @@ Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero war
 
 ## Completed
 
+- **[G58]** Focus cycle owns its cursor: `FocusCycle` with `observe()` and `next()` in `src/daemon.rs` (`1012fd5`, 24.1.2). Unit tests cover the cursor moves and the no-target case.
+- **[G52]** Re-scoped and built (Orchestration 24, `8c9c420`). `swayve spawn` writes its register line and polls `daemon.subscribe` until the agent is listed, then launches (`register_and_wait`, `src/cli.rs`). The wire ack is pruned: no daemon reply is added, and ADR 0009 and 0014 are unchanged. 2 s timeout, then a warning and launch anyway.
 - **[G54]** Completed in Orchestration 23 (`55489c7`). See `EXECUTION_PLAN_23.md` task for this goal; `STATE_23.md` has the gate results.
 - **[G56]** Completed in Orchestration 23 (`1b1c3b0, 9843d6f`). See `EXECUTION_PLAN_23.md` task for this goal; `STATE_23.md` has the gate results.
 - **[G55]** Completed in Orchestration 23 (`8460157`). See `EXECUTION_PLAN_23.md` task for this goal; `STATE_23.md` has the gate results.
