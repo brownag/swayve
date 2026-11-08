@@ -233,26 +233,13 @@ fi
             prompt,
             parent,
         } => {
-            let base_command = command.unwrap_or_else(|| agent.clone());
-            let actual_command = if let Some(ref p) = prompt {
-                let escaped_prompt = p.replace('\'', "'\\''");
-                let cmd_templated = if base_command.contains("{prompt}") {
-                    base_command.replace("{prompt}", &escaped_prompt)
-                } else {
-                    format!("{} \"{}\"", base_command, escaped_prompt)
-                };
-                format!("bash -c '{}'", cmd_templated)
-            } else {
-                base_command
-            };
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis();
-            let suffix = now % 100000;
-            let agent_id = format!("{}-{}-{}", agent, wave, suffix);
-            let app_id = format!("agent.{}.{}.{}", agent, wave, suffix);
-            let title = format!("Agent [{}]: {}", agent, wave);
+            let plan = spawn_plan(&agent, &wave, command, prompt.as_deref(), &config.terminal.args, now);
+            let agent_id = plan.agent_id.clone();
+            let app_id = plan.app_id.clone();
 
             println!("[spawn] Registering agent {} with daemon...", agent_id);
 
@@ -275,24 +262,7 @@ fi
                 println!("[spawn] Warning: Could not connect to daemon socket at {}. Running in standalone mode.", socket_path);
             }
 
-            // Template terminal command
-            let mut term_args = Vec::new();
-            for arg in &config.terminal.args {
-                if arg == "{command}" {
-                    if let Some(split_cmds) = shlex::split(&actual_command) {
-                        for sub_arg in split_cmds {
-                            term_args.push(sub_arg);
-                        }
-                    } else {
-                        term_args.push(actual_command.clone());
-                    }
-                } else {
-                    let replaced = arg
-                        .replace("{app_id}", &app_id)
-                        .replace("{title}", &title);
-                    term_args.push(replaced);
-                }
-            }
+            let term_args = plan.term_args;
 
             println!(
                 "[spawn] Launching terminal: {} {:?}",
@@ -531,6 +501,57 @@ fn fold_diff_line(map: &mut std::collections::HashMap<String, serde_json::Value>
     true
 }
 
+/// What `swayve spawn` will register and launch. Pure: the clock is passed in.
+#[derive(Debug, PartialEq)]
+pub struct SpawnPlan {
+    pub agent_id: String,
+    pub app_id: String,
+    pub title: String,
+    pub term_args: Vec<String>,
+}
+
+/// Builds the spawn plan. `term_template` is `config.terminal.args`. `{command}` is replaced by
+/// the shell-split command; `{app_id}` and `{title}` are replaced by the derived values.
+pub fn spawn_plan(
+    agent: &str,
+    wave: &str,
+    command: Option<String>,
+    prompt: Option<&str>,
+    term_template: &[String],
+    now_ms: u128,
+) -> SpawnPlan {
+    let base_command = command.unwrap_or_else(|| agent.to_string());
+    let actual_command = if let Some(p) = prompt {
+        let escaped_prompt = p.replace('\'', "'\\''");
+        let cmd_templated = if base_command.contains("{prompt}") {
+            base_command.replace("{prompt}", &escaped_prompt)
+        } else {
+            format!("{} \"{}\"", base_command, escaped_prompt)
+        };
+        format!("bash -c '{}'", cmd_templated)
+    } else {
+        base_command
+    };
+    let suffix = now_ms % 100000;
+    let agent_id = format!("{}-{}-{}", agent, wave, suffix);
+    let app_id = format!("agent.{}.{}.{}", agent, wave, suffix);
+    let title = format!("Agent [{}]: {}", agent, wave);
+
+    let mut term_args = Vec::new();
+    for arg in term_template {
+        if arg == "{command}" {
+            if let Some(split_cmds) = shlex::split(&actual_command) {
+                term_args.extend(split_cmds);
+            } else {
+                term_args.push(actual_command.clone());
+            }
+        } else {
+            term_args.push(arg.replace("{app_id}", &app_id).replace("{title}", &title));
+        }
+    }
+    SpawnPlan { agent_id, app_id, title, term_args }
+}
+
 async fn run_status_watch(socket_path: &str, diff: bool) -> Result<()> {
     use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -659,6 +680,36 @@ fn format_status(status: &crate::types::AgentStatus) -> String {
 mod tests {
     use super::*;
     use clap::Parser;
+
+    #[test]
+    fn test_spawn_plan_escapes_single_quote_in_prompt() {
+        let tmpl = vec!["{command}".to_string()];
+        let plan = spawn_plan("pi", "w1", None, Some("it's"), &tmpl, 1);
+        assert_eq!(plan.term_args, vec!["bash", "-c", "pi \"it's\""]);
+    }
+
+    #[test]
+    fn test_spawn_plan_ids_follow_clock_suffix() {
+        let plan = spawn_plan("pi", "w1", None, None, &[], 12345);
+        assert_eq!(plan.agent_id, "pi-w1-12345");
+        assert_eq!(plan.app_id, "agent.pi.w1.12345");
+        assert_eq!(plan.title, "Agent [pi]: w1");
+    }
+
+    #[test]
+    fn test_spawn_plan_distinct_clock_gives_distinct_ids() {
+        let a = spawn_plan("pi", "w1", None, None, &[], 1);
+        let b = spawn_plan("pi", "w1", None, None, &[], 2);
+        assert_ne!(a.agent_id, b.agent_id);
+        assert_ne!(a.app_id, b.app_id);
+    }
+
+    #[test]
+    fn test_spawn_plan_substitutes_app_id_and_title() {
+        let tmpl: Vec<String> = ["--app-id", "{app_id}", "--title", "{title}"].iter().map(|s| s.to_string()).collect();
+        let plan = spawn_plan("pi", "w1", None, None, &tmpl, 7);
+        assert_eq!(plan.term_args, vec!["--app-id", "agent.pi.w1.7", "--title", "Agent [pi]: w1"]);
+    }
 
     fn diff_agent_json(id: &str) -> serde_json::Value {
         serde_json::json!({
