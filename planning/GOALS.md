@@ -11,11 +11,27 @@ Two orthogonal goals, circled together at the user's request for parallel work (
 
 ## Sequenced Goals (Dependency DAG)
 
-- None open.
+- **[G29]** `daemon.subscribe` bytes are pinned by a golden test for a fixed agent state.
+  - Depends on: none
+- **[G30]** A socket-level test shows a stalled diff subscriber recovers with a snapshot once it resumes reading.
+  - Depends on: none
+- **[G31]** The diff path is measured at the G9 N and K grid, with per-subscriber memory recorded.
+  - Depends on: none
+- **[G32]** `AgentWindow` comparison is decided and implemented: derive `PartialEq`, or keep `to_value`, based on G31 numbers.
+  - Depends on: G31
+- **[G33]** `status --watch` can opt into the diff stream.
+  - Depends on: G30 (diff recovery proven at socket level)
 
 ## Independent Backlog
 
-- None open.
+- **[G34]** Foreign-owner checks in `ensure_private_dir` and `start_daemon_ipc` are tested by injecting the owner uid.
+  - Depends on: none
+- **[G35]** A non-UTF-8 IPC line has a decided policy (skip or close client) and a test pins it.
+  - Depends on: none
+- **[G36]** A relative or empty `XDG_CONFIG_HOME` logs a one-line warning before falling back.
+  - Depends on: none
+- **[G37]** Integration tests replace fixed startup sleeps with readiness checks.
+  - Depends on: none
 
 ## Blocked / Pruned
 
