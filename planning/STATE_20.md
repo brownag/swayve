@@ -17,7 +17,7 @@ Last Updated: 2026-11-08
 
 ### Wave 1 end gate
 - [x] `make all` passes serially. Expect 39 unit (35 + 4) and 10 integration. Actual: 39 unit (1 ignored) / 10 integration / Pi 3/3 / hook test passed.
-- [ ] Orchestrator reviews 20.1.1 numbers and records the D7 decision here: D7 condition met (release N=50 K=10 = 27.3 us; debug N=50 K=10 = 214.9 us; both under 1 ms). Per D7, Wave 2 waits for the user's go-ahead. Decision: ___
+- [ ] Orchestrator reviews 20.1.1 numbers and records the D7 decision here: D7 condition met (release N=50 K=10 = 27.3 us; debug N=50 K=10 = 214.9 us; both under 1 ms). Per D7, Wave 2 waits for the user's go-ahead. Decision: PROCEED (user, 2026-11-08: diff stream ships for public release).
 
 ### Wave 2: Diff Core (blocked until D7 recorded)
 - [ ] **Task 20.2.1**: `SubscribeDiff` message and diff broadcast core (`src/types.rs`, `src/daemon.rs`)
@@ -88,3 +88,10 @@ Deviations: none (also ran planned `cargo test --lib`). Gotchas: debug is serial
 - Test: `cargo test --lib test_config_path` -> 4 passed, 0 failed
 - Deviations: none (full `cargo test --lib` not run, per orchestrator; left for the wave gate)
 - Gotchas: HOME unset with absolute XDG set now loads from XDG. `parse_config_file` untouched. The home_only test also asserts (None, None) -> None.
+
+## 20.2.1
+- Status: done
+- Files: src/types.rs L65-68 (`SubscribeDiff`); src/daemon.rs: `SubMode`/`Subscriber` + `subscribers` field (~L13-28), `push_full/diff_subscriber` + `broadcast_status` + new `broadcast_diff` (~L45-130), `DaemonEvent::SubscribeDiff` variant + handler, 4 test sites -> `push_full_subscriber`; planning/tasks/20.2.1.todo.md
+- Commands: `cargo check` ok; `cargo test --lib broadcast` 2 passed 1 ignored; `cargo test --lib` 39 passed 0 failed 1 ignored; `grep -n SubscribeDiff src/types.rs` -> L68
+- Deviations: added a no-op `AgentIPCMessage::SubscribeDiff => {}` arm in the daemon event-loop match (~L421) because the match is exhaustive; `handle_client` untouched. No new tests (per orchestrator; belong to 20.3.1).
+- Gotchas: `broadcast_status` calls `broadcast_diff` at its end, so all 4 call sites cover diff subscribers. Diff compare uses `serde_json::to_value` (no PartialEq on AgentWindow).
