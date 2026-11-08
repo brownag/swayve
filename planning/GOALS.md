@@ -1,20 +1,46 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-08
-Source State: STATE_19.md (Orchestration 19 complete; `make all` passes at each wave gate; ADR 0012 recorded)
+Source State: STATE_21.md (Orchestration 21 complete; `make all` green, zero warnings, at `dc2c4e5`; ADRs 0012–0014 recorded)
 
 ## Circled Goal (Active)
 
-Two orthogonal goals, circled together at the user's request for parallel work (2026-11-08). Public release is the reason; both are in scope for it.
-
-- None open. G9 and G10 are complete (see Completed).
+- None open. No remaining goal has downstream dependents, so there is no root to circle. The highest-leverage item is **[G38]**, and it needs your approval (remote write).
 
 ## Sequenced Goals (Dependency DAG)
 
 - None open. G29–G37 are complete (see Completed).
 
+## Independent Backlog
+
+- **[G39]** The `status --watch --diff` fold is covered by an end-to-end test, not only by parse tests.
+  - Why: the fold in `run_status_watch` (`src/cli.rs`) is the only diff consumer in this repo, and it has no behavioural test.
+  - Exit criteria: a test feeds a snapshot, an upsert and a remove line through the fold and asserts the rendered agent list. Refactor the fold into a pure helper only if needed to test it.
+  - First action: read `run_status_watch` and decide between a pure helper and a test that drives the socket.
+  - Depends on: none.
+- **[G40]** The 10 event-ordering sleeps left in `tests/integration_tests.rs` (G37, D8) are replaced with explicit daemon acknowledgements.
+  - Why: those sleeps are the remaining flake risk in the integration suite.
+  - Exit criteria: no fixed sleep orders daemon events in `tests/integration_tests.rs`; `cargo test --test integration_tests` passes 5 runs in a row.
+  - First action: decide whether the daemon needs an ack message, or whether each sleep can poll an observable state (the status query on a second connection, as in `tests/slow_consumer.rs`).
+  - Depends on: none. May need a `src/` change, so it needs its own plan.
+- **[G41]** Delete the three merged local branches `docs/adr-distillation`, `docs/agents-md-structure` and `docs/task-4.1-checkoff`.
+  - Why: all three are fully merged into `main` (verified 2026-11-08). They are leftover clutter.
+  - Exit criteria: `git branch --list` shows only `main`.
+  - First action: `git branch -d` each one; `-d` refuses if any is unmerged.
+  - Depends on: none.
+
+## Deferred
+
+- **[G42]** `AgentWindow` derives `PartialEq` and the diff broadcast compares with `==` (revisit of G32).
+  - Trigger: the release N=50 K=10 measurement passes 1 ms, or the fleet grows past about 50 agents with 10 subscribers. Current: 621 µs at N=50 K=10, 2.4 ms at N=200 K=10 (`STATE_21.md`).
+- **[G43]** Per-client rate limit on undecodable or malformed IPC lines (ADR 0014 negative consequence).
+  - Trigger: a real client is observed flooding bad lines, or a log shows a noisy skip.
+
 ## Blocked / Pruned
 
+- **[G38]** Publish the local commits to `origin/main`. `origin/main` is 59 commits behind `main`.
+  - Status: Blocked / User Approval
+  - Reason: a remote write needs your explicit go-ahead (CLAUDE.md: no remote write operations). Nothing in the repo blocks it. Say the word and I will push.
 - **[G25]** The external Antigravity sidecar ships against the documented socket contract.
   - Status: Blocked / External Watch
   - Reason: the sidecar is built and owned outside this repo. Its internal prerequisites, G22 and G24, are complete.
