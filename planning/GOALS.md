@@ -1,21 +1,30 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-08
-Source State: STATE_28.md (Orchestration 28 closed at `b37b0e2`). Correction 2026-11-08: G80 was marked Completed in error; its residual is reopened as the Circled Goal. Earlier: STATE_27.md (Orchestration 27 closed at `1f79de0`). G79–G81 were added from `planning/ARCHITECTURE_REVIEW_2026-11-08_FOLLOWUP.md` (reviewed at `17c72ce`; static review, tests not run). Earlier: STATE_26.md (Orchestration 26 closed at `00a4675`; `make all` green; pushed to `origin/main`). Correction 2026-11-08: the architecture review candidates G67–G70 were already done in earlier orchestrations; the earlier ranking missed git history and is withdrawn.
+Source State: magic-wand re-rank on 2026-11-08 (after Orchestration 30, HEAD `8d78ec0`; scope: swayve repo, planning docs, code markers, `cargo audit`). Earlier: STATE_28.md (Orchestration 28 closed at `b37b0e2`). Correction 2026-11-08: G80 was marked Completed in error; its residual is reopened as the Circled Goal. Earlier: STATE_27.md (Orchestration 27 closed at `1f79de0`). G79–G81 were added from `planning/ARCHITECTURE_REVIEW_2026-11-08_FOLLOWUP.md` (reviewed at `17c72ce`; static review, tests not run). Earlier: STATE_26.md (Orchestration 26 closed at `00a4675`; `make all` green; pushed to `origin/main`). Correction 2026-11-08: the architecture review candidates G67–G70 were already done in earlier orchestrations; the earlier ranking missed git history and is withdrawn.
 
 ## Circled Goal (Active)
 
-None. G74 closed in Orchestration 30 (see Completed). No sequenced goals remain.
+- **[G82]** Daemon-spawned children are reaped. The daemon drops every `Child` it launches: lifecycle hook commands (`execute_lifecycle_hook`, `src/daemon.rs:~323`) and monitor terminals (`spawn_monitor_terminal`, `src/daemon.rs:~276`). The daemon is long-lived, so each exited child stays a zombie until the daemon exits. Scope widened from hooks alone during the 2026-11-08 audit.
+  - Why now: it is a reproducible leak in the long-running process, and the fix is local. It is the only open defect the audit confirmed in the daemon. It also touches `daemon.rs`, so it is the change that G78 names as a trigger; the added lines are few, so G78 stays deferred.
+  - Exit criteria: a test runs a daemon-spawned hook (`exit 0`) and a monitor launch, waits for them, and asserts neither is left as a zombie child of the test process (for example by reading `/proc/self/task/*/children` or the child's `/proc/<pid>/stat` state). Targeted `cargo test --lib` and `cargo test --test integration_tests` pass; serial `make all` exit 0, zero warnings.
+  - First action: write the failing zombie test for the hook path in `src/daemon.rs`'s test module, then reap the `Child` (a waiter thread or a `tokio::process::Child`) in one helper that both launch paths call.
 
 ## Sequenced Goals (Dependency DAG)
 
+None. No open goal depends on another.
+
 ## Independent Backlog
 
-- **[G82]** Lifecycle hook children are reaped. `execute_lifecycle_hook` (`src/daemon.rs`) drops the `Child` without `wait`, so exited hooks stay zombies until the daemon exits. Found during Orchestration 30.
+- **[G83]** `cargo audit` reports no unsound or vulnerable crate in `Cargo.lock`. Today it reports RUSTSEC-2026-0386 ("`AsyncFd::new` and related constructors violate I/O safety") against `tokio 1.53.1`, which swayve depends on directly. Found during the 2026-11-08 audit. Not verified: whether the advisory's code path is reachable from swayve, and whether a patched tokio release exists.
+  - First action: read RUSTSEC-2026-0386 for the patched version and affected constructors. If a patched tokio exists, bump it and run `make all`. If none exists or the path is unreachable, record that in this entry and ignore the advisory with a reason in the audit configuration.
 - **[G73]** `npm run build` (or a `typecheck` script) type-checks `integrations/pi/tests/`. Today `tsconfig` includes only `src/`, and `tsx --test` skips type checks. Found during Orchestration 26 (task 26.1.1).
 - **[G75]** The planning design docs (`planning/Sway Multi Agent Architecture Design.md`, `planning/Sway Multi-Agent Viewer Architecture.md`) carry a header that marks them historical and points to the ADRs and the current protocol.
 
 ## Deferred
+
+- **[G84]** Decisions from Orchestrations 25–30 that outlive their plans are recorded as ADRs: the single argv helper and bare-splice rule (`expand_terminal_args`, G80), the pure spawn plan (G60, G64), and the hook env contract and test seam (G74). The existing ADR 0006 already covers the env names. Found during the 2026-11-08 audit.
+  - Trigger: before `planning/` archives EXECUTION_PLAN_25–30 (the `adr-distillation` step in `wave-orchestration`).
 
 - **[G66]** The two timing benchmarks in `src/daemon.rs` (`measure_broadcast_cost`, `measure_broadcast_cost_diff`) run in a gate, or are retired.
   - Trigger: a suspected broadcast performance regression, or a decision to add a perf gate.
