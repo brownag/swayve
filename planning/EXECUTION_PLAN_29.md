@@ -1,7 +1,7 @@
 # Execution Plan 29: one argv path for all three launches (G80 residual)
 
 Source: `planning/GOALS.md` Circled Goal G80 (residual). Reopened after Orchestration 28 closed the monitor and panel paths.
-Recon base: `planning/STATE_28.md`, HEAD `2b6898f`. Status: draft for approval.
+Recon base: `planning/STATE_28.md`, HEAD `2b6898f`. Status: approved (user ran `/wave-orchestration run plan 29`); executed, closed 2026-11-08.
 
 ## Goal & Scope
 

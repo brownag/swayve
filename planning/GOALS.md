@@ -5,13 +5,7 @@ Source State: STATE_28.md (Orchestration 28 closed at `b37b0e2`). Correction 202
 
 ## Circled Goal (Active)
 
-- **[G80]** (residual) Terminal launches share one argv path for all three launches, and an argv-capture test covers each one. Reopened: Orchestration 28 closed the monitor and panel paths, but the agent launch (`spawn_plan`) still has its own inline `{command}` expansion, and no argv-capture test covers a whitespace path, a quoted prompt and a shell template.
-  - Why now: no upstream blockers. It closes the open item in STATE_28.md and the last G80 exit criterion, and it unblocks G74.
-  - Decision (2026-11-08): the shared helper keeps the bare-splice rule. A bare `{command}` entry splices the argv in, and `{app_id}`/`{title}` substitute in other entries. All documented templates use bare entries. `spawn_plan` shlex-splits the user command, then calls the helper.
-  - Exit criteria: an integration argv-capture test covers the agent launch with a whitespace path, a quoted prompt and a shell template, alongside the existing monitor and panel tests. `make all` serial exit 0, zero warnings.
-  - Scope: `src/cli.rs` (`spawn_plan` ~541, `expand_terminal_args` ~533), `tests/integration_tests.rs`, and `src/daemon.rs` only if the monitor path changes.
-  - Constraints: preserve ADR 0006 and 0010. Keep the existing spawn-plan extraction (G60, G64). Keep `terminal.args` unchanged.
-  - First action: write a failing argv-capture test for the agent launch with a quoted prompt and a shell template, and record what it produces today.
+None. G80 closed in Orchestration 29 (see Completed). G74 is the next goal.
 
 ## Sequenced Goals (Dependency DAG)
 
@@ -62,6 +56,7 @@ Source State: STATE_28.md (Orchestration 28 closed at `b37b0e2`). Correction 202
 
 ## Completed
 
+- **[G80]** Agent, monitor and panel terminal launches share one argv path. `spawn_plan` shlex-splits the command and calls `expand_terminal_args`. An integration test runs the real binary and pins the agent argv (whitespace path, quoted prompt, shell template) (`bcbe4a0`, `c2ce284`; Orchestration 29; `make all` serial exit 0, zero warnings).
 - **[G81]** Subscription lifetime owned in one place. Unchanged diff broadcasts drop closed subscriber channels, and one `subscriber_writer` serves full and diff modes (`04da0d4`, `7726496`; Orchestration 28; `make all` serial exit 0, zero warnings).
 - **[G79]** Agent identity and window ownership are coherent: re-registration keeps the container binding, rebinding releases the old window, the CLI and Pi derive the same `app_id` (lossless, `agent.<agent_id>`), and binding publishes to subscribers (`3bdc05c`, `b5932dd`, `de3fc7a`, `256974c`; Orchestration 28; `make all` serial exit 0, zero warnings).
 - **[G72]** `make check` runs `cargo clippy --all-targets -- -D warnings`, so `make all` fails on any lint warning (Orchestration 27, `1f79de0`; `make all` serial exit 0, zero warnings).
