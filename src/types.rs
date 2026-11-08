@@ -27,7 +27,7 @@ pub enum AgentStatus {
     Failed(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AgentWindow {
     pub id: AgentId,
     pub project: ProjectId,

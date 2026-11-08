@@ -97,9 +97,7 @@ impl DaemonState {
                 let up = agents
                     .iter()
                     .filter(|(id, a)| {
-                        sent.get(*id).is_none_or(|old| {
-                            serde_json::to_value(old).ok() != serde_json::to_value(a).ok()
-                        })
+                        sent.get(*id).is_none_or(|old| old != *a)
                     })
                     .map(|(_, a)| a)
                     .collect();
@@ -1159,7 +1157,7 @@ mod tests {
     #[test]
     #[ignore]
     fn measure_broadcast_cost_diff() {
-        for n in [5usize, 20, 50, 200] {
+        for n in [5usize, 20, 50, 200, 1000] {
             for k in [1usize, 10] {
                 let mut state = DaemonState::new(Config::default());
                 for i in 0..n {
