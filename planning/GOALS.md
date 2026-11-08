@@ -39,13 +39,6 @@ None. No open goal depends on another.
 - **[G65]** Daemon-launched monitor terminals get the same child env as `swayve spawn`.
   - Status: Pruned
   - Reason: `spawn_monitor_terminal` (`src/daemon.rs`, around line 287) runs the monitor with `.args(...)` and no env, and nothing in the repo reads `SWAYVE_SOCKET`, `SWAYVE_AGENT_ID`, or `SWAYVE_PROJECT_ID` from that process (Orchestration 26, D3).
-- **[G25]** The external Antigravity sidecar ships against the documented socket contract.
-  - Status: Open
-  - Reason: the sidecar is built in `integrations/antigravity/` in this repo, not yet started. Its internal prerequisites, G22 and G24, are complete.
-  - Agent prompt: `planning/external/antigravity-sidecar.prompt.md`. It covers `SWAYVE_PARENT_ID`, which the daemon does not set today.
-- **[G15]** An Antigravity sidecar integration exists in this repo. `integrations/antigravity/` has a README only.
-  - Status: Open
-  - Reason: the sidecar lives in `integrations/antigravity/` in this repo. Its internal prerequisites are complete. The remaining work is the sidecar itself. Same prompt as G25.
 - **[G53]** The external HUD consumes `daemon.subscribe_diff` and folds the stream.
   - Status: Open
   - Reason: no HUD repo exists yet. The G53 prompt scaffolds `~/workspace/swayve-hud`. The daemon side is complete (G9).
@@ -56,6 +49,8 @@ None. No open goal depends on another.
 
 ## Completed
 
+- **[G25]** The Antigravity sidecar ships against the documented socket contract (`7f7fbcb`; Orchestration 33). `sidecar.mjs` emits only `agent.register`, `agent.update_status` and `daemon.focus`. Targeted `node --test` 10/10; live `make daemon-dry` log confirmed the register line.
+- **[G15]** An Antigravity sidecar integration exists in `integrations/antigravity/` (`7f7fbcb`; Orchestration 33). Same work as G25.
 - **[G83]** `cargo audit` is clean for `Cargo.lock`. `tokio` moved from 1.53.1 to 1.53.3 (lockfile only), which clears RUSTSEC-2026-0386 (`AsyncFd` constructors; swayve makes no direct `AsyncFd` call) (`cfab81d`; Orchestration 32; `make all` serial exit 0, zero warnings).
 - **[G73]** `npm run build` type-checks `integrations/pi/tests/`. `tsconfig.test.json` (no emit) and a `typecheck` script run after `tsc` in `build`. A red probe (`TS2322`) confirmed the check fails on a type error (`e0ef35b`; Orchestration 32; `make all` serial exit 0, zero warnings).
 - **[G75]** Both early design docs carry a historical header pointing to ADRs 0003, 0004, 0009 and the README socket contract. Body text is unchanged (`200524b`; Orchestration 32; `make all` serial exit 0, zero warnings).
