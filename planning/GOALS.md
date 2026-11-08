@@ -49,7 +49,7 @@ None. No open goal depends on another.
 
 ## Completed
 
-- **[G25]** The Antigravity sidecar ships against the documented socket contract (`7f7fbcb`; Orchestration 33). `sidecar.mjs` emits only `agent.register`, `agent.update_status` and `daemon.focus`. Targeted `node --test` 10/10; live `make daemon-dry` log confirmed the register line.
+- **[G25]** The Antigravity sidecar ships against the documented socket contract (`7f7fbcb`; Orchestration 33). `sidecar.mjs` emits only `agent.register`, `agent.update_status` and `daemon.focus`, supports Antigravity `hook <Event>` mode (`stdout` JSON contract) and `ANTIGRAVITY_*` env fallbacks. Targeted `node --test` 13/13; live `make daemon-dry` log confirmed the register and hook lines.
 - **[G15]** An Antigravity sidecar integration exists in `integrations/antigravity/` (`7f7fbcb`; Orchestration 33). Same work as G25.
 - **[G83]** `cargo audit` is clean for `Cargo.lock`. `tokio` moved from 1.53.1 to 1.53.3 (lockfile only), which clears RUSTSEC-2026-0386 (`AsyncFd` constructors; swayve makes no direct `AsyncFd` call) (`cfab81d`; Orchestration 32; `make all` serial exit 0, zero warnings).
 - **[G73]** `npm run build` type-checks `integrations/pi/tests/`. `tsconfig.test.json` (no emit) and a `typecheck` script run after `tsc` in `build`. A red probe (`TS2322`) confirmed the check fails on a type error (`e0ef35b`; Orchestration 32; `make all` serial exit 0, zero warnings).

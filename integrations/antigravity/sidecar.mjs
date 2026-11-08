@@ -2,14 +2,46 @@
 // Antigravity sidecar: sends one Swayve IPC line per run over the daemon socket.
 // Best-effort: every failure logs one stderr line and exits 0 (D5). Never reads the socket.
 
+import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const SIMPLE_STATUSES = ["idle", "thinking", "executing_tool", "awaiting_human_input", "completed"];
 
+const HOOK_DEFAULT_STATUS = {
+  SessionStart: "thinking",
+  PreToolUse: "executing_tool",
+  PostToolUse: "thinking",
+  PreInvocation: "thinking",
+  PostInvocation: "thinking",
+  Stop: "idle",
+};
+
+function normalizeParentId(parentAgentId) {
+  return parentAgentId ? parentAgentId : null;
+}
+
+export function hookPayload(event) {
+  if (event === "PreToolUse") return JSON.stringify({ decision: "allow" });
+  if (event === "Stop") return JSON.stringify({ decision: "allow_stop" });
+  return "{}";
+}
+
+export function hookLines(event, agent, overrideCmd, overrideValue) {
+  if (overrideCmd === "register") return [registerLine(agent)];
+  if (overrideCmd === "status") return [statusLine({ agentId: agent.agentId, status: overrideValue })];
+  if (overrideCmd === "focus") return [focusLine()];
+  if (overrideCmd) throw new Error(`unknown hook action: ${overrideCmd}`);
+  const status = HOOK_DEFAULT_STATUS[event];
+  if (!status) throw new Error(`unknown hook event: ${event ?? "(none)"}`);
+  if (event === "SessionStart") {
+    return [registerLine(agent), statusLine({ agentId: agent.agentId, status })];
+  }
+  return [statusLine({ agentId: agent.agentId, status })];
+}
+
 export function registerLine({ agentId, projectId, pid, parentAgentId }) {
-  const parent = parentAgentId === undefined || parentAgentId === null || parentAgentId === "" ? null : parentAgentId;
   return JSON.stringify({
     method: "agent.register",
     params: {
@@ -18,7 +50,7 @@ export function registerLine({ agentId, projectId, pid, parentAgentId }) {
       project_id: projectId,
       pid,
       app_id: `agent.${agentId}`,
-      parent_agent_id: parent,
+      parent_agent_id: normalizeParentId(parentAgentId),
     },
   });
 }
@@ -46,17 +78,21 @@ export function resolveSocketPath(env) {
   return null;
 }
 
-export function resolveEnv(env, ppid) {
-  const agentId = env.SWAYVE_AGENT_ID;
+export function resolveEnv(env, ppid, stdinJson) {
+  const agentId = env.SWAYVE_AGENT_ID || env.ANTIGRAVITY_CONVERSATION_ID || stdinJson?.conversationId;
   if (!agentId) return null;
   const pidText = env.SWAYVE_AGENT_PID ?? "";
   // ponytail: strict digits only, so "12abc" falls back to ppid.
   const pid = /^[1-9]\d*$/.test(pidText) ? Number(pidText) : ppid;
+  const workspaceProject =
+    Array.isArray(stdinJson?.workspacePaths) && stdinJson.workspacePaths[0]
+      ? path.basename(stdinJson.workspacePaths[0])
+      : "";
   return {
     agentId,
-    projectId: env.SWAYVE_PROJECT_ID ?? "",
+    projectId: env.SWAYVE_PROJECT_ID || env.ANTIGRAVITY_PROJECT_ID || workspaceProject || "",
     pid,
-    parentAgentId: env.SWAYVE_PARENT_ID || null,
+    parentAgentId: normalizeParentId(env.SWAYVE_PARENT_ID),
   };
 }
 
@@ -64,20 +100,63 @@ function logAndSkip(msg) {
   process.stderr.write(`swayve-sidecar: ${msg}\n`);
 }
 
-function send(socketPath, line) {
+function send(socketPath, lines) {
+  const payload = (Array.isArray(lines) ? lines.join("\n") : lines) + "\n";
   const socket = net.createConnection(socketPath, () => {
-    socket.end(line + "\n");
+    socket.end(payload);
   });
   socket.on("error", (err) => {
     logAndSkip(`send failed: ${err.message}`);
   });
 }
 
-export function main(argv, env, ppid) {
-  const [cmd, value] = argv;
+function parseStdinJson(stdinText) {
+  if (!stdinText || !stdinText.trim()) return null;
+  try {
+    return JSON.parse(stdinText);
+  } catch {
+    return null;
+  }
+}
+
+export function main(argv, env, ppid, options = {}) {
+  const [cmd, value, extraCmd, extraValue] = argv;
+  const writeStdout = options.writeStdout ?? ((s) => process.stdout.write(s));
+
+  if (cmd === "hook") {
+    const event = value;
+    writeStdout(hookPayload(event) + "\n");
+    const socketPath = resolveSocketPath(env);
+    if (!socketPath) {
+      logAndSkip("no socket path (set SWAYVE_SOCKET or XDG_RUNTIME_DIR); skipped");
+      return;
+    }
+    if (extraCmd === "focus") {
+      send(socketPath, focusLine());
+      return;
+    }
+    const stdinJson = parseStdinJson(options.stdinText);
+    const agent = resolveEnv(env, ppid, stdinJson);
+    if (!agent) {
+      logAndSkip("SWAYVE_AGENT_ID is not set; skipped");
+      return;
+    }
+    try {
+      const lines = hookLines(event, agent, extraCmd, extraValue);
+      send(socketPath, lines);
+    } catch (err) {
+      logAndSkip(err.message);
+    }
+    return;
+  }
+
   const socketPath = resolveSocketPath(env);
   if (!socketPath) {
     logAndSkip("no socket path (set SWAYVE_SOCKET or XDG_RUNTIME_DIR); skipped");
+    return;
+  }
+  if (cmd === "focus") {
+    send(socketPath, focusLine());
     return;
   }
   const agent = resolveEnv(env, ppid);
@@ -91,10 +170,8 @@ export function main(argv, env, ppid) {
       line = registerLine(agent);
     } else if (cmd === "status") {
       line = statusLine({ agentId: agent.agentId, status: value });
-    } else if (cmd === "focus") {
-      line = focusLine();
     } else {
-      logAndSkip(`unknown subcommand: ${cmd ?? "(none)"}; expected register|status|focus`);
+      logAndSkip(`unknown subcommand: ${cmd ?? "(none)"}; expected register|status|focus|hook`);
       return;
     }
   } catch (err) {
@@ -105,5 +182,13 @@ export function main(argv, env, ppid) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  main(process.argv.slice(2), process.env, process.ppid);
+  let stdinText = "";
+  if (process.argv[2] === "hook" && !process.stdin.isTTY) {
+    try {
+      stdinText = fs.readFileSync(0, "utf8");
+    } catch {
+      stdinText = "";
+    }
+  }
+  main(process.argv.slice(2), process.env, process.ppid, { stdinText });
 }

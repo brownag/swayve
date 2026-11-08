@@ -1,11 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import net from "node:net";
+import os from "node:os";
+import path from "node:path";
 import {
   registerLine,
   statusLine,
   focusLine,
+  hookPayload,
+  hookLines,
   resolveSocketPath,
   resolveEnv,
+  main,
 } from "./sidecar.mjs";
 
 // Asserts structural equality (JSON.parse + deepEqual) and byte equality with key order from the contract.
@@ -30,8 +37,8 @@ test("register for a subagent sends the parent id", () => {
   checkWire(line, expected);
 });
 
-test("register for a root agent sends null for empty and undefined parent", () => {
-  for (const parentAgentId of ["", undefined]) {
+test("register for a root agent sends null for null, empty, and undefined parent", () => {
+  for (const parentAgentId of [null, "", undefined]) {
     const line = registerLine({ agentId: "a-1", projectId: "swayve", pid: 42, parentAgentId });
     assert.equal(JSON.parse(line).params.parent_agent_id, null);
   }
@@ -82,4 +89,86 @@ test("resolveEnv: bad SWAYVE_AGENT_PID falls back to ppid", () => {
 
 test("resolveEnv: empty SWAYVE_PARENT_ID means null", () => {
   assert.equal(resolveEnv({ SWAYVE_AGENT_ID: "a-1", SWAYVE_PARENT_ID: "" }, 1).parentAgentId, null);
+});
+
+test("resolveEnv: falls back to ANTIGRAVITY_CONVERSATION_ID and ANTIGRAVITY_PROJECT_ID, SWAYVE_* wins", () => {
+  const fallback = resolveEnv(
+    { ANTIGRAVITY_CONVERSATION_ID: "conv-123", ANTIGRAVITY_PROJECT_ID: "agy-proj" },
+    77,
+  );
+  assert.deepEqual(fallback, {
+    agentId: "conv-123",
+    projectId: "agy-proj",
+    pid: 77,
+    parentAgentId: null,
+  });
+
+  const override = resolveEnv(
+    {
+      SWAYVE_AGENT_ID: "sway-1",
+      SWAYVE_PROJECT_ID: "sway-proj",
+      ANTIGRAVITY_CONVERSATION_ID: "conv-123",
+      ANTIGRAVITY_PROJECT_ID: "agy-proj",
+    },
+    77,
+  );
+  assert.equal(override.agentId, "sway-1");
+  assert.equal(override.projectId, "sway-proj");
+
+  const fromStdin = resolveEnv({}, 77, {
+    conversationId: "stdin-conv",
+    workspacePaths: ["/home/user/workspace/swayve"],
+  });
+  assert.equal(fromStdin.agentId, "stdin-conv");
+  assert.equal(fromStdin.projectId, "swayve");
+});
+
+test("focus runs without SWAYVE_AGENT_ID over a local Unix socket", async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "swayve-agy-test-"));
+  const sockPath = path.join(tmpDir, "test.sock");
+  const received = await new Promise((resolve, reject) => {
+    const server = net.createServer((conn) => {
+      let buf = "";
+      conn.setEncoding("utf8");
+      conn.on("data", (chunk) => {
+        buf += chunk;
+      });
+      conn.on("end", () => {
+        server.close(() => resolve(buf));
+      });
+    });
+    server.on("error", reject);
+    server.listen(sockPath, () => {
+      main(["focus"], { SWAYVE_SOCKET: sockPath }, 100);
+    });
+  });
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+  assert.equal(received, '{"method":"daemon.focus"}\n');
+});
+
+test("hookPayload and hook mode emit required Antigravity stdout JSON and socket lines", async () => {
+  assert.equal(hookPayload("PreToolUse"), '{"decision":"allow"}');
+  assert.equal(hookPayload("Stop"), '{"decision":"allow_stop"}');
+  assert.equal(hookPayload("PostToolUse"), "{}");
+  assert.equal(hookPayload("SessionStart"), "{}");
+
+  const agent = { agentId: "a-1", projectId: "swayve", pid: 42, parentAgentId: null };
+  assert.equal(hookLines("SessionStart", agent).length, 2);
+  assert.equal(JSON.parse(hookLines("SessionStart", agent)[0]).method, "agent.register");
+  assert.equal(JSON.parse(hookLines("SessionStart", agent)[1]).params.status, "thinking");
+  assert.equal(JSON.parse(hookLines("PreToolUse", agent)[0]).params.status, "executing_tool");
+  assert.equal(JSON.parse(hookLines("PostToolUse", agent)[0]).params.status, "thinking");
+  assert.equal(JSON.parse(hookLines("Stop", agent)[0]).params.status, "idle");
+
+  // Even without a socket path, hook mode always writes valid JSON to stdout
+  const out = [];
+  for (const ev of ["PreToolUse", "PostToolUse", "SessionStart", "Stop"]) {
+    main(["hook", ev], {}, 100, { writeStdout: (s) => out.push(s) });
+  }
+  assert.deepEqual(out, [
+    '{"decision":"allow"}\n',
+    "{}\n",
+    "{}\n",
+    '{"decision":"allow_stop"}\n',
+  ]);
 });

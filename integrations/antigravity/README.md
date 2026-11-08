@@ -10,15 +10,15 @@ Google Antigravity orchestrates AI coding workflows across agents and subagent t
 
 ## Environment Variables
 
-These variables are supplied by the launcher, not by the swayve daemon. `swayve spawn` sets `SWAYVE_SOCKET`, `SWAYVE_AGENT_ID`, `SWAYVE_PROJECT_ID` and, for a subagent, `SWAYVE_PARENT_ID` (`src/cli.rs:564-570`). The daemon does not set `SWAYVE_PARENT_ID`, `SWAYVE_AGENT_PID`, or any other variable below.
+These variables are supplied by the launcher (`swayve spawn`) or by the Antigravity runtime (`agy`), not by the swayve daemon. `swayve spawn` sets `SWAYVE_SOCKET`, `SWAYVE_AGENT_ID`, `SWAYVE_PROJECT_ID` and, for a subagent, `SWAYVE_PARENT_ID` (`src/cli.rs:564-570`). When running inside Antigravity without `swayve spawn`, `agy` sets `ANTIGRAVITY_CONVERSATION_ID` and `ANTIGRAVITY_PROJECT_ID` in child environments and passes `conversationId` / `workspacePaths` on `stdin` to lifecycle hooks.
 
 | Variable | Description | Example |
 | :--- | :--- | :--- |
-| `SWAYVE_SOCKET` | Path to the active Swayve IPC Unix domain socket. Empty counts as unset. Default: $XDG_RUNTIME_DIR/swayve/swayve.sock (`src/cli.rs:118-126`, `src/cli.rs:73-82`). Set SWAYVE_SOCKET to override. | `$XDG_RUNTIME_DIR/swayve/swayve.sock` |
-| `SWAYVE_AGENT_ID` | Unique ID of the agent instance. Supplied by the launcher. Required by the sidecar; when missing, the sidecar logs and sends nothing. | `agy-agent-8f3a` |
-| `SWAYVE_PROJECT_ID` | Project / workspace ID. Supplied by the launcher. | `swayve-dev` |
+| `SWAYVE_SOCKET` | Path to the active Swayve IPC Unix domain socket. Empty counts as unset. Default: `$XDG_RUNTIME_DIR/swayve/swayve.sock` (`src/cli.rs:118-126`, `src/cli.rs:73-82`). Set `SWAYVE_SOCKET` to override. | `$XDG_RUNTIME_DIR/swayve/swayve.sock` |
+| `SWAYVE_AGENT_ID` | Unique ID of the agent instance. Falls back to `ANTIGRAVITY_CONVERSATION_ID` (set by `agy`), or `conversationId` from hook `stdin` JSON in `hook` mode. Required for `register` and `status` (not required for `focus`). | `agy-agent-8f3a` |
+| `SWAYVE_PROJECT_ID` | Project / workspace ID. Falls back to `ANTIGRAVITY_PROJECT_ID` (set by `agy`), or the basename of `workspacePaths[0]` from hook `stdin` JSON, or `""`. | `swayve-dev` |
 | `SWAYVE_PARENT_ID` | Agent ID of the spawning parent agent (if subagent). Supplied by the launcher. Empty or unset means a root agent (`parent_agent_id: null`). | `parent-agent-001` |
-| `SWAYVE_AGENT_PID` | PID reported in `agent.register`. Supplied by the launcher. Must be a positive integer. If unset or invalid, the sidecar falls back to `process.ppid`. The fallback is unverified and is checked by the live test. | `48201` |
+| `SWAYVE_AGENT_PID` | PID reported in `agent.register`. Supplied by the launcher. Must be a positive integer. If unset or invalid, the sidecar falls back to `process.ppid`. When invoked from Antigravity `hooks.json` (`sh -c`), prefix the hook command with `exec` (`exec node ...`) so `process.ppid` is the `agy` process rather than an intermediate `sh` subshell. | `48201` |
 
 ---
 
@@ -108,14 +108,64 @@ The sidecar is `integrations/antigravity/sidecar.mjs` (Node 22, no dependencies)
 cd integrations/antigravity && node --test sidecar.test.mjs
 ```
 
-Send one message by hand (the launcher normally sets the env vars):
+Send one message by hand (the launcher or `agy` sets the env vars):
 
 ```bash
 SWAYVE_SOCKET=/run/user/1000/swayve/swayve.sock SWAYVE_AGENT_ID=a-33-1 SWAYVE_PROJECT_ID=swayve \
   node integrations/antigravity/sidecar.mjs register
 ```
 
-Subcommands: `register`, `status <value>`, `focus`. The sidecar writes one line and does not read a reply. If no socket path or `SWAYVE_AGENT_ID` is set, it writes one line to stderr and exits 0. Socket errors also log one line and exit 0. Status reporting is best-effort, so the sidecar never fails a hook.
+Subcommands: `register`, `status <value>`, `focus`, `hook <Event> [register|status <value>|focus]`.
+- `focus` requires only a socket path (`SWAYVE_SOCKET` or `XDG_RUNTIME_DIR`) and does not require `SWAYVE_AGENT_ID`.
+- `register` and `status` resolve the agent ID from `SWAYVE_AGENT_ID` or `ANTIGRAVITY_CONVERSATION_ID` (and in `hook` mode, `conversationId` on `stdin`).
+- The sidecar writes one JSON line per message and does not read a reply from the socket. If no socket path or agent ID is set, or a socket error occurs, it writes one line to `stderr` and exits `0`.
+
+### Antigravity Lifecycle Hook Mode (`hooks.json`)
+
+Antigravity lifecycle hooks (`.agents/hooks.json` or `~/.gemini/config/hooks.json`) pass event context as JSON on `stdin` and require a valid JSON response on `stdout` (`{"decision":"allow"}` for `PreToolUse`, `{"decision":"allow_stop"}` for `Stop`, `{}` for `SessionStart`, `PostToolUse`, `PreInvocation`, `PostInvocation`).
+
+Use `hook <Event>` mode so the sidecar always emits the required JSON on `stdout` while reporting status to Swayve over the socket. Prefix with `exec` so `sh -c` replaces the shell and `process.ppid` resolves to the parent `agy` process:
+
+```json
+{
+  "swayve-sidecar": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "exec node /path/to/swayve/integrations/antigravity/sidecar.mjs hook SessionStart"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exec node /path/to/swayve/integrations/antigravity/sidecar.mjs hook PreToolUse"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exec node /path/to/swayve/integrations/antigravity/sidecar.mjs hook PostToolUse"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "exec node /path/to/swayve/integrations/antigravity/sidecar.mjs hook Stop"
+      }
+    ]
+  }
+}
+```
 
 ## Example Shell Injection
 
