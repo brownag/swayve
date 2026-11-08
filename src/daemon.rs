@@ -517,7 +517,7 @@ pub async fn run_daemon_loops(
 ) -> Result<()> {
     let mut state = DaemonState::new(config);
     let layout_manager = LayoutManager::new();
-    let mut last_focused: Option<AgentId> = None;
+    let mut focus = FocusCycle::default();
 
     while let Some(event) = event_rx.recv().await {
         match event {
@@ -592,21 +592,20 @@ pub async fn run_daemon_loops(
                     SwayEvent::WindowFocused { con_id } => {
                         // Manual focus on an agent window moves the cycle; other windows are ignored.
                         if let Some(agent_id) = state.con_to_agent.get(&con_id) {
-                            last_focused = Some(agent_id.clone());
+                            focus.observe(agent_id.clone());
                         }
                     }
                 }
             }
             DaemonEvent::Focus => {
                 // Focus event handler: hierarchical sibling cycling
-                if let Some(target) = next_focus_target(&state.agents, last_focused.as_ref())
+                if let Some(target) = focus.next(&state.agents)
                     && let Some(agent) = state.agents.get(&target) {
                         let _ = sway_cmd_tx
                             .send(SwayCommand::FocusWindow {
                                 mark: agent.mark.clone(),
                             })
                             .await;
-                        last_focused = Some(target);
                     }
             }
             DaemonEvent::Subscribe(sub_tx) => {
@@ -682,6 +681,27 @@ async fn delegate_to_layout(
 ) {
     for cmd in layout_manager.compute_commands(action, state) {
         let _ = sway_cmd_tx.send(cmd).await;
+    }
+}
+
+/// The focus cycle's cursor: the last agent focused by the cycle or by the user (G58).
+#[derive(Debug, Default)]
+pub struct FocusCycle {
+    last: Option<AgentId>,
+}
+
+impl FocusCycle {
+    /// Records a manual focus on an agent window.
+    pub fn observe(&mut self, agent: AgentId) {
+        self.last = Some(agent);
+    }
+
+    /// Returns the next target and moves the cursor to it. The cursor moves only when a target
+    /// is found; otherwise it is unchanged (D4).
+    pub fn next(&mut self, agents: &HashMap<AgentId, AgentWindow>) -> Option<AgentId> {
+        let target = next_focus_target(agents, self.last.as_ref())?;
+        self.last = Some(target.clone());
+        Some(target)
     }
 }
 
@@ -934,6 +954,35 @@ mod tests {
 
     fn registry(agents: Vec<AgentWindow>) -> HashMap<AgentId, AgentWindow> {
         agents.into_iter().map(|a| (a.id.clone(), a)).collect()
+    }
+
+    #[test]
+    fn test_focus_cycle_next_moves_cursor() {
+        let flat = registry(vec![
+            mock_agent("solo_1", None, Some(1)),
+            mock_agent("solo_2", None, Some(2)),
+        ]);
+        let mut focus = FocusCycle::default();
+        focus.observe(AgentId("solo_1".to_string()));
+        assert_eq!(focus.next(&flat), Some(AgentId("solo_2".to_string())));
+        assert_eq!(focus.next(&flat), Some(AgentId("solo_1".to_string())));
+    }
+
+    #[test]
+    fn test_focus_cycle_next_none_keeps_cursor() {
+        let empty: HashMap<AgentId, AgentWindow> = HashMap::new();
+        let mut focus = FocusCycle::default();
+        focus.observe(AgentId("ghost".to_string()));
+        assert_eq!(focus.next(&empty), None);
+        assert_eq!(focus.last, Some(AgentId("ghost".to_string())));
+    }
+
+    #[test]
+    fn test_focus_cycle_next_sets_cursor_to_target() {
+        let flat = registry(vec![mock_agent("solo_1", None, Some(1))]);
+        let mut focus = FocusCycle::default();
+        assert_eq!(focus.next(&flat), Some(AgentId("solo_1".to_string())));
+        assert_eq!(focus.last, Some(AgentId("solo_1".to_string())));
     }
 
     #[test]
