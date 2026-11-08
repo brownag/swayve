@@ -320,14 +320,18 @@ fn agent_status_to_str(status: &AgentStatus) -> &'static str {
     }
 }
 
-fn execute_lifecycle_hook(hook_cmd: &str, agent_id: &AgentId, status: &str) {
-    if let Err(e) = std::process::Command::new("sh")
-        .arg("-c")
+/// Pure: the `sh -c` command for a lifecycle hook, with the env contract from ADR 0006.
+fn lifecycle_hook_command(hook_cmd: &str, agent_id: &AgentId, status: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new("sh");
+    cmd.arg("-c")
         .arg(hook_cmd)
         .env("SWAYVE_AGENT_ID", &agent_id.0)
-        .env("SWAYVE_AGENT_STATUS", status)
-        .spawn()
-    {
+        .env("SWAYVE_AGENT_STATUS", status);
+    cmd
+}
+
+fn execute_lifecycle_hook(hook_cmd: &str, agent_id: &AgentId, status: &str) {
+    if let Err(e) = lifecycle_hook_command(hook_cmd, agent_id, status).spawn() {
         eprintln!(
             "[daemon] Failed to execute lifecycle hook '{}': {:?}",
             hook_cmd, e
@@ -1451,5 +1455,25 @@ mod tests {
     #[tokio::test]
     async fn test_writer_ends_on_socket_close_diff() {
         writer_ends_after_peer_close(DaemonState::new(Config::default()), true).await;
+    }
+
+    #[test]
+    fn test_lifecycle_hook_command_args_and_env() {
+        let cmd = lifecycle_hook_command("echo hi", &AgentId("a-1".to_string()), "thinking");
+        assert_eq!(cmd.get_program(), "sh");
+        assert_eq!(cmd.get_args().collect::<Vec<_>>(), ["-c", "echo hi"]);
+        let envs: Vec<_> = cmd.get_envs().map(|(k, v)| (k.to_os_string(), v.map(|v| v.to_os_string()))).collect();
+        assert!(envs.contains(&("SWAYVE_AGENT_ID".into(), Some("a-1".into()))));
+        assert!(envs.contains(&("SWAYVE_AGENT_STATUS".into(), Some("thinking".into()))));
+    }
+
+    #[test]
+    fn test_agent_status_to_str_all_variants() {
+        assert_eq!(agent_status_to_str(&AgentStatus::Idle), "idle");
+        assert_eq!(agent_status_to_str(&AgentStatus::Thinking), "thinking");
+        assert_eq!(agent_status_to_str(&AgentStatus::ExecutingTool), "executing_tool");
+        assert_eq!(agent_status_to_str(&AgentStatus::AwaitingHumanInput), "awaiting_human_input");
+        assert_eq!(agent_status_to_str(&AgentStatus::Completed), "completed");
+        assert_eq!(agent_status_to_str(&AgentStatus::Failed("boom".to_string())), "failed");
     }
 }
