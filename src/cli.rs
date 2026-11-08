@@ -631,6 +631,30 @@ mod tests {
     }
 
     #[test]
+    fn test_ensure_private_dir_creates_0700() {
+        use std::os::unix::fs::MetadataExt;
+        let p = std::env::temp_dir().join(format!("swayve_epd_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        let res = ensure_private_dir(&p);
+        let mode = std::fs::metadata(&p).map(|m| m.mode() & 0o777);
+        let _ = std::fs::remove_dir_all(&p);
+        assert!(res.is_ok());
+        assert_eq!(mode.unwrap(), 0o700);
+    }
+
+    #[test]
+    fn test_ensure_private_dir_rejects_loose_mode() {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        let p = std::env::temp_dir().join(format!("swayve_epd_loose_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::DirBuilder::new().mode(0o755).create(&p).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let res = ensure_private_dir(&p);
+        let _ = std::fs::remove_dir_all(&p);
+        assert!(res.is_err());
+    }
+
+    #[test]
     fn test_init_shell_cmd_parsing() {
         let cli = Cli::try_parse_from(["swayve", "init-shell"]).unwrap();
         assert!(matches!(cli.command, Commands::InitShell));
