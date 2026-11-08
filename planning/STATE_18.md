@@ -27,7 +27,7 @@ Last Updated: 2026-11-07
 - [ ] `make all` passes serially; `make test` runs Rust, Pi and hook suites
 
 ### Deferred (manual, not gated)
-- [ ] Live check: daemon started with `XDG_RUNTIME_DIR` set creates `$XDG_RUNTIME_DIR/swayve/swayve.sock`; directory mode 0700.
+- [x] Live check, run 2026-11-08 with `XDG_RUNTIME_DIR=/run/user/1000`: daemon started and listened on `/run/user/1000/swayve/swayve.sock`. Directory `/run/user/1000/swayve` is `drwx------` owned by andrew. Socket is owned by andrew (`srwxrwxr-x` inside the 0700 directory, so other users cannot reach it). `swayve status` answered over the socket. Daemon stopped and socket removed afterwards.
 
 ## Task Reports
 
