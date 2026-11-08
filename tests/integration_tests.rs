@@ -1011,6 +1011,86 @@ async fn test_hooks_and_monitoring() {
     let _ = fs::remove_file(mock_term_p).await;
 }
 
+/// Runs the real `swayve spawn` binary with a mock terminal. The config template is
+/// `--app-id {app_id} --title {title} -e {command}`. Asserts the exact argv the emulator got.
+#[test]
+fn test_spawn_argv_capture() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Command;
+
+    let cfg_home = std::path::PathBuf::from(common::unique_path("spawn_argv_cfg", ""));
+    let rt_dir = std::path::PathBuf::from(common::unique_path("spawn_argv_rt", ""));
+    let flag_path = common::unique_path("spawn_argv_flag", ".txt");
+    let mock_path = common::unique_path("spawn_argv_mock", ".sh");
+    let nosock = common::unique_path("spawn_argv_nosock", ".sock");
+    let _ = std::fs::remove_dir_all(&cfg_home);
+    let _ = std::fs::remove_dir_all(&rt_dir);
+    let _ = std::fs::remove_file(flag_path);
+
+    std::fs::create_dir_all(cfg_home.join("swayve")).unwrap();
+    std::fs::create_dir(&rt_dir).unwrap();
+    std::fs::set_permissions(&rt_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+
+    std::fs::write(mock_path, format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\n", flag_path)).unwrap();
+    std::fs::set_permissions(mock_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    // A full config: a partial file fails to parse and swayve silently falls back to `foot`.
+    let mut cfg = Config::default();
+    cfg.terminal.default_emulator = mock_path.to_string();
+    cfg.terminal.args = ["--app-id", "{app_id}", "--title", "{title}", "-e", "{command}"].map(String::from).to_vec();
+    std::fs::write(cfg_home.join("swayve/config.toml"), toml::to_string(&cfg).unwrap()).unwrap();
+
+    // No socket at `nosock`: spawn warns and launches anyway, so no daemon is needed.
+    let out = Command::new(env!("CARGO_BIN_EXE_swayve"))
+        .args([
+            "spawn", "--wave", "w1", "--agent", "pi", "--project", "p",
+            "--command", "tool --path \"/run/my dir/x\"",
+            "--prompt", "it's",
+        ])
+        .env("XDG_CONFIG_HOME", &cfg_home)
+        .env("XDG_RUNTIME_DIR", &rt_dir)
+        .env("SWAYVE_SOCKET", nosock)
+        .env_remove("SWAYVE_DRY_RUN")
+        .output()
+        .expect("failed to run swayve spawn");
+    assert!(out.status.success(), "spawn failed: {}", String::from_utf8_lossy(&out.stderr));
+
+    // The emulator runs detached, so poll for its flag file (up to 2 s).
+    let mut captured = String::new();
+    for _ in 0..200 {
+        if let Some(c) = std::fs::read_to_string(flag_path).ok().filter(|c| c.lines().count() >= 8) {
+            captured = c;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let lines: Vec<&str> = captured.lines().collect();
+    assert_eq!(lines.len(), 8, "captured argv: {lines:?}");
+
+    // The clock suffix varies, so check its shape and then pin the rest of the argv exactly.
+    let app_id = lines[1];
+    let suffix = app_id.strip_prefix("agent.pi-w1-").expect("app id prefix");
+    assert!(!suffix.is_empty() && suffix.chars().all(|c| c.is_ascii_digit()), "bad suffix in {app_id}");
+    assert_eq!(
+        lines,
+        [
+            "--app-id",
+            app_id,
+            "--title",
+            "Agent [pi]: w1",
+            "-e",
+            "bash",
+            "-c",
+            "tool --path \"/run/my dir/x\" \"it's\"",
+        ]
+    );
+
+    let _ = std::fs::remove_dir_all(&cfg_home);
+    let _ = std::fs::remove_dir_all(&rt_dir);
+    let _ = std::fs::remove_file(flag_path);
+    let _ = std::fs::remove_file(mock_path);
+}
+
 #[tokio::test]
 async fn test_dashboard_subscription_stream() {
     use tokio::io::{AsyncBufReadExt, BufReader};
