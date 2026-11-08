@@ -1011,6 +1011,76 @@ async fn test_hooks_and_monitoring() {
     let _ = fs::remove_file(mock_term_p).await;
 }
 
+/// A status-change hook appends `id status` per `UpdateStatus`. Asserts the lines arrive in order.
+#[tokio::test]
+async fn test_lifecycle_status_hook_order() {
+    let socket_path = common::unique_path("status_hook", ".sock");
+    let flag_path = common::unique_path("status_hook_flag", ".txt");
+    let _ = fs::remove_file(socket_path).await;
+    let _ = fs::remove_file(flag_path).await;
+
+    let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
+    let (sway_cmd_tx, _sway_cmd_rx) = mpsc::channel::<SwayCommand>(32);
+
+    let socket_path_str = socket_path.to_string();
+    let listener_handle = tokio::spawn(async move {
+        start_daemon_ipc(&socket_path_str, event_tx).await
+    });
+
+    let mut config = Config::default();
+    config.hooks.on_agent_status_change = Some(format!(
+        "printf '%s %s\\n' \"$SWAYVE_AGENT_ID\" \"$SWAYVE_AGENT_STATUS\" >> {flag_path}"
+    ));
+
+    let daemon_handle = tokio::spawn(async move {
+        run_daemon_loops(true, config, socket_path, event_rx, sway_cmd_tx).await
+    });
+
+    wait_for_socket(socket_path).await;
+    let mut stream = UnixStream::connect(socket_path).await.expect("Failed to connect to socket");
+
+    let agent_id = AgentId("agent-status-1".to_string());
+    let reg = AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: agent_id.clone(),
+            agent_type: "pi".to_string(),
+            project_id: ProjectId("test-status-proj".to_string()),
+            pid: 20010,
+            app_id: "agent.pi.agent-status-1".to_string(),
+            parent_agent_id: None,
+        },
+    };
+    stream.write_all((serde_json::to_string(&reg).unwrap() + "\n").as_bytes()).await.unwrap();
+
+    for status in [AgentStatus::Thinking, AgentStatus::ExecutingTool] {
+        let msg = AgentIPCMessage::UpdateStatus {
+            params: UpdateStatusParams { agent_id: agent_id.clone(), status },
+        };
+        stream.write_all((serde_json::to_string(&msg).unwrap() + "\n").as_bytes()).await.unwrap();
+    }
+    stream.flush().await.unwrap();
+
+    // Poll up to 2 s until the hook has written both lines.
+    for _ in 0..200 {
+        if fs::read_to_string(flag_path).await.is_ok_and(|c| c.lines().count() >= 2) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+
+    let content = fs::read_to_string(flag_path).await.expect("status hook did not write its flag file");
+    assert_eq!(
+        content.lines().collect::<Vec<_>>(),
+        ["agent-status-1 thinking", "agent-status-1 executing_tool"]
+    );
+
+    listener_handle.abort();
+    daemon_handle.abort();
+    let _ = fs::remove_file(socket_path).await;
+    let _ = fs::remove_file(flag_path).await;
+}
+
 /// Runs the real `swayve spawn` binary with a mock terminal. The config template is
 /// `--app-id {app_id} --title {title} -e {command}`. Asserts the exact argv the emulator got.
 #[test]
