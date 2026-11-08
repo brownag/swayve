@@ -17,14 +17,6 @@ Two orthogonal goals, circled together at the user's request for parallel work (
     - `make all` passes.
   - First action: run the Wave 1 measurement task (`20.1.1`).
 
-- **[G10]** `XDG_CONFIG_HOME` is honored for the config path (ADR 0010 negative).
-  - Why now: public release. A packaged install expects the XDG path.
-  - Exit criteria:
-    - `$XDG_CONFIG_HOME/swayve/config.toml` is used when the variable is set, non-empty, and absolute. Otherwise the path falls back to `$HOME/.config/swayve/config.toml`.
-    - Unit tests cover the four cases (absolute XDG, relative XDG ignored, empty XDG ignored, HOME only). They do not mutate env vars.
-    - README Configuration section and ADR 0010 are updated.
-    - `make all` passes.
-  - First action: add `config_path_from` in `src/config.rs` (task `20.1.2`).
 
 ## Sequenced Goals (Dependency DAG)
 
@@ -49,6 +41,7 @@ Two orthogonal goals, circled together at the user's request for parallel work (
 
 ## Completed
 
+- **[G10]** `XDG_CONFIG_HOME` is honored for the config path when absolute; `$HOME/.config` is the fallback. `config_path_from` in `src/config.rs` (`c6c483a`, 20.1.2); README Configuration note and ADR 0010 amendment (`f4e9e33`, 20.1.3). Orchestration 20.
 - **[G28]** No README text in this repo describes the daemon IPC as JSON-RPC, except the deliberate correction at `README.md:54`. The `src/types.rs` link description now names newline-delimited JSON framing (one-line edit at `README.md:178`; `make all` passes).
 - **[G22]** The daemon's runtime socket path is enforced by tests and documented as the external client contract. Tests `cc3c7b3` (ensure_private_dir), `30f576e` (stale socket, malformed line). README Socket Contract `40c2777`. Recorded as ADR 0012 (`b6d76b3`). Orchestration 19.
 - **[G23]** `planning/GOALS.md` and `planning/STATE_18.md` agree on G17 status. Done in the 2026-11-08 rewrite.
