@@ -946,8 +946,20 @@ async fn test_hooks_and_monitoring() {
     stream.write_all((serde_json::to_string(&reg_sub).unwrap() + "\n").as_bytes()).await.expect("Failed to write reg_sub");
     stream.flush().await.unwrap();
 
-    // Wait a brief moment for spawn hooks and auto_monitor process execution
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // Poll until the hooks have written what the asserts below read, up to 2 s.
+    // Both ids must be in the spawn file, since each agent's hook appends a line.
+    for _ in 0..200 {
+        let spawn_ready = fs::read_to_string(spawn_flag_path).await.is_ok_and(|c| {
+            c.contains("parent-hooks-1") && c.contains("subagent-hooks-1")
+        });
+        let monitor_ready = fs::read_to_string(monitor_flag_path)
+            .await
+            .is_ok_and(|c| !c.trim().is_empty());
+        if spawn_ready && monitor_ready {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 
     // Verify on_agent_spawn hook executed for both agents
     let spawn_flag_content = fs::read_to_string(spawn_flag_path)
