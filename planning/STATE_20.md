@@ -16,8 +16,8 @@ Last Updated: 2026-11-08
 - [ ] **Task 20.1.3**: G10 docs (README Configuration note, ADR 0010 amendment)
 
 ### Wave 1 end gate
-- [ ] `make all` passes serially. Expect 39 unit (35 + 4) and 10 integration. Actual: ___
-- [ ] Orchestrator reviews 20.1.1 numbers and records the D7 decision here: ___
+- [x] `make all` passes serially. Expect 39 unit (35 + 4) and 10 integration. Actual: 39 unit (1 ignored) / 10 integration / Pi 3/3 / hook test passed.
+- [ ] Orchestrator reviews 20.1.1 numbers and records the D7 decision here: D7 condition met (release N=50 K=10 = 27.3 us; debug N=50 K=10 = 214.9 us; both under 1 ms). Per D7, Wave 2 waits for the user's go-ahead. Decision: ___
 
 ### Wave 2: Diff Core (blocked until D7 recorded)
 - [ ] **Task 20.2.1**: `SubscribeDiff` message and diff broadcast core (`src/types.rs`, `src/daemon.rs`)
@@ -47,3 +47,44 @@ Last Updated: 2026-11-08
 ## Task Reports
 
 _Workers append here. Orchestrator distills each report to 15 lines or fewer._
+
+## 20.1.1
+Status: done.
+Files: src/daemon.rs 931-964 (new ignored test `measure_broadcast_cost`, end of mod tests); planning/tasks/20.1.1.todo.md (checked off).
+Commands: `cargo test --lib measure_broadcast_cost -- --ignored --nocapture` (1 passed); `cargo test --release --lib measure_broadcast_cost -- --ignored --nocapture` (1 passed); `cargo test --lib` (35 passed, 1 ignored).
+Debug:
+N=5 K=1 mean_us=23.2 payload_bytes=641
+N=5 K=10 mean_us=24.0 payload_bytes=641
+N=20 K=1 mean_us=87.2 payload_bytes=2591
+N=20 K=10 mean_us=89.0 payload_bytes=2591
+N=50 K=1 mean_us=186.0 payload_bytes=6521
+N=50 K=10 mean_us=214.9 payload_bytes=6521
+N=200 K=1 mean_us=754.8 payload_bytes=26471
+N=200 K=10 mean_us=871.0 payload_bytes=26471
+Release:
+N=5 K=1 mean_us=1.8 payload_bytes=641
+N=5 K=10 mean_us=6.5 payload_bytes=641
+N=20 K=1 mean_us=1.6 payload_bytes=2591
+N=20 K=10 mean_us=14.8 payload_bytes=2591
+N=50 K=1 mean_us=3.6 payload_bytes=6521
+N=50 K=10 mean_us=27.3 payload_bytes=6521
+N=200 K=1 mean_us=21.0 payload_bytes=26471
+N=200 K=10 mean_us=140.2 payload_bytes=26471
+Deviations: none (also ran planned `cargo test --lib`). Gotchas: debug is serialization-dominated; release cost scales with K (string clone per subscriber).
+
+## 20.1.3
+- Status: done. Both acceptance greps pass (README `XDG_CONFIG_HOME` count 1; ADR `Amended 2026-11-08` count 1).
+- Files changed:
+  - `README.md` lines 153-155: added the XDG paragraph under `## ⚙️ Configuration` (heading unchanged per Q2).
+  - `docs/decisions/0010-toml-config-in-home-config-dir.md` line 34: added bullet `* Amended 2026-11-08 (Orchestration 20): ...` directly after the "XDG_CONFIG_HOME is ignored" bullet (per Q1).
+  - `planning/tasks/20.1.3.todo.md`: checkboxes flipped.
+- Commands: `grep -c 'XDG_CONFIG_HOME' README.md` -> 1; `grep -c 'Amended 2026-11-08' docs/decisions/0010-toml-config-in-home-config-dir.md` -> 1.
+- Deviations: TODO item "git diff --stat / git diff" not run, because the ground rules say to run only the two greps. Diff was checked by reading the edited ranges instead.
+- Gotchas: the README paragraph sits before the "Customize agent states..." line, so the TOML example stays attached to its intro sentence. Nothing committed or pushed.
+
+## 20.1.2
+- Status: done
+- Files: src/config.rs (new `config_path_from` + rewritten `load_config` head ~L108-127; 4 tests appended at end of `mod tests`); planning/tasks/20.1.2.todo.md
+- Test: `cargo test --lib test_config_path` -> 4 passed, 0 failed
+- Deviations: none (full `cargo test --lib` not run, per orchestrator; left for the wave gate)
+- Gotchas: HOME unset with absolute XDG set now loads from XDG. `parse_config_file` untouched. The home_only test also asserts (None, None) -> None.
