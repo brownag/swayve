@@ -1,12 +1,12 @@
 ---
 id: "0015"
 title: "Per-Client IPC Rate Limit: Drop and Log"
-status: "Accepted" # Proposed | Accepted | Deprecated | Superseded
+status: "Superseded" # Proposed | Accepted | Deprecated | Superseded
 date: 2026-11-08
 authors:
   - "Andrew G. Brown"
 supersedes: null
-superseded_by: null
+superseded_by: "0016"
 source_context: "Orchestration 22 (EXECUTION_PLAN_22.md D1, G43; commit 5d7ef87); src/ratelimit.rs; src/daemon.rs handle_client; tests/slow_consumer.rs"
 ---
 

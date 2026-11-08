@@ -18,7 +18,8 @@ Ordered by dependency: each record depends only on records above it.
 | [0012](0012-runtime-socket-private-dir-contract.md) | Runtime Socket Lives in a Private XDG Runtime Directory; SWAYVE_SOCKET Is an Explicit Override | Accepted | 2026-11-08 | - | - | Orchestration 19 |
 | [0013](0013-opt-in-diff-status-subscription.md) | Opt-In Diff Status Subscription Alongside the Full-List Stream | Accepted | 2026-11-08 | - | - | Orchestration 20 |
 | [0014](0014-skip-undecodable-ipc-lines-keep-client.md) | Skip Non-UTF-8 IPC Lines and Keep the Client Connected | Accepted | 2026-11-08 | - | - | Orchestration 21 |
-| [0015](0015-ipc-rate-limit-drop-and-log.md) | Per-Client IPC Rate Limit: Drop and Log | Accepted | 2026-11-08 | - | - | Orchestration 22 |
+| [0015](0015-ipc-rate-limit-drop-and-log.md) | Per-Client IPC Rate Limit: Drop and Log | Superseded | 2026-11-08 | - | [0016](0016-configurable-ipc-rate-limit.md) | Orchestration 22 |
+| [0016](0016-configurable-ipc-rate-limit.md) | Configurable Per-Client IPC Rate Limit | Accepted | 2026-11-08 | [0015](0015-ipc-rate-limit-drop-and-log.md) | - | Backlog G48 |
 
 ## Not recorded as ADRs
 
