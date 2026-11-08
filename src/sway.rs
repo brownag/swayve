@@ -16,6 +16,37 @@ pub enum SwayCommand {
     SetLayoutTabbed { mark: String },
 }
 
+impl SwayCommand {
+    pub fn to_command_string(&self) -> String {
+        match self {
+            SwayCommand::MarkWindow { con_id, mark } => {
+                format!("[con_id=\"{}\"] mark --add \"{}\"", con_id, mark)
+            }
+            SwayCommand::SetBorderColor { mark, .. } => {
+                format!("[con_mark=\"{}\"] border pixel 3", mark)
+            }
+            SwayCommand::FocusWindow { mark } => {
+                format!("[con_mark=\"{}\"] focus", mark)
+            }
+            SwayCommand::MoveToWorkspace { con_id, workspace } => {
+                format!("[con_id=\"{}\"] move container to workspace {}", con_id, workspace)
+            }
+            SwayCommand::ApplyLayout { workspace, layout } => {
+                format!("[workspace=\"{}\"] layout {}", workspace, layout)
+            }
+            SwayCommand::SplitHorizontal { parent_mark } => {
+                format!("[con_mark=\"{}\"] focus, split horizontal", parent_mark)
+            }
+            SwayCommand::MoveToContainer { con_id, target_mark } => {
+                format!("[con_id=\"{}\"] move container to mark \"{}\"", con_id, target_mark)
+            }
+            SwayCommand::SetLayoutTabbed { mark } => {
+                format!("[con_mark=\"{}\"] layout tabbed", mark)
+            }
+        }
+    }
+}
+
 pub struct SwayManager {
     dry_run: bool,
     command_rx: mpsc::Receiver<SwayCommand>,
@@ -40,32 +71,7 @@ impl SwayManager {
         };
 
         while let Some(cmd) = self.command_rx.recv().await {
-            let command_str = match &cmd {
-                SwayCommand::MarkWindow { con_id, mark } => {
-                    format!("[con_id=\"{}\"] mark --add \"{}\"", con_id, mark)
-                }
-                SwayCommand::SetBorderColor { mark, .. } => {
-                    format!("[con_mark=\"{}\"] border pixel 3", mark)
-                }
-                SwayCommand::FocusWindow { mark } => {
-                    format!("[con_mark=\"{}\"] focus", mark)
-                }
-                SwayCommand::MoveToWorkspace { con_id, workspace } => {
-                    format!("[con_id=\"{}\"] move container to workspace {}", con_id, workspace)
-                }
-                SwayCommand::ApplyLayout { workspace, layout } => {
-                    format!("[workspace=\"{}\"] layout {}", workspace, layout)
-                }
-                SwayCommand::SplitHorizontal { parent_mark } => {
-                    format!("[con_mark=\"{}\"] focus, split horizontal", parent_mark)
-                }
-                SwayCommand::MoveToContainer { con_id, target_mark } => {
-                    format!("[con_id=\"{}\"] move container to mark \"{}\"", con_id, target_mark)
-                }
-                SwayCommand::SetLayoutTabbed { mark } => {
-                    format!("[con_mark=\"{}\"] layout tabbed", mark)
-                }
-            };
+            let command_str = cmd.to_command_string();
 
             if let Some(conn) = &mut connection {
                 println!("[sway] Executing: {}", command_str);
@@ -136,4 +142,22 @@ pub async fn run_event_listener(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn renders_every_variant() {
+        let s = |c: SwayCommand| c.to_command_string();
+        assert_eq!(s(SwayCommand::MarkWindow { con_id: 7, mark: "m".into() }), "[con_id=\"7\"] mark --add \"m\"");
+        assert_eq!(s(SwayCommand::SetBorderColor { mark: "m".into(), hex_color: "#fff".into() }), "[con_mark=\"m\"] border pixel 3");
+        assert_eq!(s(SwayCommand::FocusWindow { mark: "m".into() }), "[con_mark=\"m\"] focus");
+        assert_eq!(s(SwayCommand::MoveToWorkspace { con_id: 7, workspace: "w".into() }), "[con_id=\"7\"] move container to workspace w");
+        assert_eq!(s(SwayCommand::ApplyLayout { workspace: "w".into(), layout: "l".into() }), "[workspace=\"w\"] layout l");
+        assert_eq!(s(SwayCommand::SplitHorizontal { parent_mark: "p".into() }), "[con_mark=\"p\"] focus, split horizontal");
+        assert_eq!(s(SwayCommand::MoveToContainer { con_id: 7, target_mark: "t".into() }), "[con_id=\"7\"] move container to mark \"t\"");
+        assert_eq!(s(SwayCommand::SetLayoutTabbed { mark: "m".into() }), "[con_mark=\"m\"] layout tabbed");
+    }
 }

@@ -81,3 +81,31 @@ pub struct UpdateStatusParams {
     #[serde(alias = "state")]
     pub status: AgentStatus,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn agent_status_roundtrip() {
+        let cases = [
+            (AgentStatus::Idle, "\"idle\""),
+            (AgentStatus::Thinking, "\"thinking\""),
+            (AgentStatus::ExecutingTool, "\"executing_tool\""),
+            (AgentStatus::AwaitingHumanInput, "\"awaiting_human_input\""),
+            (AgentStatus::Completed, "\"completed\""),
+            (AgentStatus::Failed("boom".into()), "{\"failed\":\"boom\"}"),
+        ];
+        for (st, json) in cases {
+            assert_eq!(serde_json::to_string(&st).unwrap(), json);
+            assert_eq!(serde_json::from_str::<AgentStatus>(json).unwrap(), st);
+        }
+    }
+
+    #[test]
+    fn agent_id_marks() {
+        let id = AgentId("a-b-c".into());
+        assert_eq!(id.to_mark(), "mark_a_b_c");
+        assert_eq!(id.to_children_mark(), "mark_children_a_b_c");
+    }
+}
