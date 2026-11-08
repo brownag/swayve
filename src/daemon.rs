@@ -245,11 +245,15 @@ impl DaemonState {
     }
 
     /// Window-destroyed rules: unbind the window, remove the agent, promote its children to
-    /// roots, and return the layout action. Returns nothing when no agent owned the window.
+    /// roots, and return the layout action. Returns nothing when no agent owned the window,
+    /// or when the agent has since been rebound to another window (stale mapping only dropped).
     pub fn on_window_destroyed(&mut self, con_id: i64) -> Vec<LayoutAction> {
         let Some(agent_id) = self.con_to_agent.remove(&con_id) else {
             return Vec::new();
         };
+        if self.agents.get(&agent_id).and_then(|a| a.container_id).is_some_and(|c| c != con_id) {
+            return Vec::new();
+        }
         println!("[daemon] Sway window destroyed for agent: {}", agent_id.0);
         let parent_id = self.agents.get(&agent_id).and_then(|a| a.parent_id.clone());
         if self.agents.remove(&agent_id).is_some() {
@@ -646,8 +650,11 @@ fn promote_orphans(state: &mut DaemonState, destroyed: &AgentId) {
 /// Returns the agent's id, or `None` when no agent claims this `app_id`.
 fn register_agent_window(app_id: &str, con_id: i64, state: &mut DaemonState) -> Option<AgentId> {
     let agent = state.agents.values_mut().find(|a| a.app_id == app_id)?;
-    agent.container_id = Some(con_id);
+    let old = agent.container_id.replace(con_id);
     let agent_id = agent.id.clone();
+    if let Some(old) = old.filter(|&o| o != con_id) {
+        state.con_to_agent.remove(&old);
+    }
     state.con_to_agent.insert(con_id, agent_id.clone());
     Some(agent_id)
 }
@@ -1193,6 +1200,19 @@ mod tests {
         assert_eq!(agent.status, AgentStatus::Thinking);
         assert_eq!(agent.project, ProjectId("p2".to_string()));
         assert_eq!(state.pid_to_agent.get(&2), Some(&a));
+    }
+
+    #[test]
+    fn test_rebind_releases_old_container() {
+        let mut state = DaemonState::new(Config::default());
+        let a = AgentId("a".to_string());
+        state.register_agent(a.clone(), ProjectId("p".to_string()), 1, "agent.a".to_string(), None);
+        register_agent_window("agent.a", 10, &mut state);
+        register_agent_window("agent.a", 20, &mut state);
+        assert!(state.on_window_destroyed(10).is_empty());
+        assert_eq!(state.agents.get(&a).unwrap().container_id, Some(20));
+        assert_eq!(state.con_to_agent.get(&10), None);
+        assert_eq!(state.con_to_agent.get(&20), Some(&a));
     }
 
     #[test]

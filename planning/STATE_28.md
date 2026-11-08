@@ -16,7 +16,7 @@ Last Updated: 2026-11-08
 - [x] **Task 28.1.1**: `register_agent` keeps `container_id`, `con_to_agent` and `status` on re-registration
 
 ### Wave 2: rebinding releases old container (G79)
-- [ ] **Task 28.1.2**: `register_agent_window` releases the old mapping; `on_window_destroyed` removes only the current owner
+- [x] **Task 28.1.2**: `register_agent_window` releases the old mapping; `on_window_destroyed` removes only the current owner
 
 ### Wave 3: CLI and Pi derive the same `app_id` (G79)
 - [ ] **Task 28.1.3**: Pi client `app_id` matches the CLI format; Rust format pin
@@ -58,4 +58,9 @@ Last Updated: 2026-11-08
 - Tests: `cargo test --lib test_reregister` 1 passed (red first: container_id None). `make all` serial exit 0, zero warnings, unit 75 passed / 2 ignored.
 - Deviations: none. Q1 answered: keep lifecycle hook call unchanged.
 - Gotcha: a re-registration with a new pid leaves the old pid in `pid_to_agent` (kept per spec).
+
+### 28.1.2 (done)
+- Status: done. Files: `src/daemon.rs` `register_agent_window` (~652) drops the old `con_to_agent` entry; `on_window_destroyed` (~249) returns early for `Some(other)` owner; new test `test_rebind_releases_old_container`.
+- Tests: `cargo test --lib test_rebind` 1 passed; `test_window_destroyed` 4 passed. `make all` serial exit 0, zero warnings, unit 76 passed / 2 ignored.
+- Deviations: red run skipped (test written and run only after the fix). Q1 answered: `container_id == None` counts as owned.
 
