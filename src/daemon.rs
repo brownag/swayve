@@ -632,7 +632,7 @@ fn apply_process_tree_auditing(
         return false;
     }
 
-    match find_registered_parent_ancestor(con_pid, pid_to_agent, max_depth) {
+    match find_registered_parent_ancestor(con_pid, pid_to_agent, max_depth, get_parent_pid) {
         Some(ancestor_id) => {
             println!(
                 "[daemon] Auto-detected parent agent {} for child {} via process tree auditing (PID={})",
@@ -711,15 +711,18 @@ fn get_parent_pid(pid: u32) -> Option<u32> {
     None
 }
 
+/// Walks up from `start_pid` looking for a registered agent. `parent_of` gives a process's
+/// parent pid; production passes `get_parent_pid` (`/proc`), tests pass a fake chain.
 fn find_registered_parent_ancestor(
     start_pid: u32,
     pid_to_agent: &HashMap<u32, AgentId>,
     max_depth: usize,
+    parent_of: impl Fn(u32) -> Option<u32>,
 ) -> Option<AgentId> {
     let mut current_pid = start_pid;
     let mut depth = 0;
     while current_pid > 1 && depth < max_depth {
-        if let Some(ppid) = get_parent_pid(current_pid) {
+        if let Some(ppid) = parent_of(current_pid) {
             if let Some(agent_id) = pid_to_agent.get(&ppid) {
                 return Some(agent_id.clone());
             }
@@ -853,20 +856,17 @@ mod tests {
 
     #[test]
     fn test_early_termination_at_depth_limit() {
-        // Test that find_registered_parent_ancestor respects max_depth limit
+        // Chain: pid 100 -> 101 -> ... -> 110 (each pid's parent is pid + 1).
+        // The registered agent is at pid 105, five steps above pid 100.
+        let parent_of = |p: u32| if (100..110).contains(&p) { Some(p + 1) } else { None };
         let mut pid_to_agent = HashMap::new();
         let agent_id = AgentId("test_agent".to_string());
+        pid_to_agent.insert(105, agent_id.clone());
 
-        // Mock: agent registered at PID 100
-        pid_to_agent.insert(100, agent_id.clone());
-
-        // When max_depth is 5, the function should stop after 5 iterations
-        // even if it hasn't found a match
-        let result = find_registered_parent_ancestor(1, &pid_to_agent, 5);
-
-        // Since PID 1 doesn't have a registered agent and we limit to depth 5,
-        // the result should be None (respecting the depth limit)
-        assert_eq!(result, None);
+        // A limit of 3 stops before the agent is reached.
+        assert_eq!(find_registered_parent_ancestor(100, &pid_to_agent, 3, parent_of), None);
+        // A limit of 10 reaches it.
+        assert_eq!(find_registered_parent_ancestor(100, &pid_to_agent, 10, parent_of), Some(agent_id));
     }
 
     #[test]
