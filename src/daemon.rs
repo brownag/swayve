@@ -612,6 +612,46 @@ mod tests {
         assert!(still);
     }
 
+    #[tokio::test]
+    async fn test_stale_socket_same_owner_is_replaced() {
+        use std::os::unix::fs::FileTypeExt;
+        let p = std::env::temp_dir().join(format!("swayve_stale_{}", std::process::id()));
+        let _ = std::fs::remove_file(&p);
+        drop(std::os::unix::net::UnixListener::bind(&p).unwrap());
+        let (tx, _rx) = mpsc::channel(1);
+        let path = p.to_str().unwrap().to_string();
+        let task = tokio::spawn(async move { start_daemon_ipc(&path, tx).await });
+        // A stale socket refuses connections, so a successful connect proves replacement.
+        let mut replaced = false;
+        for _ in 0..100 {
+            let is_sock = std::fs::symlink_metadata(&p)
+                .map(|m| m.file_type().is_socket())
+                .unwrap_or(false);
+            if is_sock && std::os::unix::net::UnixStream::connect(&p).is_ok() {
+                replaced = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        task.abort();
+        let _ = std::fs::remove_file(&p);
+        assert!(replaced);
+    }
+
+    #[tokio::test]
+    async fn test_malformed_ipc_line_keeps_client() {
+        use tokio::io::AsyncWriteExt;
+        let (mut client, server) = UnixStream::pair().unwrap();
+        let (event_tx, mut event_rx) = mpsc::channel(4);
+        tokio::spawn(handle_client(server, event_tx));
+        client.write_all(b"not json\n").await.unwrap();
+        client.write_all(b"{\"method\":\"daemon.focus\"}\n").await.unwrap();
+        let ev = tokio::time::timeout(std::time::Duration::from_secs(2), event_rx.recv())
+            .await
+            .expect("timed out waiting for event");
+        assert!(matches!(ev, Some(DaemonEvent::Focus)));
+    }
+
     #[test]
     fn test_early_termination_at_depth_limit() {
         // Test that find_registered_parent_ancestor respects max_depth limit
