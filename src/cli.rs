@@ -346,18 +346,8 @@ fi
                     conn.run_command("[app_id=\"agent.orchestrator\"] scratchpad show").await?;
                 } else {
                     println!("[panel] Orchestrator panel not found. Spawning...");
-                    // Template args for orchestrator panel
-                    let mut term_args = Vec::new();
-                    let status_cmd = "swayve status --watch".to_string();
-                    for arg in &config.terminal.args {
-                        let replaced = arg
-                            .replace("{app_id}", "agent.orchestrator")
-                            .replace("{title}", "Swayve Orchestrator HUD")
-                            .replace("{command}", &status_cmd);
-                        term_args.push(replaced);
-                    }
                     Command::new(&config.terminal.default_emulator)
-                        .args(&term_args)
+                        .args(panel_terminal_args(&config.terminal.args))
                         .spawn()
                         .context("Failed to spawn orchestrator terminal")?;
                 }
@@ -538,6 +528,12 @@ pub fn expand_terminal_args(template: &[String], app_id: &str, title: &str, comm
         }
     }
     out
+}
+
+/// Terminal argv for the orchestrator panel: `swayve status --watch` as separate entries.
+pub fn panel_terminal_args(template: &[String]) -> Vec<String> {
+    let cmd = ["swayve", "status", "--watch"].map(String::from);
+    expand_terminal_args(template, "agent.orchestrator", "Swayve Orchestrator HUD", &cmd)
 }
 
 /// Builds the spawn plan. `term_template` is `config.terminal.args`. `{command}` is replaced by
@@ -762,6 +758,15 @@ mod tests {
         let t = vec!["{command}".to_string()];
         let c = vec!["a".to_string(), "b c".to_string()];
         assert_eq!(expand_terminal_args(&t, "i", "t", &c), ["a", "b c"]);
+    }
+
+    #[test]
+    fn test_panel_argv() {
+        let t: Vec<String> = ["-e", "{command}", "--app-id", "{app_id}", "-T", "{title}"].map(String::from).to_vec();
+        assert_eq!(
+            panel_terminal_args(&t),
+            ["-e", "swayve", "status", "--watch", "--app-id", "agent.orchestrator", "-T", "Swayve Orchestrator HUD"]
+        );
     }
 
     #[tokio::test]
