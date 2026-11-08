@@ -105,11 +105,22 @@ pub fn parse_config_file(path: &std::path::Path) -> Result<Option<Config>, Strin
         .map_err(|e| format!("{}: {}", path.display(), e))
 }
 
+/// Pure: `xdg` is `XDG_CONFIG_HOME`, `home` is `HOME`. A relative or empty
+/// `xdg` is ignored per the XDG spec.
+pub fn config_path_from(xdg: Option<&str>, home: Option<&str>) -> Option<PathBuf> {
+    match (xdg, home) {
+        (Some(x), _) if x.starts_with('/') => Some(PathBuf::from(x).join("swayve/config.toml")),
+        (_, Some(h)) => Some(PathBuf::from(h).join(".config/swayve/config.toml")),
+        _ => None,
+    }
+}
+
 pub fn load_config() -> Config {
-    let Ok(home) = std::env::var("HOME") else {
+    let xdg = std::env::var("XDG_CONFIG_HOME").ok();
+    let home = std::env::var("HOME").ok();
+    let Some(path) = config_path_from(xdg.as_deref(), home.as_deref()) else {
         return Config::default();
     };
-    let path = PathBuf::from(format!("{}/.config/swayve/config.toml", home));
     match parse_config_file(&path) {
         Ok(Some(c)) => c,
         Ok(None) => Config::default(),
@@ -192,6 +203,39 @@ mod tests {
         "##;
         let config: Config = toml::from_str(toml_str).unwrap();
         assert!(config.daemon.auto_monitor);
+    }
+
+    #[test]
+    fn test_config_path_absolute_xdg_wins() {
+        assert_eq!(
+            config_path_from(Some("/x/cfg"), Some("/home/u")),
+            Some(PathBuf::from("/x/cfg/swayve/config.toml"))
+        );
+    }
+
+    #[test]
+    fn test_config_path_relative_xdg_falls_back_to_home() {
+        assert_eq!(
+            config_path_from(Some("rel/cfg"), Some("/home/u")),
+            Some(PathBuf::from("/home/u/.config/swayve/config.toml"))
+        );
+    }
+
+    #[test]
+    fn test_config_path_empty_xdg_falls_back_to_home() {
+        assert_eq!(
+            config_path_from(Some(""), Some("/home/u")),
+            Some(PathBuf::from("/home/u/.config/swayve/config.toml"))
+        );
+    }
+
+    #[test]
+    fn test_config_path_home_only() {
+        assert_eq!(
+            config_path_from(None, Some("/home/u")),
+            Some(PathBuf::from("/home/u/.config/swayve/config.toml"))
+        );
+        assert_eq!(config_path_from(None, None), None);
     }
 }
 
