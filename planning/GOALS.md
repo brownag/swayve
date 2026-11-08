@@ -5,15 +5,13 @@ Source State: STATE_28.md (Orchestration 28 closed at `b37b0e2`). Correction 202
 
 ## Circled Goal (Active)
 
-None. G80 closed in Orchestration 29 (see Completed). G74 is the next goal.
+None. G74 closed in Orchestration 30 (see Completed). No sequenced goals remain.
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G74]** Lifecycle hooks (`on_agent_spawn`, `on_agent_status_change`) have a test that checks argument order and status string. `execute_lifecycle_hook` (`src/daemon.rs`) has no test today.
-  - Depends on: G80 (reuses its argv-capture pattern).
-
 ## Independent Backlog
 
+- **[G82]** Lifecycle hook children are reaped. `execute_lifecycle_hook` (`src/daemon.rs`) drops the `Child` without `wait`, so exited hooks stay zombies until the daemon exits. Found during Orchestration 30.
 - **[G73]** `npm run build` (or a `typecheck` script) type-checks `integrations/pi/tests/`. Today `tsconfig` includes only `src/`, and `tsx --test` skips type checks. Found during Orchestration 26 (task 26.1.1).
 - **[G75]** The planning design docs (`planning/Sway Multi Agent Architecture Design.md`, `planning/Sway Multi-Agent Viewer Architecture.md`) carry a header that marks them historical and points to the ADRs and the current protocol.
 
@@ -55,6 +53,8 @@ None. G80 closed in Orchestration 29 (see Completed). G74 is the next goal.
   - Reason: ADR 0004 rejected it; the newline-delimited JSON protocol is in use.
 
 ## Completed
+
+- **[G74]** Lifecycle hooks are tested. `lifecycle_hook_command` (pure builder, `src/daemon.rs`) pins the `sh -c` argv and the `SWAYVE_AGENT_ID`/`SWAYVE_AGENT_STATUS` env pair; `agent_status_to_str` covers all six variants; `test_lifecycle_status_hook_order` runs the daemon and asserts status-change lines arrive in `UpdateStatus` order (`43b183b`, `3004dd6`; Orchestration 30; `make all` serial exit 0, zero warnings).
 
 - **[G80]** Agent, monitor and panel terminal launches share one argv path. `spawn_plan` shlex-splits the command and calls `expand_terminal_args`. An integration test runs the real binary and pins the agent argv (whitespace path, quoted prompt, shell template) (`bcbe4a0`, `c2ce284`; Orchestration 29; `make all` serial exit 0, zero warnings).
 - **[G81]** Subscription lifetime owned in one place. Unchanged diff broadcasts drop closed subscriber channels, and one `subscriber_writer` serves full and diff modes (`04da0d4`, `7726496`; Orchestration 28; `make all` serial exit 0, zero warnings).
