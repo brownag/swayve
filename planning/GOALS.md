@@ -45,27 +45,27 @@ Source State: STATE_22.md (Orchestration 22 complete; `make all` green, zero war
   - Depends on: none. Needs `github-actions-ci` skill conventions.
 
 - **[G54]** Window lifecycle rules live in `DaemonState`, behind two methods: `on_window_created(con_id, app_id, pid)` and `on_window_destroyed(con_id)`. Each returns `Vec<LayoutAction>` and `Vec<MonitorRequest>`. The run loop only executes spawns.
-  - Source: architecture review, top recommendation. Confirmed in code: the auto-monitor rule appears in `register_agent` (`src/daemon.rs` ~162, gated on `is_subagent`) and in the WindowCreated arm (~500, gated on process-tree auditing also succeeding). The gates differ, so the refactor must make that difference explicit, not merge it silently.
+  - Source: [architecture review](ARCHITECTURE_REVIEW_2026-11-08.md), candidate 1. Confirmed in code: the auto-monitor rule appears in `register_agent` (`src/daemon.rs` ~162, gated on `is_subagent`) and in the WindowCreated arm (~500, gated on process-tree auditing also succeeding). The gates differ, so the refactor must make that difference explicit, not merge it silently.
   - Exit criteria: one method owns the auto-monitor decision; `test_auto_monitor_subagent_registration` tests it without a channel; `LayoutAction` shape unchanged (ADR 0005); `make all` passes.
   - Depends on: none. Plan-wave before any change.
 - **[G55]** The process-tree depth-limit test proves `max_depth` is respected.
-  - Source: architecture review, confirmed. `test_early_termination_at_depth_limit` (`src/daemon.rs` ~819) starts at PID 1 and asserts `None`, which passes even if `max_depth` is ignored.
+  - Source: [architecture review](ARCHITECTURE_REVIEW_2026-11-08.md), candidate 2, confirmed. `test_early_termination_at_depth_limit` (`src/daemon.rs` ~819) starts at PID 1 and asserts `None`, which passes even if `max_depth` is ignored.
   - Approach: pass the parent lookup as a closure to `find_registered_parent_ancestor`. The `/proc` read stays as the production adapter. The test uses a map-backed chain longer than the limit, and asserts the walk stops at the limit.
   - Exit criteria: the test fails if the depth check is removed; `make all` passes.
   - Depends on: none.
 - **[G56]** The diff frame has one shared type, `DiffFrame { snapshot, upsert, remove }`, used by the daemon to build frames and by `fold_diff_line` to read them.
-  - Source: architecture review. Confirmed: the daemon builds the JSON with `serde_json::json!` (`src/daemon.rs` ~112) and the CLI indexes raw `Value`s.
+  - Source: [architecture review](ARCHITECTURE_REVIEW_2026-11-08.md), candidate 3. Confirmed: the daemon builds the JSON with `serde_json::json!` (`src/daemon.rs` ~112) and the CLI indexes raw `Value`s.
   - Constraint: the wire bytes must not change. Add a golden test for `daemon.subscribe_diff` lines first. The existing golden pins only `daemon.subscribe`.
   - Depends on: a `subscribe_diff` golden test (part of this goal).
 - **[G57]** The `spawn` command's plan (prompt escaping, `bash -c` wrapping, ID and title derivation) is a pure function, `spawn_plan(args, now_ms)`, and the command executes it.
-  - Source: architecture review. Not fully verified: the review read only the first ~40 lines of the `Commands::Spawn` arm (`src/cli.rs` ~222). Read the whole arm before planning.
+  - Source: [architecture review](ARCHITECTURE_REVIEW_2026-11-08.md), candidate 5. Not fully verified: the review read only the first ~40 lines of the `Commands::Spawn` arm (`src/cli.rs` ~222). Read the whole arm before planning.
   - Exit criteria: the plan function has unit tests for escaping and ID shape; `make all` passes.
   - Depends on: none.
 
 ## Deferred
 
 - **[G58]** The focus cycle owns its cursor: `FocusCycle { last }` with `.next(&agents)` and `.observe(con_id)`, replacing the `last_focused` local in `run_daemon_loops` (`src/daemon.rs` ~413).
-  - Source: architecture review. The reviewer judged the gain small: the cycle rule is already one tested function (`next_focus_target`). Do not merge the daemon and CLI focus paths (ADR 0003 keeps the flat fallback).
+  - Source: [architecture review](ARCHITECTURE_REVIEW_2026-11-08.md), candidate 4. The reviewer judged the gain small: the cycle rule is already one tested function (`next_focus_target`). Do not merge the daemon and CLI focus paths (ADR 0003 keeps the flat fallback).
   - Trigger: the next change to the focus cycle rules, or G54 landing (it would touch the same loop).
 
 - **[G52]** The daemon sends a delivery ack for each IPC message.
