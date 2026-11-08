@@ -273,10 +273,9 @@ impl DaemonState {
         };
         let term_args = monitor_argv(&self.config.terminal.args, agent_id, &logs_dir);
 
-        if let Err(e) = std::process::Command::new(&self.config.terminal.default_emulator)
-            .args(&term_args)
-            .spawn()
-        {
+        if let Err(e) = spawn_reaped(
+            std::process::Command::new(&self.config.terminal.default_emulator).args(&term_args),
+        ) {
             eprintln!(
                 "[daemon] Failed to spawn monitor terminal for agent {}: {:?}",
                 agent_id.0, e
@@ -330,8 +329,20 @@ fn lifecycle_hook_command(hook_cmd: &str, agent_id: &AgentId, status: &str) -> s
     cmd
 }
 
+/// Spawns a daemon child and returns its pid. The `Child` is handed to a detached thread that
+/// waits on it, so an exited child is reaped and never left as a zombie.
+// ponytail: one thread per live child. Upgrade to a shared reaper if hook fan-out grows.
+fn spawn_reaped(cmd: &mut std::process::Command) -> std::io::Result<u32> {
+    let mut child = cmd.spawn()?;
+    let pid = child.id();
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(pid)
+}
+
 fn execute_lifecycle_hook(hook_cmd: &str, agent_id: &AgentId, status: &str) {
-    if let Err(e) = lifecycle_hook_command(hook_cmd, agent_id, status).spawn() {
+    if let Err(e) = spawn_reaped(&mut lifecycle_hook_command(hook_cmd, agent_id, status)) {
         eprintln!(
             "[daemon] Failed to execute lifecycle hook '{}': {:?}",
             hook_cmd, e
@@ -1475,5 +1486,19 @@ mod tests {
         assert_eq!(agent_status_to_str(&AgentStatus::AwaitingHumanInput), "awaiting_human_input");
         assert_eq!(agent_status_to_str(&AgentStatus::Completed), "completed");
         assert_eq!(agent_status_to_str(&AgentStatus::Failed("boom".to_string())), "failed");
+    }
+
+    #[test]
+    fn test_spawned_child_is_reaped() {
+        let pid = spawn_reaped(std::process::Command::new("sh").args(["-c", "exit 0"]))
+            .expect("spawn sh");
+        let proc_path = format!("/proc/{pid}");
+        for _ in 0..200 {
+            if !std::path::Path::new(&proc_path).exists() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("child {pid} was not reaped: {proc_path} still exists");
     }
 }
