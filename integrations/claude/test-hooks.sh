@@ -4,9 +4,9 @@
 
 set -euo pipefail
 
-SOCKET_PATH="/tmp/swayve_claude_test.sock"
-LOG_FILE="$(mktemp /tmp/swayve_claude_test_log.XXXXXX)"
-MOCK_DIR="$(mktemp -d /tmp/swayve_claude_mock.XXXXXX)"
+MOCK_DIR="$(mktemp -d)"
+SOCKET_PATH="$MOCK_DIR/swayve_claude_test.sock"
+LOG_FILE="$(mktemp)"
 
 PY_PID=""
 

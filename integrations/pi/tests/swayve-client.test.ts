@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { SwayveClient } from '../src/swayve-client.js';
 
@@ -15,7 +16,7 @@ describe('SwayveClient', () => {
   });
 
   test('handles missing socket gracefully', async () => {
-    const client = new SwayveClient({ socketPath: '/tmp/non-existent.sock' });
+    const client = new SwayveClient({ socketPath: path.join(os.tmpdir(), 'swayve-missing-' + process.pid + '.sock') });
     // Should not throw
     await assert.doesNotReject(client.sendStatus('thinking'));
   });
