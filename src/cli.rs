@@ -243,8 +243,8 @@ fi
 
             println!("[spawn] Registering agent {} with daemon...", agent_id);
 
-            // Register with daemon over Unix socket
-            if let Ok(mut stream) = UnixStream::connect(socket_path).await {
+            // Register with daemon over Unix socket, and wait until it is listed (G52, D1).
+            if UnixStream::connect(socket_path).await.is_ok() {
                 let reg_msg = AgentIPCMessage::Register {
                     id: None,
                     params: RegisterParams {
@@ -257,7 +257,9 @@ fi
                     },
                 };
                 let payload = serde_json::to_string(&reg_msg)? + "\n";
-                let _ = stream.write_all(payload.as_bytes()).await;
+                if !register_and_wait(socket_path, &payload, &agent_id, std::time::Duration::from_secs(2)).await {
+                    println!("[spawn] Warning: daemon did not list {} within 2s; launching anyway", agent_id);
+                }
             } else {
                 println!("[spawn] Warning: Could not connect to daemon socket at {}. Running in standalone mode.", socket_path);
             }
@@ -542,6 +544,51 @@ pub fn spawn_plan(
     SpawnPlan { agent_id, app_id, title, term_args }
 }
 
+/// Writes `reg_line` on one connection, then polls `daemon.subscribe` on fresh connections until
+/// the first line lists `agent_id`. Returns `false` when the socket cannot be reached, or when
+/// `timeout` passes first. Used by `spawn` so the window is not launched before the daemon has
+/// applied the registration (G52, re-scoped; no wire change).
+pub async fn register_and_wait(
+    socket_path: &str,
+    reg_line: &str,
+    agent_id: &str,
+    timeout: std::time::Duration,
+) -> bool {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let Ok(mut stream) = UnixStream::connect(socket_path).await else {
+        return false;
+    };
+    if stream.write_all(reg_line.as_bytes()).await.is_err() || stream.flush().await.is_err() {
+        return false;
+    }
+    drop(stream);
+
+    let needle = format!("\"id\":\"{}\"", agent_id);
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        if let Ok(mut s) = UnixStream::connect(socket_path).await
+            && s.write_all(b"{\"method\":\"daemon.subscribe\"}\n").await.is_ok()
+        {
+            let (r, _) = s.into_split();
+            let first = tokio::time::timeout(
+                std::time::Duration::from_millis(100),
+                BufReader::new(r).lines().next_line(),
+            )
+            .await;
+            if let Ok(Ok(Some(line))) = first
+                && line.contains(&needle)
+            {
+                return true;
+            }
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+}
+
 async fn run_status_watch(socket_path: &str, diff: bool) -> Result<()> {
     use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -669,6 +716,16 @@ fn format_status(status: &crate::types::AgentStatus) -> String {
 mod tests {
     use super::*;
     use clap::Parser;
+
+    #[tokio::test]
+    async fn test_register_and_wait_false_when_no_socket() {
+        let path = std::env::temp_dir().join(format!("swayve-{}-no-such.sock", std::process::id()));
+        let line = "{\"method\":\"daemon.subscribe\"}\n";
+        let start = std::time::Instant::now();
+        let ok = register_and_wait(path.to_str().unwrap(), line, "x", std::time::Duration::from_millis(200)).await;
+        assert!(!ok);
+        assert!(start.elapsed() < std::time::Duration::from_secs(1));
+    }
 
     #[test]
     fn test_spawn_plan_escapes_single_quote_in_prompt() {
