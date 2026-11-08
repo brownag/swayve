@@ -83,10 +83,36 @@ async fn test_stalled_diff_subscriber_recovers_with_snapshot() {
         )
         .await
         .unwrap();
-    for i in 0..300 {
-        client.write_all(update(AgentStatus::Failed(format!("s{i}"))).as_bytes()).await.unwrap();
-    }
+    // Split the 300 updates over two connections of 150 lines each, so no connection
+    // trips the per-client IPC rate limit (burst 200). The second batch starts only
+    // after the daemon has processed the first, so the update order is unchanged.
     client.flush().await.unwrap();
+    for _ in 0..100 {
+        if !daemon_list(socket_path).await.is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let mut first = UnixStream::connect(socket_path).await.expect("connect first batch");
+    for i in 0..150 {
+        first.write_all(update(AgentStatus::Failed(format!("s{i}"))).as_bytes()).await.unwrap();
+    }
+    first.flush().await.unwrap();
+    let mid = serde_json::json!(AgentStatus::Failed("s149".to_string()));
+    let mut mid_processed = false;
+    for _ in 0..100 {
+        if daemon_list(socket_path).await.first().is_some_and(|a| a["status"] == mid) {
+            mid_processed = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(mid_processed, "daemon never processed the first batch");
+    let mut second = UnixStream::connect(socket_path).await.expect("connect second batch");
+    for i in 150..300 {
+        second.write_all(update(AgentStatus::Failed(format!("s{i}"))).as_bytes()).await.unwrap();
+    }
+    second.flush().await.unwrap();
 
     // Ordering check: wait until the daemon has processed the last update.
     let last = serde_json::json!(AgentStatus::Failed("s299".to_string()));

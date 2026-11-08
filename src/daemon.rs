@@ -325,11 +325,20 @@ async fn handle_client(stream: UnixStream, event_tx: mpsc::Sender<DaemonEvent>) 
     let mut reader = BufReader::new(reader);
     let mut writer_opt = Some(writer);
     let mut buf = Vec::new();
+    let mut limiter = crate::ratelimit::RateLimiter::new(
+        crate::ratelimit::IPC_LINES_PER_SEC,
+        crate::ratelimit::IPC_BURST,
+        std::time::Instant::now(),
+    );
 
     loop {
         buf.clear();
         if reader.read_until(b'\n', &mut buf).await? == 0 {
             break;
+        }
+        if !limiter.allow(std::time::Instant::now()) {
+            eprintln!("[daemon] Rate limit exceeded; dropping IPC line");
+            continue;
         }
         let Ok(line) = std::str::from_utf8(&buf) else {
             eprintln!("[daemon] Skipping non-UTF-8 IPC line");
