@@ -5,22 +5,35 @@ Source State: STATE_19.md (Orchestration 19 complete; `make all` passes at each 
 
 ## Circled Goal (Active)
 
-- None open. G28 is complete (see Completed).
+Two orthogonal goals, circled together at the user's request for parallel work (2026-11-08). Public release is the reason; both are in scope for it.
+
+- **[G9]** Full-state broadcast cost is reduced to diffs for subscribers that opt in (ADR 0008 upgrade path). The existing full-list stream stays unchanged.
+  - Why now: public release. The trigger was "measurable HUD lag, or agent counts that make full-list pushes noticeable." The user has decided to proceed; the measurement in Wave 1 records the numbers.
+  - Exit criteria:
+    - Baseline numbers for broadcast time and payload size at 5, 20, 50 and 200 agents are recorded in `planning/STATE_20.md`.
+    - `daemon.subscribe_diff` streams upserts and removals. A test applies the stream to a client map and matches the daemon's state.
+    - A subscriber whose channel fills receives a full snapshot on its next send.
+    - `daemon.subscribe` output is byte-identical to before.
+    - `make all` passes.
+  - First action: run the Wave 1 measurement task (`20.1.1`).
+
+- **[G10]** `XDG_CONFIG_HOME` is honored for the config path (ADR 0010 negative).
+  - Why now: public release. A packaged install expects the XDG path.
+  - Exit criteria:
+    - `$XDG_CONFIG_HOME/swayve/config.toml` is used when the variable is set, non-empty, and absolute. Otherwise the path falls back to `$HOME/.config/swayve/config.toml`.
+    - Unit tests cover the four cases (absolute XDG, relative XDG ignored, empty XDG ignored, HOME only). They do not mutate env vars.
+    - README Configuration section and ADR 0010 are updated.
+    - `make all` passes.
+  - First action: add `config_path_from` in `src/config.rs` (task `20.1.2`).
 
 ## Sequenced Goals (Dependency DAG)
 
-- None open. G22, G23, G24 and G26 are complete (see Completed).
+- **[G9 phase 2]** Diff protocol and daemon broadcast. Depends on: G9 measurement (`20.1.1`) reviewed.
+- **[G9 phase 3]** Integration test and docs. Depends on: G9 phase 2.
 
 ## Independent Backlog
 
-- None open. G27 is complete.
-
-## Deferred
-
-- **[G9]** Full-state broadcast cost is reduced to diffs (ADR 0008 upgrade path). Depends on G5 (complete).
-  - Trigger: measurable HUD lag, or agent counts that make full-list pushes noticeable.
-- **[G10]** `XDG_CONFIG_HOME` is honored for the config path (ADR 0010 negative).
-  - Trigger: a user request or a packaging need. Kept separate from G17 by decision on 2026-11-07.
+- None open.
 
 ## Blocked / Pruned
 
