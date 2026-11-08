@@ -55,6 +55,8 @@ pub enum Commands {
         json: bool,
         #[arg(long, short)]
         watch: bool,
+        #[arg(long, requires = "watch")]
+        diff: bool,
     },
     /// Focus navigation commands
     Focus {
@@ -374,13 +376,13 @@ fi
             }
         },
 
-        Commands::Status { json, watch } => {
+        Commands::Status { json, watch, diff } => {
             if watch {
                 if dry_run {
                     println!("[status] [DRY-RUN] HUD watch mode active (dry run)");
                     return Ok(());
                 }
-                run_status_watch(socket_path).await?;
+                run_status_watch(socket_path, diff).await?;
             } else if json {
                 let summary = serde_json::json!({
                     "text": "Swayve: Active",
@@ -503,7 +505,7 @@ async fn focus_cycle_standalone() -> Result<()> {
     Ok(())
 }
 
-async fn run_status_watch(socket_path: &str) -> Result<()> {
+async fn run_status_watch(socket_path: &str, diff: bool) -> Result<()> {
     use tokio::io::{AsyncBufReadExt, BufReader};
 
     let mut stream = match UnixStream::connect(socket_path).await {
@@ -514,20 +516,48 @@ async fn run_status_watch(socket_path: &str) -> Result<()> {
         }
     };
 
-    let sub_msg = AgentIPCMessage::SubscribeStatus;
+    let sub_msg = if diff {
+        AgentIPCMessage::SubscribeDiff
+    } else {
+        AgentIPCMessage::SubscribeStatus
+    };
     let payload = serde_json::to_string(&sub_msg)? + "\n";
     stream.write_all(payload.as_bytes()).await?;
 
     let (reader, _) = stream.into_split();
     let buf_reader = BufReader::new(reader);
     let mut lines = buf_reader.lines();
+    let mut map: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
 
     while let Some(line) = lines.next_line().await? {
         if line.trim().is_empty() {
             continue;
         }
 
-        if let Ok(agents) = serde_json::from_str::<Vec<crate::types::AgentWindow>>(&line) {
+        let agents = if diff {
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else {
+                continue;
+            };
+            if v["snapshot"].as_bool() == Some(true) {
+                map.clear();
+            }
+            for a in v["upsert"].as_array().into_iter().flatten() {
+                if let Some(id) = a["id"].as_str() {
+                    map.insert(id.to_string(), a.clone());
+                }
+            }
+            for id in v["remove"].as_array().into_iter().flatten().filter_map(|x| x.as_str()) {
+                map.remove(id);
+            }
+            let mut agents: Vec<crate::types::AgentWindow> =
+                map.values().filter_map(|a| serde_json::from_value(a.clone()).ok()).collect();
+            agents.sort_by(|a, b| a.id.0.cmp(&b.id.0));
+            Some(agents)
+        } else {
+            serde_json::from_str::<Vec<crate::types::AgentWindow>>(&line).ok()
+        };
+
+        if let Some(agents) = agents {
             print!("\x1B[2J\x1B[H");
             use std::io::Write;
             let _ = std::io::stdout().flush();
@@ -693,12 +723,20 @@ mod tests {
     #[test]
     fn test_status_watch_cmd_parsing() {
         let cli = Cli::try_parse_from(["swayve", "status", "--watch"]).unwrap();
-        if let Commands::Status { watch, json } = cli.command {
+        if let Commands::Status { watch, json, diff } = cli.command {
             assert!(watch);
             assert!(!json);
+            assert!(!diff);
         } else {
             panic!("Expected Commands::Status");
         }
+        let cli = Cli::try_parse_from(["swayve", "status", "--watch", "--diff"]).unwrap();
+        if let Commands::Status { watch, diff, .. } = cli.command {
+            assert!(watch && diff);
+        } else {
+            panic!("Expected Commands::Status");
+        }
+        assert!(Cli::try_parse_from(["swayve", "status", "--diff"]).is_err());
     }
 
     #[test]
