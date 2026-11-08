@@ -1103,4 +1103,49 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    #[ignore]
+    fn measure_broadcast_cost_diff() {
+        for n in [5usize, 20, 50, 200] {
+            for k in [1usize, 10] {
+                let mut state = DaemonState::new(Config::default());
+                for i in 0..n {
+                    state.register_agent(
+                        AgentId(format!("agent_{i}")),
+                        ProjectId("proj".to_string()),
+                        1000 + i as u32,
+                        format!("agent.{i}"),
+                        None,
+                    );
+                }
+                let mut rxs = Vec::new();
+                for _ in 0..k {
+                    let (tx, rx) = mpsc::channel(10_000);
+                    state.push_diff_subscriber(tx);
+                    rxs.push(rx);
+                }
+                state.broadcast_status(); // snapshot; fills `sent`
+                let id = AgentId("agent_0".to_string());
+                let start = std::time::Instant::now();
+                for i in 0..200 {
+                    let s = if i % 2 == 0 { AgentStatus::Thinking } else { AgentStatus::Idle };
+                    state.update_status(&id, s);
+                    state.broadcast_status();
+                }
+                let mean_us = start.elapsed().as_secs_f64() * 1e6 / 200.0;
+                let _snapshot = rxs[0].try_recv().unwrap();
+                let (mut lines, mut bytes) = (0usize, 0usize);
+                while let Ok(l) = rxs[0].try_recv() {
+                    lines += 1;
+                    bytes += l.len();
+                }
+                let avg_line_bytes = bytes as f64 / lines as f64;
+                println!(
+                    "N={n} K={k} mean_us={mean_us:.1} mode=diff lines={lines} avg_line_bytes={avg_line_bytes:.0}"
+                );
+                drop(rxs);
+            }
+        }
+    }
 }
