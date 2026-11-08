@@ -13,7 +13,7 @@ Last Updated: 2026-11-08
 ## Wave Board
 
 ### Wave 1: re-registration keeps container binding (G79)
-- [ ] **Task 28.1.1**: `register_agent` keeps `container_id`, `con_to_agent` and `status` on re-registration
+- [x] **Task 28.1.1**: `register_agent` keeps `container_id`, `con_to_agent` and `status` on re-registration
 
 ### Wave 2: rebinding releases old container (G79)
 - [ ] **Task 28.1.2**: `register_agent_window` releases the old mapping; `on_window_destroyed` removes only the current owner
@@ -52,4 +52,10 @@ Last Updated: 2026-11-08
 - None yet.
 
 ## Task Reports
+
+### 28.1.1 (done)
+- Status: done. Files: `src/daemon.rs` `register_agent` (~152-165) carries `container_id` and `status` from the existing record; new test `test_reregister_keeps_container_binding` at the test module bottom.
+- Tests: `cargo test --lib test_reregister` 1 passed (red first: container_id None). `make all` serial exit 0, zero warnings, unit 75 passed / 2 ignored.
+- Deviations: none. Q1 answered: keep lifecycle hook call unchanged.
+- Gotcha: a re-registration with a new pid leaves the old pid in `pid_to_agent` (kept per spec).
 

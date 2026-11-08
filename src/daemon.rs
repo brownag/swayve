@@ -150,14 +150,19 @@ impl DaemonState {
             }
 
         let mark = agent_id.to_mark();
+        // Re-registration keeps an existing window binding and status (G79).
+        let (container_id, status) = match self.agents.get(&agent_id) {
+            Some(old) => (old.container_id, old.status.clone()),
+            None => (None, AgentStatus::Idle),
+        };
         let agent = AgentWindow {
             id: agent_id.clone(),
             project: project_id,
             parent_id,
-            container_id: None,
+            container_id,
             app_id,
             mark,
-            status: AgentStatus::Idle,
+            status,
         };
         self.agents.insert(agent_id.clone(), agent);
         self.pid_to_agent.insert(pid, agent_id.clone());
@@ -1170,6 +1175,24 @@ mod tests {
             LayoutAction::WindowDestroyed { agent_id, parent_id: None } if *agent_id == parent
         ));
         assert_eq!(state.agents.get(&child).unwrap().parent_id, None);
+    }
+
+    #[test]
+    fn test_reregister_keeps_container_binding() {
+        let mut state = DaemonState::new(Config::default());
+        let a = AgentId("a".to_string());
+        state.register_agent(a.clone(), ProjectId("p1".to_string()), 1, "agent.a".to_string(), None);
+        assert_eq!(register_agent_window("agent.a", 10, &mut state), Some(a.clone()));
+        state.agents.get_mut(&a).unwrap().status = AgentStatus::Thinking;
+
+        state.register_agent(a.clone(), ProjectId("p2".to_string()), 2, "agent.a".to_string(), None);
+
+        let agent = state.agents.get(&a).unwrap();
+        assert_eq!(agent.container_id, Some(10));
+        assert_eq!(state.con_to_agent.get(&10), Some(&a));
+        assert_eq!(agent.status, AgentStatus::Thinking);
+        assert_eq!(agent.project, ProjectId("p2".to_string()));
+        assert_eq!(state.pid_to_agent.get(&2), Some(&a));
     }
 
     #[test]
