@@ -109,6 +109,12 @@ exec_always --no-startup-id swayve daemon
   ```
   *(Running with `--dry-run` logs all Sway window operations to stdout instead of connecting to `SWAYSOCK`, useful for headless/offline testing)*
 
+* **Print Shell Hook:**
+  ```bash
+  eval "$(swayve init-shell)"
+  ```
+  *(Prints the bash/zsh prompt hook configuration; add the `eval` line to your shell rc file)*
+
 * **Spawn an Agent:**
   ```bash
   swayve spawn --wave refactor-auth --agent pi --project core-backend [--prompt "refactor auth"]
@@ -123,8 +129,15 @@ exec_always --no-startup-id swayve daemon
 
 * **View Active Agent Status:**
   ```bash
-  swayve status [--json]
+  swayve status [--json] [--watch]
   ```
+  *(`--watch` (`-w`) keeps the status view running and refreshes it live)*
+
+* **Cycle Focus:**
+  ```bash
+  swayve focus --cycle
+  ```
+  *(Cycles focus through agent windows)*
 
 ---
 
