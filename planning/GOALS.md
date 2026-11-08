@@ -1,7 +1,7 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-08
-Source State: STATE_24.md (Orchestration 24 complete at `b839190`; `make all` green; `main` local, nothing pushed since `805fcea`).
+Source State: STATE_25.md (Orchestration 25 closed at `9a91b55`; `make all` green; `main` local, nothing pushed since `805fcea`). Backlog from the 2026-11-08 full workspace audit (Magic Wand).
 
 ## Circled Goal (Active)
 
@@ -17,10 +17,14 @@ Source State: STATE_24.md (Orchestration 24 complete at `b839190`; `make all` gr
 
 ## Deferred
 
-- None open.
+- **[G66]** The two timing benchmarks in `src/daemon.rs` (`measure_broadcast_cost`, `measure_broadcast_cost_diff`) run in a gate, or are retired.
+  - Trigger: a suspected broadcast performance regression, or a decision to add a perf gate.
 
 ## Blocked / Pruned
 
+- **[G65]** Daemon-launched monitor terminals get the same child env as `swayve spawn`.
+  - Status: Pruned
+  - Reason: `spawn_monitor_terminal` (`src/daemon.rs`, around line 287) runs the monitor with `.args(...)` and no env, and nothing in the repo reads `SWAYVE_SOCKET`, `SWAYVE_AGENT_ID`, or `SWAYVE_PROJECT_ID` from that process (Orchestration 26, D3).
 - **[G25]** The external Antigravity sidecar ships against the documented socket contract.
   - Status: Blocked / External Watch
   - Reason: the sidecar is built and owned outside this repo. Its internal prerequisites, G22 and G24, are complete.
@@ -38,6 +42,8 @@ Source State: STATE_24.md (Orchestration 24 complete at `b839190`; `make all` gr
 
 ## Completed
 
+- **[G64]** `spawn_plan` takes a `SpawnRequest<'a>` struct, and the `too_many_arguments` allow is removed (Orchestration 26, `9b31e73`; the 7 `spawn_plan` tests pass).
+- **[G63]** Pi tests leave no socket files in the package directory. `dummy.sock` goes into a per-run `mkdtemp` dir, and the `test.sock` cleanup test is removed (Orchestration 26, `bf5feaf`; Pi `npm test` 6/6).
 - **[G59]** `swayve spawn --parent X` sets `SWAYVE_PARENT_ID=X` in the child env, and the variable is unset without `--parent` (Orchestration 25, `7b72405`; test `test_spawn_plan_sets_parent_env_when_given` and `test_spawn_plan_omits_parent_env_when_absent`).
 - **[G61]** The Pi client sends `parent_agent_id` on `agent.register` from `SWAYVE_PARENT_ID`, or `null` when unset. Its README lists the variable (Orchestration 25, `556c678`; 3 new Pi tests).
 - **[G60]** The child env is built in the pure `spawn_plan` and the spawn arm executes it (Orchestration 25, `b0438ec`).
