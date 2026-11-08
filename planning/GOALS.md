@@ -1,40 +1,25 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-08
-Source State: STATE_18.md (Orchestration 18 complete and committed at `01f2da4`; `make all` passes)
+Source State: STATE_19.md (Orchestration 19 complete; `make all` passes at each wave gate; ADR 0012 recorded)
 
 ## Circled Goal (Active)
 
-- **[G22]** The daemon's runtime socket path is enforced by tests and documented as the external client contract.
-  - Why now: The Antigravity sidecar (G15) needs a stable, documented socket path to build against. Today the path is verified only by a manual live check (C2), and the Antigravity README still names the old `/tmp/swayve.sock` default (C3). Fixing both is the internal part of G15 and unblocks it.
+- **[G28]** No README or design text in this repo describes the daemon IPC as JSON-RPC. The `src/types.rs` link description matches ADR 0004 and ADR 0012.
+  - Why now: `README.md:178` still says "JSON-RPC message framing" after the Socket Contract section (19.1.4) corrected the same claim at line 54. It is the only internal contradiction left in the contract. Leverage is low. It finishes the contract and nothing else depends on it.
   - Exit criteria:
-    - An automated test asserts that the socket directory is created with mode 0700 and owned by the current uid, and that stale-socket removal refuses a non-socket and a foreign-owned path.
-    - `integrations/antigravity/README.md` gives the default socket as `$XDG_RUNTIME_DIR/swayve/swayve.sock` and names `SWAYVE_SOCKET` as the override.
-    - The socket path and newline-delimited JSON framing are stated once in `README.md` as the external client contract.
+    - `grep -n 'JSON-RPC' README.md` shows only the deliberate correction at line 54.
+    - The `src/types.rs` link description names newline-delimited JSON with a `method` tag.
     - `make all` passes.
-  - First action: Read `src/cli.rs` `runtime_dir_from` and `ensure_private_dir`, then write a failing unit test for the directory mode and ownership check.
+  - First action: Edit `README.md` line 178 to read "Central data structures and newline-delimited JSON message framing schemas." Then run the grep above.
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G23]** `planning/GOALS.md` and `planning/STATE_18.md` agree on G17 status.
-  - Depends on: none (trivial; do first, it can be done in the same commit as G22's planning update)
-  - Note: the live check passed 2026-11-08, so G17 moves to Completed.
-
-- **[G24]** The Antigravity integration documents the runtime socket default.
-  - Depends on: G22 (exit criterion for the socket contract)
-
-- **[G25]** The external Antigravity sidecar ships against the documented socket contract.
-  - Depends on: G22, G24
-  - Note: this is external work. Track it here only once G22 is complete.
+- None open. G22, G23, G24 and G26 are complete (see Completed).
 
 ## Independent Backlog
 
-- **[G26]** `handle_client` drops no client on a malformed IPC line. A test sends a malformed line followed by a valid `focus` message and asserts the valid message is still delivered.
-  - Status: Verified by reading (`src/daemon.rs:251-281` logs and continues on parse error). No test covers it yet.
-  - Caveat: a non-UTF-8 line makes `lines.next_line()` return an error, which closes that client. Decide whether that is acceptable before writing the test.
-
-- **[G27]** Old `EXECUTION_PLAN_15–17.md`, `STATE_15–17.md` and `PROMPT_TEMPLATE_15–17.md` move to `planning/archive/` once their work is closed.
-  - Low value. Planning hygiene only.
+- None open. G27 is complete.
 
 ## Deferred
 
@@ -45,15 +30,23 @@ Source State: STATE_18.md (Orchestration 18 complete and committed at `01f2da4`;
 
 ## Blocked / Pruned
 
+- **[G25]** The external Antigravity sidecar ships against the documented socket contract.
+  - Status: Blocked / External Watch
+  - Reason: the sidecar is built and owned outside this repo. Its internal prerequisites, G22 and G24, are complete.
 - **[G15]** An Antigravity sidecar integration exists in this repo. `integrations/antigravity/` has a README only.
   - Status: Blocked / External Watch
-  - Reason: the sidecar is built and owned outside this repo. Its internal prerequisites are G22 and G24.
+  - Reason: the sidecar is built and owned outside this repo. Its internal prerequisites are complete, so only the external work remains.
 - **[G11]** Adopt the JSON-RPC 2.0 envelope from the design doc.
   - Status: Pruned
   - Reason: ADR 0004 rejected it; the newline-delimited JSON protocol is in use.
 
 ## Completed
 
+- **[G22]** The daemon's runtime socket path is enforced by tests and documented as the external client contract. Tests `cc3c7b3` (ensure_private_dir), `30f576e` (stale socket, malformed line). README Socket Contract `40c2777`. Recorded as ADR 0012 (`b6d76b3`). Orchestration 19.
+- **[G23]** `planning/GOALS.md` and `planning/STATE_18.md` agree on G17 status. Done in the 2026-11-08 rewrite.
+- **[G24]** The Antigravity integration documents the runtime socket default (`161c0de`, 19.1.3).
+- **[G26]** `handle_client` drops no client on a malformed IPC line. Test `test_malformed_ipc_line_keeps_client` (`30f576e`, 19.1.2). Non-UTF-8 lines still close the client; that is the accepted limit in `STATE_19.md`.
+- **[G27]** Orchestrations 15–17 planning files moved to `planning/archive/` (`40f8af6`, 19.2.1).
 - **[G17]** The daemon socket and agent logs live in `$XDG_RUNTIME_DIR/swayve/` (0700). Refuses to start without `XDG_RUNTIME_DIR`. Stale-socket removal only deletes a socket owned by the current user. Commit `cc35bfd`. Live check passed on 2026-11-08 (`planning/STATE_18.md`).
 - **[G18]** README CLI reference lists `init-shell`, `status [--json] [--watch]`, and `focus --cycle` (18.2.1).
 - **[G19]** `cargo clippy --all-targets` is clean (18.2.2).
