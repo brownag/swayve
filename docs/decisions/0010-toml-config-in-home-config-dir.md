@@ -31,6 +31,7 @@ Chosen option: "TOML at `$HOME/.config/swayve/config.toml` with `serde` defaults
 ### Consequences
 * **Positive**: Adding a field is a default function plus a struct field. Old files still load.
 * **Negative**: The path is built from `HOME` directly, so `XDG_CONFIG_HOME` is ignored. Commit `46e5c13` simplified path construction and kept this behaviour.
+* Amended 2026-11-08 (Orchestration 20): XDG_CONFIG_HOME is honored when absolute; see the Configuration section of README.md.
 * **Negative**: A malformed file falls back silently to defaults in `load_config` (`src/config.rs`). Users see defaults, not an error.
 
 ## Validation & Compliance

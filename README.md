@@ -150,6 +150,8 @@ exec_always --no-startup-id swayve daemon
 
 ## ⚙️ Configuration (`~/.config/swayve/config.toml`)
 
+The config file is `$XDG_CONFIG_HOME/swayve/config.toml` when `XDG_CONFIG_HOME` is set to an absolute path, otherwise `~/.config/swayve/config.toml`. A relative or empty `XDG_CONFIG_HOME` is ignored.
+
 Customize agent states, border styles, and terminal commands:
 
 ```toml
