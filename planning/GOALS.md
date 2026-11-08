@@ -9,7 +9,7 @@ Source State: STATE_21.md (Orchestration 21 complete; `make all` green, zero war
   - Why now: it is the root of the open work. Every open item in the backlog is in its scope. Nothing outside it is open.
   - Exit criteria: each of G39–G43 has a Completed entry (with SHA) or a Deferred entry (with trigger). `make all` passes, zero warnings. `origin/main` contains the work.
   - First action: run the N=1000 diff-broadcast measurement for G42, which decides whether `PartialEq` is tested.
-  - Plan: `planning/EXECUTION_PLAN_22.md` (drafted, awaiting approval). Waves: 1 (22.1.1 to 22.1.3), 2 (22.2.1), 3 (22.3.1), then the orchestrator closes G41.
+  - Plan: `planning/EXECUTION_PLAN_22.md` (approved 2026-11-08, not yet executed). Waves: 1 (22.1.1 to 22.1.3), 2 (22.2.1), 3 (22.3.1), then the orchestrator closes G41.
 
 ## Sequenced Goals (Dependency DAG)
 
