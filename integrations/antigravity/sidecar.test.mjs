@@ -126,24 +126,76 @@ test("resolveEnv: falls back to ANTIGRAVITY_CONVERSATION_ID and ANTIGRAVITY_PROJ
 test("focus runs without SWAYVE_AGENT_ID over a local Unix socket", async () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "swayve-agy-test-"));
   const sockPath = path.join(tmpDir, "test.sock");
-  const received = await new Promise((resolve, reject) => {
-    const server = net.createServer((conn) => {
-      let buf = "";
-      conn.setEncoding("utf8");
-      conn.on("data", (chunk) => {
-        buf += chunk;
+  let server;
+  try {
+    const received = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("focus test timed out after 5 s")), 5000);
+      server = net.createServer((conn) => {
+        let buf = "";
+        conn.setEncoding("utf8");
+        conn.on("data", (chunk) => {
+          buf += chunk;
+        });
+        conn.on("end", () => {
+          clearTimeout(timer);
+          server.close(() => resolve(buf));
+        });
       });
-      conn.on("end", () => {
-        server.close(() => resolve(buf));
+      server.on("error", (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+      server.listen(sockPath, () => {
+        main(["focus"], { SWAYVE_SOCKET: sockPath }, 100);
       });
     });
-    server.on("error", reject);
-    server.listen(sockPath, () => {
-      main(["focus"], { SWAYVE_SOCKET: sockPath }, 100);
+    assert.equal(received, '{"method":"daemon.focus"}\n');
+  } finally {
+    if (server?.listening) server.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("send gives up on a stalled daemon", async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "swayve-agy-test-"));
+  const sockPath = path.join(tmpDir, "stalled.sock");
+  let server;
+  let serverConn;
+  try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        serverConn?.destroy();
+        reject(new Error("stalled daemon connection was not closed within 4 s"));
+      }, 4000);
+      server = net.createServer({ allowHalfOpen: true }, (conn) => {
+        serverConn = conn;
+        let probe;
+        let start;
+        conn.on("error", () => {});
+        conn.on("data", () => {});
+        // Start writing only after the client's 2 s idle timeout, so the probes do not reset it.
+        conn.on("end", () => {
+          start = setTimeout(() => {
+            probe = setInterval(() => conn.write("p"), 50);
+          }, 2500);
+        });
+        conn.on("close", () => {
+          clearTimeout(timer);
+          clearTimeout(start);
+          clearInterval(probe);
+          resolve();
+        });
+      });
+      server.on("error", reject);
+      server.listen(sockPath, () => {
+        main(["focus"], { SWAYVE_SOCKET: sockPath }, 100);
+      });
     });
-  });
-  fs.rmSync(tmpDir, { recursive: true, force: true });
-  assert.equal(received, '{"method":"daemon.focus"}\n');
+  } finally {
+    serverConn?.destroy();
+    if (server?.listening) server.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 });
 
 test("hookPayload and hook mode emit required Antigravity stdout JSON and socket lines", async () => {

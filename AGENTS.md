@@ -43,7 +43,7 @@
 - **Claude hook tests**: `integrations/claude/test-hooks.sh` — starts a mock Unix-socket server and checks hook status messages.
 - **Antigravity sidecar** (`integrations/antigravity/`): `node --test sidecar.test.mjs`, run from that directory (also included in `make test`).
 - **Implementation planning**: Review `planning/` for the active wave plan and the highest-numbered `STATE_N.md` before changing code. Task status lives there, not in this file.
-- **Test layout**: Rust unit tests live in a `#[cfg(test)] mod tests` at the bottom of the module they cover (`src/daemon.rs`, `src/layout.rs`, `src/config.rs`). Cross-module and socket-level tests go in `tests/integration_tests.rs`. Each `integrations/` client tests itself in its own directory; the root gate does not run them.
+- **Test layout**: Rust unit tests live in a `#[cfg(test)] mod tests` at the bottom of the module they cover (`src/daemon.rs`, `src/layout.rs`, `src/config.rs`). Cross-module and socket-level tests go in `tests/integration_tests.rs`. Each `integrations/` client tests itself in its own directory; `make test` runs the Antigravity tests through the root `Makefile`.
 - **CI**: none. There is no `.github/` workflow. `make all` run locally is the only gate.
 
 ## Infrastructure

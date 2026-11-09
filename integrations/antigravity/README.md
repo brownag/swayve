@@ -18,7 +18,7 @@ These variables are supplied by the launcher (`swayve spawn`) or by the Antigrav
 | `SWAYVE_AGENT_ID` | Unique ID of the agent instance. Falls back to `ANTIGRAVITY_CONVERSATION_ID` (set by `agy`), or `conversationId` from hook `stdin` JSON in `hook` mode. Required for `register` and `status` (not required for `focus`). | `agy-agent-8f3a` |
 | `SWAYVE_PROJECT_ID` | Project / workspace ID. Falls back to `ANTIGRAVITY_PROJECT_ID` (set by `agy`), or the basename of `workspacePaths[0]` from hook `stdin` JSON, or `""`. | `swayve-dev` |
 | `SWAYVE_PARENT_ID` | Agent ID of the spawning parent agent (if subagent). Supplied by the launcher. Empty or unset means a root agent (`parent_agent_id: null`). | `parent-agent-001` |
-| `SWAYVE_AGENT_PID` | PID reported in `agent.register`. Supplied by the launcher. Must be a positive integer. If unset or invalid, the sidecar falls back to `process.ppid`. When invoked from Antigravity `hooks.json` (`sh -c`), prefix the hook command with `exec` (`exec node ...`) so `process.ppid` is the `agy` process rather than an intermediate `sh` subshell. | `48201` |
+| `SWAYVE_AGENT_PID` | PID reported in `agent.register`. `swayve spawn` does not set it; set it when `process.ppid` is not the PID of the agent that `agent.register` should report. Must be a positive integer. If unset or invalid, the sidecar falls back to `process.ppid`. When invoked from Antigravity `hooks.json` (`sh -c`), prefix the hook command with `exec` (`exec node ...`) so `process.ppid` is the `agy` process rather than an intermediate `sh` subshell. | `48201` |
 
 ---
 
@@ -105,7 +105,7 @@ Swayve processes this request via its internal hierarchical focus algorithm, nav
 The sidecar is `integrations/antigravity/sidecar.mjs` (Node 22, no dependencies).
 
 ```bash
-cd integrations/antigravity && node --test sidecar.test.mjs
+(cd integrations/antigravity && node --test sidecar.test.mjs)
 ```
 
 Send one message by hand (the launcher or `agy` sets the env vars):

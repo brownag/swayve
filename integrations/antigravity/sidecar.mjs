@@ -105,6 +105,10 @@ function send(socketPath, lines) {
   const socket = net.createConnection(socketPath, () => {
     socket.end(payload);
   });
+  socket.setTimeout(2000, () => {
+    logAndSkip("send timed out");
+    socket.destroy();
+  });
   socket.on("error", (err) => {
     logAndSkip(`send failed: ${err.message}`);
   });
