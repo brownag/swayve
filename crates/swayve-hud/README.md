@@ -15,7 +15,7 @@ If neither environment variable provides a usable path, the HUD reports an error
 ## Building and Running
 
 ### Prerequisites
-- Rust (Edition 2024 compatible toolchain, e.g. rustc >= 1.85 / 1.99)
+- Rust (Edition 2024 toolchain with let-chain support, rustc >= 1.88)
 - Cargo
 - `make`
 

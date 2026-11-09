@@ -26,7 +26,7 @@
 - Socket path precedence: `$SWAYVE_SOCKET` -> `$XDG_RUNTIME_DIR/swayve/swayve.sock`
 - Protocol message sent on connect: `daemon.subscribe_diff` (newline-terminated JSON, see `SUBSCRIBE_DIFF_MSG` in `src/client.rs`)
 - Backoff: initial 500ms, max 5000ms (`src/client.rs`)
-- Toolchain: Rust, edition 2024 (rustc >= 1.85)
+- Toolchain: Rust, edition 2024 (rustc >= 1.88)
 - Dependencies: `Cargo.toml` (`swayve-types` and `serde_json`)
 - Build output and `.development/` are git-ignored
 
