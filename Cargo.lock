@@ -529,8 +529,26 @@ dependencies = [
  "serde_json",
  "shlex",
  "swayipc-async",
+ "swayve-hud",
+ "swayve-types",
  "tokio",
  "toml",
+]
+
+[[package]]
+name = "swayve-hud"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "swayve-types",
+]
+
+[[package]]
+name = "swayve-types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

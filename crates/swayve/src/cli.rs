@@ -63,6 +63,12 @@ pub enum Commands {
         #[arg(long)]
         cycle: bool,
     },
+    /// Launch the live terminal Heads-Up Display (HUD)
+    Hud {
+        /// Override daemon socket path
+        #[arg(long)]
+        socket: Option<std::path::PathBuf>,
+    },
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -117,9 +123,11 @@ pub async fn run_cli() -> Result<()> {
     let args = Cli::parse();
     let config = load_config();
     // Resolved lazily: init-shell and panel never touch the socket.
-    let socket_path = if matches!(args.command, Commands::InitShell | Commands::Panel { .. }) {
+    let socket_path = if matches!(args.command, Commands::InitShell | Commands::Panel { .. } | Commands::Hud { socket: Some(_) }) {
         String::new()
-    } else if let Ok(p) = env::var("SWAYVE_SOCKET") {
+    } else if let Ok(p) = env::var("SWAYVE_SOCKET")
+        && !p.trim().is_empty()
+    {
         p
     } else {
         let dir = swayve_runtime_dir()?;
@@ -432,6 +440,15 @@ fi
                     }
                 }
             }
+        }
+
+        Commands::Hud { socket } => {
+            if dry_run {
+                println!("[hud] [DRY-RUN] Would launch Swayve HUD.");
+                return Ok(());
+            }
+            let target_socket = socket.unwrap_or_else(|| std::path::PathBuf::from(socket_path));
+            swayve_hud::client::run_client(&target_socket).map_err(|e| anyhow::anyhow!(e))?;
         }
     }
 
@@ -962,6 +979,19 @@ mod tests {
     fn test_init_shell_cmd_parsing() {
         let cli = Cli::try_parse_from(["swayve", "init-shell"]).unwrap();
         assert!(matches!(cli.command, Commands::InitShell));
+    }
+
+    #[test]
+    fn test_hud_cmd_parsing() {
+        let cli = Cli::try_parse_from(["swayve", "hud"]).unwrap();
+        assert!(matches!(cli.command, Commands::Hud { socket: None }));
+        let custom = std::env::temp_dir().join("swayve_hud_test.sock");
+        let cli = Cli::try_parse_from(["swayve", "hud", "--socket", custom.to_str().unwrap()]).unwrap();
+        if let Commands::Hud { socket } = cli.command {
+            assert_eq!(socket, Some(custom));
+        } else {
+            panic!("Expected Commands::Hud");
+        }
     }
 
     #[test]

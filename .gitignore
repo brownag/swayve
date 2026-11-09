@@ -1,5 +1,6 @@
 target/
 .pi-subagents/
+.development/
 node_modules/
 dist/
 *.js
