@@ -149,6 +149,12 @@ exec_always --no-startup-id swayve daemon
   ```
   *(Cycles focus through agent windows)*
 
+* **Launch Live HUD:**
+  ```bash
+  swayve hud [--socket <PATH>]
+  ```
+  *(Launches the terminal Heads-Up Display consuming `daemon.subscribe_diff` with automatic reconnect and exponential backoff; also available as the standalone `swayve-hud` binary)*
+
 ---
 
 ## ⚙️ Configuration (`~/.config/swayve/config.toml`)
@@ -189,12 +195,16 @@ A value that is not a number above 0 (or below 1 for `ipc_burst`) falls back to 
 
 ## 🛠 Project Structure
 
-* [src/config.rs](file:///home/andrew/workspace/swayve/src/config.rs): Configuration loading and parser routines.
-* [src/types.rs](file:///home/andrew/workspace/swayve/src/types.rs): Central data structures and newline-delimited JSON message framing schemas.
-* [src/daemon.rs](file:///home/andrew/workspace/swayve/src/daemon.rs): Socket handling loop and state coordination engine.
-* [src/sway.rs](file:///home/andrew/workspace/swayve/src/sway.rs): Event listener and serialized command execution threads interfacing with `swayipc-async`.
-* [src/cli.rs](file:///home/andrew/workspace/swayve/src/cli.rs): Main subcommand handler mappings (`daemon`, `spawn`, `panel`, `status`).
-* [tests/integration_tests.rs](file:///home/andrew/workspace/swayve/tests/integration_tests.rs): Fully automated test suite validating registration and status updates.
+The repository is organized as a Cargo virtual workspace under `crates/`:
+
+* [crates/swayve-types/src/lib.rs](file:///home/andrew/workspace/swayve/crates/swayve-types/src/lib.rs): Shared wire protocol types (`AgentId`, `ProjectId`, `AgentStatus`, `AgentWindow`, `AgentIPCMessage`, `DiffFrame`) and newline-delimited JSON framing schemas.
+* [crates/swayve/src/config.rs](file:///home/andrew/workspace/swayve/crates/swayve/src/config.rs): Configuration loading and parser routines.
+* [crates/swayve/src/types.rs](file:///home/andrew/workspace/swayve/crates/swayve/src/types.rs): Re-exports shared wire types from `swayve-types`.
+* [crates/swayve/src/daemon.rs](file:///home/andrew/workspace/swayve/crates/swayve/src/daemon.rs): Socket handling loop and state coordination engine.
+* [crates/swayve/src/sway.rs](file:///home/andrew/workspace/swayve/crates/swayve/src/sway.rs): Event listener and serialized command execution threads interfacing with `swayipc-async`.
+* [crates/swayve/src/cli.rs](file:///home/andrew/workspace/swayve/crates/swayve/src/cli.rs): Main subcommand handler mappings (`daemon`, `spawn`, `panel`, `status`, `focus`, `hud`).
+* [crates/swayve/tests/integration_tests.rs](file:///home/andrew/workspace/swayve/crates/swayve/tests/integration_tests.rs): Fully automated test suite validating registration and status updates.
+* [crates/swayve-hud/](file:///home/andrew/workspace/swayve/crates/swayve-hud/README.md): Terminal Heads-Up Display (`swayve-hud`) consuming `daemon.subscribe_diff` with automatic reconnect and backoff.
 
 ---
 
