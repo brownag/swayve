@@ -34,6 +34,7 @@ check:
 test:
 	cargo test
 	cd integrations/pi && npm test
+	cd integrations/antigravity && node --test sidecar.test.mjs
 	bash integrations/claude/test-hooks.sh
 
 # Clean artifacts
