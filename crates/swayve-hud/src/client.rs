@@ -64,6 +64,7 @@ pub struct ClientOptions {
 }
 
 impl Default for ClientOptions {
+    /// Returns default reconnect options with standard initial and maximum backoff.
     fn default() -> Self {
         Self {
             initial_backoff: DEFAULT_INITIAL_BACKOFF,

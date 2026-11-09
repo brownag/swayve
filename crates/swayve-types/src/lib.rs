@@ -2,68 +2,81 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 
+/// Unique identifier for an agent instance.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct AgentId(pub String);
 
 impl AgentId {
+    /// Returns the underlying string slice for this agent ID.
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
+    /// Generates the Sway container mark for this agent window.
     pub fn to_mark(&self) -> String {
         format!("mark_{}", self.0.replace('-', "_"))
     }
 
+    /// Generates the Sway container mark used to identify child agent containers.
     pub fn to_children_mark(&self) -> String {
         format!("mark_children_{}", self.0.replace('-', "_"))
     }
 }
 
 impl fmt::Display for AgentId {
+    /// Formats the agent identifier as a string.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
 impl From<String> for AgentId {
+    /// Converts an owned `String` into an `AgentId`.
     fn from(s: String) -> Self {
         Self(s)
     }
 }
 
 impl From<&str> for AgentId {
+    /// Converts a borrowed string slice into an `AgentId`.
     fn from(s: &str) -> Self {
         Self(s.to_string())
     }
 }
 
+/// Project identifier associated with an agent or workspace.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ProjectId(pub String);
 
 impl ProjectId {
+    /// Returns the underlying string slice for this project ID.
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
 impl fmt::Display for ProjectId {
+    /// Formats the project identifier as a string.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
 impl From<String> for ProjectId {
+    /// Converts an owned `String` into a `ProjectId`.
     fn from(s: String) -> Self {
         Self(s)
     }
 }
 
 impl From<&str> for ProjectId {
+    /// Converts a borrowed string slice into a `ProjectId`.
     fn from(s: &str) -> Self {
         Self(s.to_string())
     }
 }
 
+/// Execution status of an agent reported to Swayve.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentStatus {
@@ -83,6 +96,7 @@ impl AgentStatus {
 }
 
 impl fmt::Display for AgentStatus {
+    /// Formats the status into its wire string representation.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AgentStatus::Idle => write!(f, "idle"),
@@ -114,7 +128,9 @@ impl AgentWindow {
     }
 }
 
+/// Trait providing access to currently tracked agent windows.
 pub trait AgentRegistry {
+    /// Returns a reference to the map of tracked agent windows keyed by AgentId.
     fn agents(&self) -> &HashMap<AgentId, AgentWindow>;
 }
 
@@ -142,6 +158,7 @@ pub enum AgentIPCMessage {
     SubscribeDiff,
 }
 
+/// Parameters supplied when registering a newly spawned agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterParams {
     pub agent_id: AgentId,
@@ -152,6 +169,7 @@ pub struct RegisterParams {
     pub parent_agent_id: Option<AgentId>,
 }
 
+/// Parameters supplied when updating the execution status of an agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateStatusParams {
     pub agent_id: AgentId,
@@ -203,6 +221,7 @@ impl DiffFrame {
 impl std::str::FromStr for DiffFrame {
     type Err = ();
 
+    /// Parses a diff frame from its JSON string representation.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         DiffFrame::from_str(s).ok_or(())
     }

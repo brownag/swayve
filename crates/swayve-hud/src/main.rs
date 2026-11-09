@@ -4,6 +4,7 @@ use std::process;
 
 use swayve_hud::client::{resolve_socket_path, run_client};
 
+/// Prints usage and options for the standalone HUD binary.
 fn print_help() {
     println!("swayve-hud: live terminal diff consumer for Swayve");
     println!();
@@ -19,6 +20,8 @@ fn print_help() {
     println!("    XDG_RUNTIME_DIR      Fallback directory for swayve/swayve.sock");
 }
 
+/// Parses CLI flags (`-h`, `--socket`), resolves the Swayve socket path,
+/// and executes the live HUD client loop.
 fn main() {
     let args: Vec<String> = env::args().collect();
     let mut custom_socket = None;

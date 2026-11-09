@@ -20,6 +20,7 @@ struct TempSocket {
 }
 
 impl TempSocket {
+    /// Generates a unique temporary socket path and removes any preexisting socket file.
     fn new(test_name: &str) -> Self {
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);
@@ -29,12 +30,14 @@ impl TempSocket {
         Self { path }
     }
 
+    /// Returns a reference to the temporary socket file path.
     fn path(&self) -> &Path {
         &self.path
     }
 }
 
 impl Drop for TempSocket {
+    /// Removes the socket file from the filesystem on drop.
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.path);
     }
@@ -50,6 +53,7 @@ fn verify_handshake(stream: &UnixStream) {
     assert_eq!(line, SUBSCRIBE_DIFF_MSG);
 }
 
+/// Tests mock daemon handshake transmission and processing of snapshot, upsert, and remove diff frames.
 #[test]
 fn test_mock_daemon_handshake_and_frames() {
     let temp_socket = TempSocket::new("test_handshake_and_frames");
@@ -121,6 +125,7 @@ fn test_mock_daemon_handshake_and_frames() {
     server_handle.join().expect("server thread failed");
 }
 
+/// Tests reconnect loop recovery after daemon disconnection, verifying clean state reset with a fresh snapshot.
 #[test]
 fn test_disconnect_and_reconnect_recovery() {
     let temp_socket = TempSocket::new("test_reconnect_recovery");
@@ -211,6 +216,7 @@ fn test_disconnect_and_reconnect_recovery() {
     assert_eq!(final_state["agent-new"].status, AgentStatus::Thinking);
 }
 
+/// Tests that disconnecting from the daemon triggers offline state rendering with cleared active agents.
 #[test]
 fn test_disconnect_renders_offline_state() {
     let temp_socket = TempSocket::new("test_disconnect_offline");
@@ -271,6 +277,7 @@ fn test_disconnect_renders_offline_state() {
     assert!(!last_render.contains("agent-old"));
 }
 
+/// Tests that encountering a closed output/stdout stream halts the client immediately rather than looping.
 #[test]
 fn test_output_closed_stops_client() {
     let temp_socket = TempSocket::new("test_output_closed");
@@ -304,6 +311,7 @@ fn test_output_closed_stops_client() {
     server_handle.join().expect("server thread failed");
 }
 
+/// Tests that invalid JSON and blank lines in the stream are silently ignored without disrupting valid diff frames.
 #[test]
 fn test_non_json_lines_ignored_by_mock_stream() {
     let temp_socket = TempSocket::new("test_non_json_ignored");

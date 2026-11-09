@@ -84,6 +84,7 @@ pub fn runtime_dir_from(xdg: Option<&str>) -> Result<std::path::PathBuf> {
     }
 }
 
+/// Returns the swayve runtime directory under `$XDG_RUNTIME_DIR/swayve`.
 pub fn swayve_runtime_dir() -> Result<std::path::PathBuf> {
     runtime_dir_from(env::var("XDG_RUNTIME_DIR").ok().as_deref())
 }
@@ -119,6 +120,8 @@ pub fn ensure_private_dir_for(p: &std::path::Path, expected_uid: u32) -> Result<
     Ok(())
 }
 
+/// Main entry point for the Swayve CLI: parses arguments, prepares the runtime
+/// socket directory, and dispatches subcommands to the daemon or client.
 pub async fn run_cli() -> Result<()> {
     let args = Cli::parse();
     let config = load_config();
