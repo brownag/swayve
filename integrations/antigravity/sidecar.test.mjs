@@ -200,7 +200,7 @@ test("send gives up on a stalled daemon", async () => {
 
 test("hookPayload and hook mode emit required Antigravity stdout JSON and socket lines", async () => {
   assert.equal(hookPayload("PreToolUse"), '{"decision":"allow"}');
-  assert.equal(hookPayload("Stop"), '{"decision":"allow_stop"}');
+  assert.equal(hookPayload("Stop"), '{}');
   assert.equal(hookPayload("PostToolUse"), "{}");
   assert.equal(hookPayload("SessionStart"), "{}");
 
@@ -221,6 +221,6 @@ test("hookPayload and hook mode emit required Antigravity stdout JSON and socket
     '{"decision":"allow"}\n',
     "{}\n",
     "{}\n",
-    '{"decision":"allow_stop"}\n',
+    '{}\n',
   ]);
 });
