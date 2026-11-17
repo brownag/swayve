@@ -122,7 +122,7 @@ Subcommands: `register`, `status <value>`, `focus`, `hook <Event> [register|stat
 
 ### Antigravity Lifecycle Hook Mode (`hooks.json`)
 
-Antigravity lifecycle hooks (`.agents/hooks.json` or `~/.gemini/config/hooks.json`) pass event context as JSON on `stdin` and require a valid JSON response on `stdout` (`{"decision":"allow"}` for `PreToolUse`, `{"decision":"allow_stop"}` for `Stop`, `{}` for `SessionStart`, `PostToolUse`, `PreInvocation`, `PostInvocation`).
+Antigravity lifecycle hooks (`.agents/hooks.json` or `~/.gemini/config/hooks.json`) pass event context as JSON on `stdin` and require a JSON object on `stdout`. The schema is documented in the `hooks.md` file bundled with the `agy` install (`builtin/skills/agy-customizations/docs/hooks.md`). Per that doc: `{"decision":"allow"}` for `PreToolUse`; `{}` for `SessionStart`, `PostToolUse`, `PreInvocation`, `PostInvocation`, and `Stop` (only `{"decision":"continue"}` changes behavior on `Stop`, and it keeps the agent running).
 
 Use `hook <Event>` mode so the sidecar always emits the required JSON on `stdout` while reporting status to Swayve over the socket. Prefix with `exec` so `sh -c` replaces the shell and `process.ppid` resolves to the parent `agy` process:
 
