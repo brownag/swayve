@@ -16,7 +16,7 @@ Target branch: `feat/opencode-integration1`
 | Wave | Task | Status | Worker / Session |
 |---|---|---|---|
 | 1 | 36.1.1 | done | `ses_e143b833effevqQipCZlT0g17e` |
-| 2 | 36.2.1 | pending | — |
+| 2 | 36.2.1 | done | `ses_e142e97f8ffezVvR9N5e48QsRq` |
 
 ## Task Reports
 
@@ -26,3 +26,11 @@ Target branch: `feat/opencode-integration1`
 - tests: `node --experimental-strip-types --check .opencode/plugins/swayve.ts` — passed; `git show --check --oneline HEAD` — passed
 - deviations: no mock-socket or live OpenCode test in this task; mock-socket tests are Wave 2 per plan
 - gotchas: API docs do not specify a supported release pin; workspace falls back to plugin `ctx.location.directory` only when event session info has no directory; tests should exercise both identity paths
+
+### 36.2.1
+- status: done; implementation commit `5c74946` (`test(opencode): cover lifecycle plugin socket reporting`)
+- files: `integrations/opencode/sidecar.test.mjs` (218 lines), `integrations/opencode/README.md` (59 lines)
+- tests: `node --experimental-strip-types --test integrations/opencode/sidecar.test.mjs` — 4/4 passed; no temporary sockets remained; Node emitted a harmless `MODULE_TYPELESS_PACKAGE_JSON` warning
+- final gate: `make all` passed after Wave 2; Rust/workspace tests, Pi 8/8, Antigravity 14/14, Claude hooks, and release build all passed
+- deviations: Node built-in `registerHooks()` has no unregister return; the resolver hook is limited to the isolated test process. No live OpenCode smoke test was run.
+- gotchas: README describes the API verification date rather than a release compatibility guarantee; manual runtime smoke test remains recommended.
