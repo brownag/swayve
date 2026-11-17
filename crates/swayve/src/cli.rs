@@ -157,7 +157,8 @@ _swayve_send_status() {
     local status="$1"
     local msg="{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"$SWAYVE_AGENT_ID\",\"status\":\"$status\"}}"
     if command -v nc >/dev/null 2>&1; then
-        printf '%s\n' "$msg" | nc -N -U "$SWAYVE_SOCKET" 2>/dev/null || true
+        # -N: OpenBSD nc needs it to send EOF; Ncat rejects it, so retry with a timeout.
+        printf '%s\n' "$msg" | nc -N -U "$SWAYVE_SOCKET" 2>/dev/null || printf '%s\n' "$msg" | nc -w 1 -U "$SWAYVE_SOCKET" 2>/dev/null || true
     elif command -v socat >/dev/null 2>&1; then
         printf '%s\n' "$msg" | socat - UNIX-CONNECT:"$SWAYVE_SOCKET" 2>/dev/null || true
     fi
@@ -309,7 +310,7 @@ fi
                 );
             }
 
-            if let Some(hint) = missing_hooks_hint(&agent) {
+            if let Some(hint) = missing_hooks_hint(&agent, &work_dir) {
                 println!("[spawn] Warning: {}", hint);
             }
             let term_args = plan.term_args;
@@ -659,12 +660,21 @@ pub fn spawn_plan(req: SpawnRequest<'_>) -> SpawnPlan {
 }
 
 /// Warning text when an agent's Swayve hooks are not installed, or `None` when they are (or the agent has none).
-fn missing_hooks_hint(agent: &str) -> Option<&'static str> {
+fn missing_hooks_hint(agent: &str, work_dir: &std::path::Path) -> Option<&'static str> {
     let home = env::var_os("HOME").map(std::path::PathBuf::from);
+    missing_hooks_hint_in(agent, work_dir, home.as_deref())
+}
+
+fn missing_hooks_hint_in(
+    agent: &str,
+    work_dir: &std::path::Path,
+    home: Option<&std::path::Path>,
+) -> Option<&'static str> {
+    let home = home.map(|h| h.to_path_buf());
     let (files, marker, hint): (Vec<std::path::PathBuf>, &str, &str) = match agent {
         "claude" => (
             [
-                Some(std::path::PathBuf::from(".claude/settings.json")),
+                Some(work_dir.join(".claude/settings.json")),
                 home.map(|h| h.join(".claude/settings.json")),
             ]
             .into_iter()
@@ -675,7 +685,7 @@ fn missing_hooks_hint(agent: &str) -> Option<&'static str> {
         ),
         "antigravity" => (
             [
-                Some(std::path::PathBuf::from(".agents/hooks.json")),
+                Some(work_dir.join(".agents/hooks.json")),
                 home.map(|h| h.join(".gemini/config/hooks.json")),
             ]
             .into_iter()
@@ -943,7 +953,26 @@ mod tests {
 
     #[test]
     fn test_missing_hooks_hint_only_for_hook_based_agents() {
-        assert!(missing_hooks_hint("pi").is_none());
+        let dir = std::env::temp_dir();
+        assert!(missing_hooks_hint("pi", &dir).is_none());
+    }
+
+    #[test]
+    fn test_missing_hooks_hint_checks_spawn_dir_not_cwd() {
+        let base = std::env::temp_dir().join(format!("swayve-hooks-hint-{}", std::process::id()));
+        let with_hooks = base.join("with");
+        let without_hooks = base.join("without");
+        std::fs::create_dir_all(with_hooks.join(".claude")).unwrap();
+        std::fs::create_dir_all(&without_hooks).unwrap();
+        std::fs::write(
+            with_hooks.join(".claude/settings.json"),
+            r#"{"hooks":{"x":"agent.update_status"}}"#,
+        )
+        .unwrap();
+        // home = None keeps the test independent of the real ~/.claude/settings.json.
+        assert!(missing_hooks_hint_in("claude", &with_hooks, None).is_none());
+        assert!(missing_hooks_hint_in("claude", &without_hooks, None).is_some());
+        std::fs::remove_dir_all(&base).ok();
     }
 
     #[test]
