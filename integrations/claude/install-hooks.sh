@@ -51,9 +51,9 @@ TARGET_DIR="$(dirname "$TARGET_FILE")"
 mkdir -p "$TARGET_DIR"
 
 # Swayve hook commands
-HOOK_CMD_THINKING='if [ -n "$SWAYVE_SOCKET" ] && [ -n "$SWAYVE_AGENT_ID" ] && [ -S "$SWAYVE_SOCKET" ]; then printf '\''{"method":"agent.update_status","params":{"agent_id":"%s","status":"thinking"}}\n'\'' "$SWAYVE_AGENT_ID" | nc -U "$SWAYVE_SOCKET" 2>/dev/null || true; fi'
-HOOK_CMD_TOOL='if [ -n "$SWAYVE_SOCKET" ] && [ -n "$SWAYVE_AGENT_ID" ] && [ -S "$SWAYVE_SOCKET" ]; then printf '\''{"method":"agent.update_status","params":{"agent_id":"%s","status":"executing_tool"}}\n'\'' "$SWAYVE_AGENT_ID" | nc -U "$SWAYVE_SOCKET" 2>/dev/null || true; fi'
-HOOK_CMD_IDLE='if [ -n "$SWAYVE_SOCKET" ] && [ -n "$SWAYVE_AGENT_ID" ] && [ -S "$SWAYVE_SOCKET" ]; then printf '\''{"method":"agent.update_status","params":{"agent_id":"%s","status":"idle"}}\n'\'' "$SWAYVE_AGENT_ID" | nc -U "$SWAYVE_SOCKET" 2>/dev/null || true; fi'
+HOOK_CMD_THINKING='if [ -n "$SWAYVE_SOCKET" ] && [ -n "$SWAYVE_AGENT_ID" ] && [ -S "$SWAYVE_SOCKET" ]; then printf '\''{"method":"agent.update_status","params":{"agent_id":"%s","status":"thinking"}}\n'\'' "$SWAYVE_AGENT_ID" | nc -N -U "$SWAYVE_SOCKET" 2>/dev/null || true; fi'
+HOOK_CMD_TOOL='if [ -n "$SWAYVE_SOCKET" ] && [ -n "$SWAYVE_AGENT_ID" ] && [ -S "$SWAYVE_SOCKET" ]; then printf '\''{"method":"agent.update_status","params":{"agent_id":"%s","status":"executing_tool"}}\n'\'' "$SWAYVE_AGENT_ID" | nc -N -U "$SWAYVE_SOCKET" 2>/dev/null || true; fi'
+HOOK_CMD_IDLE='if [ -n "$SWAYVE_SOCKET" ] && [ -n "$SWAYVE_AGENT_ID" ] && [ -S "$SWAYVE_SOCKET" ]; then printf '\''{"method":"agent.update_status","params":{"agent_id":"%s","status":"idle"}}\n'\'' "$SWAYVE_AGENT_ID" | nc -N -U "$SWAYVE_SOCKET" 2>/dev/null || true; fi'
 
 echo "[swayve-hooks] Installing Claude Code lifecycle hooks to: $TARGET_FILE"
 

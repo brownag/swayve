@@ -10,7 +10,7 @@ _send_swayve_status() {
     if [ -n "${SWAYVE_SOCKET:-}" ] && [ -n "${SWAYVE_AGENT_ID:-}" ] && [ -S "$SWAYVE_SOCKET" ]; then
         local payload="{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"$SWAYVE_AGENT_ID\",\"status\":$status_json}}"
         if command -v nc >/dev/null 2>&1; then
-            printf '%s\n' "$payload" | nc -U "$SWAYVE_SOCKET" 2>/dev/null || true
+            printf '%s\n' "$payload" | nc -N -U "$SWAYVE_SOCKET" 2>/dev/null || true
         elif command -v socat >/dev/null 2>&1; then
             printf '%s\n' "$payload" | socat - UNIX-CONNECT:"$SWAYVE_SOCKET" 2>/dev/null || true
         fi

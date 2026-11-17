@@ -58,7 +58,7 @@ When installed, your `.claude/settings.json` will contain hooks configured like 
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -n \"$SWAYVE_SOCKET\" ] && [ -n \"$SWAYVE_AGENT_ID\" ] && [ -S \"$SWAYVE_SOCKET\" ]; then printf '{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"%s\",\"status\":\"thinking\"}}\\n' \"$SWAYVE_AGENT_ID\" | nc -U \"$SWAYVE_SOCKET\" 2>/dev/null || true; fi"
+            "command": "if [ -n \"$SWAYVE_SOCKET\" ] && [ -n \"$SWAYVE_AGENT_ID\" ] && [ -S \"$SWAYVE_SOCKET\" ]; then printf '{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"%s\",\"status\":\"thinking\"}}\\n' \"$SWAYVE_AGENT_ID\" | nc -N -U \"$SWAYVE_SOCKET\" 2>/dev/null || true; fi"
           }
         ]
       }
@@ -69,7 +69,7 @@ When installed, your `.claude/settings.json` will contain hooks configured like 
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -n \"$SWAYVE_SOCKET\" ] && [ -n \"$SWAYVE_AGENT_ID\" ] && [ -S \"$SWAYVE_SOCKET\" ]; then printf '{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"%s\",\"status\":\"executing_tool\"}}\\n' \"$SWAYVE_AGENT_ID\" | nc -U \"$SWAYVE_SOCKET\" 2>/dev/null || true; fi"
+            "command": "if [ -n \"$SWAYVE_SOCKET\" ] && [ -n \"$SWAYVE_AGENT_ID\" ] && [ -S \"$SWAYVE_SOCKET\" ]; then printf '{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"%s\",\"status\":\"executing_tool\"}}\\n' \"$SWAYVE_AGENT_ID\" | nc -N -U \"$SWAYVE_SOCKET\" 2>/dev/null || true; fi"
           }
         ]
       }
@@ -80,7 +80,7 @@ When installed, your `.claude/settings.json` will contain hooks configured like 
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -n \"$SWAYVE_SOCKET\" ] && [ -n \"$SWAYVE_AGENT_ID\" ] && [ -S \"$SWAYVE_SOCKET\" ]; then printf '{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"%s\",\"status\":\"thinking\"}}\\n' \"$SWAYVE_AGENT_ID\" | nc -U \"$SWAYVE_SOCKET\" 2>/dev/null || true; fi"
+            "command": "if [ -n \"$SWAYVE_SOCKET\" ] && [ -n \"$SWAYVE_AGENT_ID\" ] && [ -S \"$SWAYVE_SOCKET\" ]; then printf '{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"%s\",\"status\":\"thinking\"}}\\n' \"$SWAYVE_AGENT_ID\" | nc -N -U \"$SWAYVE_SOCKET\" 2>/dev/null || true; fi"
           }
         ]
       }
@@ -91,7 +91,7 @@ When installed, your `.claude/settings.json` will contain hooks configured like 
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -n \"$SWAYVE_SOCKET\" ] && [ -n \"$SWAYVE_AGENT_ID\" ] && [ -S \"$SWAYVE_SOCKET\" ]; then printf '{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"%s\",\"status\":\"idle\"}}\\n' \"$SWAYVE_AGENT_ID\" | nc -U \"$SWAYVE_SOCKET\" 2>/dev/null || true; fi"
+            "command": "if [ -n \"$SWAYVE_SOCKET\" ] && [ -n \"$SWAYVE_AGENT_ID\" ] && [ -S \"$SWAYVE_SOCKET\" ]; then printf '{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"%s\",\"status\":\"idle\"}}\\n' \"$SWAYVE_AGENT_ID\" | nc -N -U \"$SWAYVE_SOCKET\" 2>/dev/null || true; fi"
           }
         ]
       }

@@ -98,7 +98,7 @@ send_hook_payload() {
     local status="$1"
     local payload="{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"claude-test\",\"status\":$status}}"
     if command -v nc >/dev/null 2>&1; then
-        printf '%s\n' "$payload" | nc -U "$SOCKET_PATH" 2>/dev/null || true
+        printf '%s\n' "$payload" | nc -N -U "$SOCKET_PATH" 2>/dev/null || true
     elif command -v socat >/dev/null 2>&1; then
         printf '%s\n' "$payload" | socat - UNIX-CONNECT:"$SOCKET_PATH" 2>/dev/null || true
     fi
