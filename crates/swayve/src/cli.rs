@@ -43,6 +43,9 @@ pub enum Commands {
         /// Full agent ID of the parent (its SWAYVE_AGENT_ID, e.g. A-c1-14404), not the bare name
         #[arg(long)]
         parent: Option<String>,
+        /// Working directory for the agent terminal (default: current directory)
+        #[arg(long)]
+        dir: Option<String>,
     },
     /// Toggle visibility of the Orchestrator panel
     Panel {
@@ -243,11 +246,13 @@ fi
             command,
             prompt,
             parent,
+            dir,
         } => {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis();
+            let work_dir = resolve_spawn_dir(dir.as_deref(), &env::current_dir()?)?;
             let plan = spawn_plan(SpawnRequest {
                 agent: &agent,
                 wave: &wave,
@@ -305,6 +310,7 @@ fi
                     .with_context(|| format!("Failed to clone log file handle for {}", log_path))?;
 
                 let mut cmd = Command::new(&config.terminal.default_emulator);
+                cmd.current_dir(&work_dir);
                 for (k, v) in &plan.env {
                     cmd.env(k, v);
                 }
@@ -589,6 +595,17 @@ pub fn spawn_plan(req: SpawnRequest<'_>) -> SpawnPlan {
         env.push(("SWAYVE_PARENT_ID".to_string(), p.to_string()));
     }
     SpawnPlan { agent_id, app_id, title, term_args, env }
+}
+
+/// Resolves the agent's working directory: `arg` (relative to `cwd`) or `cwd` itself. Must exist and be a directory.
+pub fn resolve_spawn_dir(arg: Option<&str>, cwd: &std::path::Path) -> Result<std::path::PathBuf> {
+    let p = match arg {
+        Some(a) => cwd.join(a),
+        None => cwd.to_path_buf(),
+    };
+    let p = p.canonicalize().with_context(|| format!("--dir {} does not exist", p.display()))?;
+    anyhow::ensure!(p.is_dir(), "--dir {} is not a directory", p.display());
+    Ok(p)
 }
 
 /// Writes `reg_line` on one connection, then polls `daemon.subscribe` on fresh connections until
@@ -1025,6 +1042,19 @@ mod tests {
         assert_eq!(format_status(&AgentStatus::AwaitingHumanInput), "\x1B[5;1;31mAwaitingInput\x1B[0m");
         assert_eq!(format_status(&AgentStatus::Completed), "\x1B[32mCompleted\x1B[0m");
         assert_eq!(format_status(&AgentStatus::Failed("error".to_string())), "\x1B[31mFailed(error)\x1B[0m");
+    }
+
+    #[test]
+    fn test_resolve_spawn_dir_defaults_and_relative() {
+        let base = std::env::temp_dir().join(format!("swayve_rsd_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("sub")).unwrap();
+        let canon = base.canonicalize().unwrap();
+        assert_eq!(resolve_spawn_dir(None, &base).unwrap(), canon);
+        assert_eq!(resolve_spawn_dir(Some("sub"), &base).unwrap(), canon.join("sub"));
+        assert!(resolve_spawn_dir(Some("missing"), &base).is_err());
+        assert!(resolve_spawn_dir(Some("sub/../../"), &base).is_ok());
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
 
