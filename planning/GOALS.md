@@ -1,19 +1,25 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-08
-Source State: magic-wand re-rank on 2026-11-08 (after Orchestration 30, HEAD `8d78ec0`; scope: swayve repo, planning docs, code markers, `cargo audit`). Earlier: STATE_28.md (Orchestration 28 closed at `b37b0e2`). Correction 2026-11-08: G80 was marked Completed in error; its residual is reopened as the Circled Goal. Earlier: STATE_27.md (Orchestration 27 closed at `1f79de0`). G79–G81 were added from `planning/ARCHITECTURE_REVIEW_2026-11-08_FOLLOWUP.md` (reviewed at `17c72ce`; static review, tests not run). Earlier: STATE_26.md (Orchestration 26 closed at `00a4675`; `make all` green; pushed to `origin/main`). Correction 2026-11-08: the architecture review candidates G67–G70 were already done in earlier orchestrations; the earlier ranking missed git history and is withdrawn.
+Last Updated: 2026-11-17
+Source State: STATE_35.md; Magic Wand audit focused on OpenCode integration, Claude/Antigravity integrations, and official OpenCode plugin docs (`planning/RESEARCH_OPENCODE_INTEGRATION.md`); execution plan 36 drafted on `feat/opencode-integration1`.
 
 ## Circled Goal (Active)
 
-None. G82 closed in Orchestration 31 (see Completed). The next open goal is G83 (backlog).
+**[G85]** A tested OpenCode server plugin registers OpenCode sessions with Swayve and maps session/tool lifecycle events to Swayve statuses over the existing Unix socket contract.
+  - Why now: OpenCode's documented server plugin API supports event subscriptions and cleanup, enabling an integration through the existing protocol without a separate wrapper or daemon changes.
+  - Exit criteria: plugin sends correct register and status IPC lines; focused tests cover lifecycle mapping, socket delivery, and missing/unavailable Swayve configuration; the integration is verified against a supported OpenCode API version.
+  - First action: inspect the official event schemas/types and resolve stable session identity, project/PID/window identity, and child-session semantics before choosing mappings.
 
 ## Sequenced Goals (Dependency DAG)
 
-None. No open goal depends on another.
+- **[G86]** OpenCode agent identity, project/window identity, and child-session relationships have explicit, tested mappings to Swayve.
+  - Depends on: G85
+- **[G87]** OpenCode integration installation, configuration, and supported-version requirements are documented.
+  - Depends on: G85
 
 ## Independent Backlog
 
-
+- **[G83]** `cargo audit` is clean for `Cargo.lock`. `tokio` moved from 1.53.1 to 1.53.3 (lockfile only), which clears RUSTSEC-2026-0386 (`AsyncFd` constructors; swayve makes no direct `AsyncFd` call) (`cfab81d`; Orchestration 32; `make all` serial exit 0, zero warnings).
 ## Deferred
 
 - **[G84]** Decisions from Orchestrations 25–30 that outlive their plans are recorded as ADRs: the single argv helper and bare-splice rule (`expand_terminal_args`, G80), the pure spawn plan (G60, G64), and the hook env contract and test seam (G74). The existing ADR 0006 already covers the env names. Found during the 2026-11-08 audit.
@@ -33,6 +39,10 @@ None. No open goal depends on another.
 - **[G76]** The design doc's JSON-RPC 2.0 envelope and its four methods (`agent.heartbeat`, `agent.request_window_action`, `orchestrator.interrupt`, `orchestrator.focus_changed`) are adopted.
   - Status: Pruned
   - Reason: ADR 0004 rejected the envelope, and none of the four methods has a code hit in `src/` or `tests/`. If a client later needs one, open a new goal for that method.
+- **[G88]** Optional OpenCode-native actions such as Swayve focus requests are evaluated and implemented only where supported behavior is clear.
+  - Status: Deferred
+  - Reason: prioritize lifecycle/status parity; reconsider after the base plugin is verified against OpenCode's event/API contract.
+  - Trigger: base OpenCode plugin has shipped and a concrete focus action is requested.
 - **[G71]** Name the spawn plan as a pure function extracted from the CLI arm (review candidate 5).
   - Status: Pruned
   - Reason: already delivered. G60 (Orchestration 25) moved the plan into the pure `spawn_plan`, and G64 (Orchestration 26) gave it a request struct.
