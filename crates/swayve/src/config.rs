@@ -63,11 +63,17 @@ pub fn sanitize_rate_limit(d: &mut DaemonConfig) -> Vec<String> {
     let mut warnings = Vec::new();
     let defaults = crate::ratelimit::IpcLimits::default();
     if !(d.ipc_lines_per_sec.is_finite() && d.ipc_lines_per_sec > 0.0) {
-        warnings.push(format!("daemon.ipc_lines_per_sec must be a number above 0; using {}", defaults.lines_per_sec));
+        warnings.push(format!(
+            "daemon.ipc_lines_per_sec must be a number above 0; using {}",
+            defaults.lines_per_sec
+        ));
         d.ipc_lines_per_sec = defaults.lines_per_sec;
     }
     if !(d.ipc_burst.is_finite() && d.ipc_burst >= 1.0) {
-        warnings.push(format!("daemon.ipc_burst must be a number of at least 1; using {}", defaults.burst));
+        warnings.push(format!(
+            "daemon.ipc_burst must be a number of at least 1; using {}",
+            defaults.burst
+        ));
         d.ipc_burst = defaults.burst;
     }
     warnings
@@ -225,8 +231,8 @@ mod tests {
 
     #[test]
     fn test_parse_config_file_malformed_reports_path() {
-        let path = std::env::temp_dir()
-            .join(format!("swayve-config-test-{}.toml", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("swayve-config-test-{}.toml", std::process::id()));
         fs::write(&path, "daemon = [").unwrap();
         let result = parse_config_file(&path);
         fs::remove_file(&path).unwrap();
@@ -339,4 +345,3 @@ mod tests {
         assert_eq!(xdg_config_warning(None), None);
     }
 }
-

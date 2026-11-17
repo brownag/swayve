@@ -1,7 +1,9 @@
 use crate::config::Config;
 use crate::layout::{LayoutAction, LayoutManager};
 use crate::sway::{SwayCommand, SwayEvent};
-use crate::types::{AgentId, AgentIPCMessage, AgentRegistry, AgentStatus, AgentWindow, DiffFrame, ProjectId};
+use crate::types::{
+    AgentIPCMessage, AgentId, AgentRegistry, AgentStatus, AgentWindow, DiffFrame, ProjectId,
+};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::path::Path;
@@ -43,13 +45,19 @@ impl DaemonState {
     }
 
     pub fn push_full_subscriber(&mut self, tx: mpsc::Sender<String>) {
-        self.subscribers.push(Subscriber { tx, mode: SubMode::Full });
+        self.subscribers.push(Subscriber {
+            tx,
+            mode: SubMode::Full,
+        });
     }
 
     pub fn push_diff_subscriber(&mut self, tx: mpsc::Sender<String>) {
         self.subscribers.push(Subscriber {
             tx,
-            mode: SubMode::Diff { needs_snapshot: true, sent: HashMap::new() },
+            mode: SubMode::Diff {
+                needs_snapshot: true,
+                sent: HashMap::new(),
+            },
         });
     }
 
@@ -88,22 +96,25 @@ impl DaemonState {
     fn broadcast_diff(&mut self) {
         let agents = &self.agents;
         self.subscribers.retain_mut(|sub| {
-            let SubMode::Diff { needs_snapshot, sent } = &mut sub.mode else {
+            let SubMode::Diff {
+                needs_snapshot,
+                sent,
+            } = &mut sub.mode
+            else {
                 return true;
             };
-            let (snapshot, upsert, remove): (bool, Vec<&AgentWindow>, Vec<&AgentId>) = if *needs_snapshot {
-                (true, agents.values().collect(), Vec::new())
-            } else {
-                let up = agents
-                    .iter()
-                    .filter(|(id, a)| {
-                        sent.get(*id).is_none_or(|old| old != *a)
-                    })
-                    .map(|(_, a)| a)
-                    .collect();
-                let rm = sent.keys().filter(|id| !agents.contains_key(*id)).collect();
-                (false, up, rm)
-            };
+            let (snapshot, upsert, remove): (bool, Vec<&AgentWindow>, Vec<&AgentId>) =
+                if *needs_snapshot {
+                    (true, agents.values().collect(), Vec::new())
+                } else {
+                    let up = agents
+                        .iter()
+                        .filter(|(id, a)| sent.get(*id).is_none_or(|old| old != *a))
+                        .map(|(_, a)| a)
+                        .collect();
+                    let rm = sent.keys().filter(|id| !agents.contains_key(*id)).collect();
+                    (false, up, rm)
+                };
             if !snapshot && upsert.is_empty() && remove.is_empty() {
                 return !sub.tx.is_closed();
             }
@@ -137,17 +148,28 @@ impl DaemonState {
 
     /// Registers an agent. Returns a monitor request when the auto-monitor rule applies; the
     /// loop executes it (G54).
-    pub fn register_agent(&mut self, agent_id: AgentId, project_id: ProjectId, pid: u32, app_id: String, parent_id: Option<AgentId>) -> Option<MonitorRequest> {
+    pub fn register_agent(
+        &mut self,
+        agent_id: AgentId,
+        project_id: ProjectId,
+        pid: u32,
+        app_id: String,
+        parent_id: Option<AgentId>,
+    ) -> Option<MonitorRequest> {
         let is_subagent = if let Some(ref p_id) = parent_id {
             self.agents.contains_key(p_id)
         } else {
             false
         };
         if let Some(ref p_id) = parent_id
-            && !is_subagent {
-                // Usually a bare name passed where the full agent ID is needed.
-                eprintln!("[daemon] Parent {} is not registered; {} is not linked to it", p_id.0, agent_id.0);
-            }
+            && !is_subagent
+        {
+            // Usually a bare name passed where the full agent ID is needed.
+            eprintln!(
+                "[daemon] Parent {} is not registered; {} is not linked to it",
+                p_id.0, agent_id.0
+            );
+        }
 
         let mark = agent_id.to_mark();
         // Re-registration keeps an existing window binding and status (G79).
@@ -196,7 +218,10 @@ impl DaemonState {
         if let Some(target) = app_id.strip_prefix("agent.monitor.") {
             let target_id = AgentId(target.to_string());
             if let Some(agent) = self.agents.get(&target_id) {
-                println!("[daemon] Sway monitor window created for agent {}: con_id={}", target_id.0, con_id);
+                println!(
+                    "[daemon] Sway monitor window created for agent {}: con_id={}",
+                    target_id.0, con_id
+                );
                 actions.push(LayoutAction::WindowCreated {
                     con_id,
                     app_id: app_id.to_string(),
@@ -227,13 +252,18 @@ impl DaemonState {
                 None => false,
             };
             if self.auto_monitor_wanted(found) {
-                monitors.push(MonitorRequest { agent_id: agent_id.clone() });
+                monitors.push(MonitorRequest {
+                    agent_id: agent_id.clone(),
+                });
             }
         }
 
         // Read parent_id after auditing so an auto-detected parent reaches the layout on this event.
         if let Some(agent) = self.agents.get(&agent_id) {
-            println!("[daemon] Sway window created for agent {}: con_id={}", agent_id.0, con_id);
+            println!(
+                "[daemon] Sway window created for agent {}: con_id={}",
+                agent_id.0, con_id
+            );
             actions.push(LayoutAction::WindowCreated {
                 con_id,
                 app_id: app_id.to_string(),
@@ -251,7 +281,12 @@ impl DaemonState {
         let Some(agent_id) = self.con_to_agent.remove(&con_id) else {
             return Vec::new();
         };
-        if self.agents.get(&agent_id).and_then(|a| a.container_id).is_some_and(|c| c != con_id) {
+        if self
+            .agents
+            .get(&agent_id)
+            .and_then(|a| a.container_id)
+            .is_some_and(|c| c != con_id)
+        {
             return Vec::new();
         }
         println!("[daemon] Sway window destroyed for agent: {}", agent_id.0);
@@ -260,7 +295,10 @@ impl DaemonState {
             self.pid_to_agent.retain(|_, id| id != &agent_id);
         }
         promote_orphans(self, &agent_id);
-        vec![LayoutAction::WindowDestroyed { agent_id, parent_id }]
+        vec![LayoutAction::WindowDestroyed {
+            agent_id,
+            parent_id,
+        }]
     }
 
     pub fn spawn_monitor_terminal(&self, agent_id: &AgentId) {
@@ -283,7 +321,11 @@ impl DaemonState {
         }
     }
 
-    pub fn update_status(&mut self, agent_id: &AgentId, status: AgentStatus) -> Option<AgentWindow> {
+    pub fn update_status(
+        &mut self,
+        agent_id: &AgentId,
+        status: AgentStatus,
+    ) -> Option<AgentWindow> {
         if let Some(agent) = self.agents.get_mut(agent_id) {
             agent.status = status;
             let status_str = agent_status_to_str(&agent.status);
@@ -301,7 +343,9 @@ impl DaemonState {
             AgentStatus::Idle => self.config.border_colors.idle.clone(),
             AgentStatus::Thinking => self.config.border_colors.thinking.clone(),
             AgentStatus::ExecutingTool => self.config.border_colors.executing_tool.clone(),
-            AgentStatus::AwaitingHumanInput => self.config.border_colors.awaiting_human_input.clone(),
+            AgentStatus::AwaitingHumanInput => {
+                self.config.border_colors.awaiting_human_input.clone()
+            }
             AgentStatus::Completed => self.config.border_colors.completed.clone(),
             AgentStatus::Failed(_) => self.config.border_colors.failed.clone(),
         }
@@ -320,7 +364,11 @@ fn agent_status_to_str(status: &AgentStatus) -> &'static str {
 }
 
 /// Pure: the `sh -c` command for a lifecycle hook, with the env contract from ADR 0006.
-fn lifecycle_hook_command(hook_cmd: &str, agent_id: &AgentId, status: &str) -> std::process::Command {
+fn lifecycle_hook_command(
+    hook_cmd: &str,
+    agent_id: &AgentId,
+    status: &str,
+) -> std::process::Command {
     let mut cmd = std::process::Command::new("sh");
     cmd.arg("-c")
         .arg(hook_cmd)
@@ -396,7 +444,12 @@ pub async fn start_daemon_ipc(
     socket_path: &str,
     event_tx: mpsc::Sender<DaemonEvent>,
 ) -> Result<()> {
-    start_daemon_ipc_with_limits(socket_path, event_tx, crate::ratelimit::IpcLimits::default()).await
+    start_daemon_ipc_with_limits(
+        socket_path,
+        event_tx,
+        crate::ratelimit::IpcLimits::default(),
+    )
+    .await
 }
 
 pub async fn start_daemon_ipc_with_limits(
@@ -429,10 +482,14 @@ pub async fn start_daemon_ipc_with_limits(
 
 /// Owns a subscription's receiver and socket write half. Ends on a write error, dropping `rx`
 /// so the daemon prunes the subscriber. An idle writer notices a closed socket only on its next write.
-async fn subscriber_writer(mut rx: mpsc::Receiver<String>, mut writer: tokio::net::unix::OwnedWriteHalf) {
+async fn subscriber_writer(
+    mut rx: mpsc::Receiver<String>,
+    mut writer: tokio::net::unix::OwnedWriteHalf,
+) {
     use tokio::io::AsyncWriteExt;
     while let Some(msg) = rx.recv().await {
-        if writer.write_all(msg.as_bytes()).await.is_err() || writer.write_all(b"\n").await.is_err() {
+        if writer.write_all(msg.as_bytes()).await.is_err() || writer.write_all(b"\n").await.is_err()
+        {
             break;
         }
     }
@@ -493,7 +550,10 @@ async fn handle_client(
                 let _ = event_tx.send(DaemonEvent::AgentIPC(msg)).await;
             }
             Err(e) => {
-                eprintln!("[daemon] Failed to parse IPC message: {:?}. Line: {}", e, line);
+                eprintln!(
+                    "[daemon] Failed to parse IPC message: {:?}. Line: {}",
+                    e, line
+                );
             }
         }
     }
@@ -517,7 +577,10 @@ pub async fn run_daemon_loops(
             DaemonEvent::AgentIPC(msg) => {
                 match msg {
                     AgentIPCMessage::Register { id: _, params } => {
-                        println!("[daemon] Registering agent: {} (parent: {:?})", params.agent_id.0, params.parent_agent_id);
+                        println!(
+                            "[daemon] Registering agent: {} (parent: {:?})",
+                            params.agent_id.0, params.parent_agent_id
+                        );
                         let monitor = state.register_agent(
                             params.agent_id.clone(),
                             params.project_id.clone(),
@@ -535,7 +598,9 @@ pub async fn run_daemon_loops(
                             "[daemon] Agent {} status update: {:?}",
                             params.agent_id.0, params.status
                         );
-                        if let Some(agent) = state.update_status(&params.agent_id, params.status.clone()) {
+                        if let Some(agent) =
+                            state.update_status(&params.agent_id, params.status.clone())
+                        {
                             let color = state.get_border_color(&params.status);
                             let _ = sway_cmd_tx
                                 .send(SwayCommand::SetBorderColor {
@@ -564,7 +629,11 @@ pub async fn run_daemon_loops(
             }
             DaemonEvent::Sway(sway_event) => {
                 match sway_event {
-                    SwayEvent::WindowCreated { con_id, app_id, pid } => {
+                    SwayEvent::WindowCreated {
+                        con_id,
+                        app_id,
+                        pid,
+                    } => {
                         let (actions, monitors) = state.on_window_created(con_id, &app_id, pid);
                         for req in monitors {
                             state.spawn_monitor_terminal(&req.agent_id);
@@ -581,7 +650,8 @@ pub async fn run_daemon_loops(
                         let actions = state.on_window_destroyed(con_id);
                         if !actions.is_empty() {
                             for action in actions {
-                                delegate_to_layout(action, &layout_manager, &state, &sway_cmd_tx).await;
+                                delegate_to_layout(action, &layout_manager, &state, &sway_cmd_tx)
+                                    .await;
                             }
                             state.broadcast_status();
                         }
@@ -597,13 +667,14 @@ pub async fn run_daemon_loops(
             DaemonEvent::Focus => {
                 // Focus event handler: hierarchical sibling cycling
                 if let Some(target) = focus.next(&state.agents)
-                    && let Some(agent) = state.agents.get(&target) {
-                        let _ = sway_cmd_tx
-                            .send(SwayCommand::FocusWindow {
-                                mark: agent.mark.clone(),
-                            })
-                            .await;
-                    }
+                    && let Some(agent) = state.agents.get(&target)
+                {
+                    let _ = sway_cmd_tx
+                        .send(SwayCommand::FocusWindow {
+                            mark: agent.mark.clone(),
+                        })
+                        .await;
+                }
             }
             DaemonEvent::Subscribe(sub_tx) => {
                 state.push_full_subscriber(sub_tx);
@@ -713,8 +784,10 @@ fn next_focus_target(
     agents: &HashMap<AgentId, AgentWindow>,
     last_focused: Option<&AgentId>,
 ) -> Option<AgentId> {
-    let mut candidates: Vec<&AgentWindow> =
-        agents.values().filter(|a| a.container_id.is_some()).collect();
+    let mut candidates: Vec<&AgentWindow> = agents
+        .values()
+        .filter(|a| a.container_id.is_some())
+        .collect();
     candidates.sort_by_key(|a| a.container_id);
 
     let mut order: Vec<&AgentWindow> = Vec::with_capacity(candidates.len());
@@ -748,14 +821,16 @@ fn next_focus_target(
 fn get_parent_pid(pid: u32) -> Option<u32> {
     let stat_path = format!("/proc/{}/stat", pid);
     if let Ok(contents) = std::fs::read_to_string(stat_path)
-        && let Some(r_paren) = contents.rfind(')') {
-            let rest = &contents[r_paren + 1..];
-            let fields: Vec<&str> = rest.split_whitespace().collect();
-            if fields.len() >= 2
-                && let Ok(ppid) = fields[1].parse::<u32>() {
-                    return Some(ppid);
-                }
+        && let Some(r_paren) = contents.rfind(')')
+    {
+        let rest = &contents[r_paren + 1..];
+        let fields: Vec<&str> = rest.split_whitespace().collect();
+        if fields.len() >= 2
+            && let Ok(ppid) = fields[1].parse::<u32>()
+        {
+            return Some(ppid);
         }
+    }
     None
 }
 
@@ -784,8 +859,15 @@ fn find_registered_parent_ancestor(
 }
 
 /// Pure argv for the monitor terminal; the log path stays a single argument.
-fn monitor_argv(template: &[String], agent_id: &AgentId, logs_dir: &std::path::Path) -> Vec<String> {
-    let log = logs_dir.join(format!("{}.log", agent_id.0)).to_string_lossy().into_owned();
+fn monitor_argv(
+    template: &[String],
+    agent_id: &AgentId,
+    logs_dir: &std::path::Path,
+) -> Vec<String> {
+    let log = logs_dir
+        .join(format!("{}.log", agent_id.0))
+        .to_string_lossy()
+        .into_owned();
     let command = ["tail".to_string(), "-f".to_string(), log];
     crate::cli::expand_terminal_args(
         template,
@@ -801,10 +883,35 @@ mod tests {
 
     #[test]
     fn test_monitor_argv_spaced_path_is_one_arg() {
-        let tmpl: Vec<String> = ["--app-id", "{app_id}", "--title", "{title}", "-e", "{command}"]
-            .iter().map(|s| s.to_string()).collect();
-        let argv = monitor_argv(&tmpl, &AgentId("a1".into()), std::path::Path::new("/run/my swayve/logs"));
-        assert_eq!(argv, ["--app-id", "agent.monitor.a1", "--title", "Monitor: a1", "-e", "tail", "-f", "/run/my swayve/logs/a1.log"]);
+        let tmpl: Vec<String> = [
+            "--app-id",
+            "{app_id}",
+            "--title",
+            "{title}",
+            "-e",
+            "{command}",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        let argv = monitor_argv(
+            &tmpl,
+            &AgentId("a1".into()),
+            std::path::Path::new("/run/my swayve/logs"),
+        );
+        assert_eq!(
+            argv,
+            [
+                "--app-id",
+                "agent.monitor.a1",
+                "--title",
+                "Monitor: a1",
+                "-e",
+                "tail",
+                "-f",
+                "/run/my swayve/logs/a1.log"
+            ]
+        );
     }
 
     #[tokio::test]
@@ -850,19 +957,22 @@ mod tests {
         use tokio::io::AsyncWriteExt;
         let (mut client, server) = UnixStream::pair().unwrap();
         let (event_tx, mut event_rx) = mpsc::channel(8);
-        let limits = crate::ratelimit::IpcLimits { lines_per_sec: 1.0, burst: 2.0 };
+        let limits = crate::ratelimit::IpcLimits {
+            lines_per_sec: 1.0,
+            burst: 2.0,
+        };
         tokio::spawn(handle_client(server, event_tx, limits));
         // Burst of 2: the first two focus lines pass, the third is dropped.
         for _ in 0..3 {
-            client.write_all(b"{\"method\":\"daemon.focus\"}\n").await.unwrap();
+            client
+                .write_all(b"{\"method\":\"daemon.focus\"}\n")
+                .await
+                .unwrap();
         }
         client.flush().await.unwrap();
         let mut focus_events = 0;
-        while let Ok(Some(DaemonEvent::Focus)) = tokio::time::timeout(
-            std::time::Duration::from_millis(200),
-            event_rx.recv(),
-        )
-        .await
+        while let Ok(Some(DaemonEvent::Focus)) =
+            tokio::time::timeout(std::time::Duration::from_millis(200), event_rx.recv()).await
         {
             focus_events += 1;
         }
@@ -874,9 +984,16 @@ mod tests {
         use tokio::io::AsyncWriteExt;
         let (mut client, server) = UnixStream::pair().unwrap();
         let (event_tx, mut event_rx) = mpsc::channel(4);
-        tokio::spawn(handle_client(server, event_tx, crate::ratelimit::IpcLimits::default()));
+        tokio::spawn(handle_client(
+            server,
+            event_tx,
+            crate::ratelimit::IpcLimits::default(),
+        ));
         client.write_all(b"not json\n").await.unwrap();
-        client.write_all(b"{\"method\":\"daemon.focus\"}\n").await.unwrap();
+        client
+            .write_all(b"{\"method\":\"daemon.focus\"}\n")
+            .await
+            .unwrap();
         let ev = tokio::time::timeout(std::time::Duration::from_secs(2), event_rx.recv())
             .await
             .expect("timed out waiting for event");
@@ -888,9 +1005,16 @@ mod tests {
         use tokio::io::AsyncWriteExt;
         let (mut client, server) = UnixStream::pair().unwrap();
         let (event_tx, mut event_rx) = mpsc::channel(4);
-        tokio::spawn(handle_client(server, event_tx, crate::ratelimit::IpcLimits::default()));
+        tokio::spawn(handle_client(
+            server,
+            event_tx,
+            crate::ratelimit::IpcLimits::default(),
+        ));
         client.write_all(b"\xff\xfe\n").await.unwrap();
-        client.write_all(b"{\"method\":\"daemon.focus\"}\n").await.unwrap();
+        client
+            .write_all(b"{\"method\":\"daemon.focus\"}\n")
+            .await
+            .unwrap();
         let ev = tokio::time::timeout(std::time::Duration::from_secs(2), event_rx.recv())
             .await
             .expect("timed out waiting for event");
@@ -926,15 +1050,27 @@ mod tests {
     fn test_early_termination_at_depth_limit() {
         // Chain: pid 100 -> 101 -> ... -> 110 (each pid's parent is pid + 1).
         // The registered agent is at pid 105, five steps above pid 100.
-        let parent_of = |p: u32| if (100..110).contains(&p) { Some(p + 1) } else { None };
+        let parent_of = |p: u32| {
+            if (100..110).contains(&p) {
+                Some(p + 1)
+            } else {
+                None
+            }
+        };
         let mut pid_to_agent = HashMap::new();
         let agent_id = AgentId("test_agent".to_string());
         pid_to_agent.insert(105, agent_id.clone());
 
         // A limit of 3 stops before the agent is reached.
-        assert_eq!(find_registered_parent_ancestor(100, &pid_to_agent, 3, parent_of), None);
+        assert_eq!(
+            find_registered_parent_ancestor(100, &pid_to_agent, 3, parent_of),
+            None
+        );
         // A limit of 10 reaches it.
-        assert_eq!(find_registered_parent_ancestor(100, &pid_to_agent, 10, parent_of), Some(agent_id));
+        assert_eq!(
+            find_registered_parent_ancestor(100, &pid_to_agent, 10, parent_of),
+            Some(agent_id)
+        );
     }
 
     #[test]
@@ -1029,12 +1165,24 @@ mod tests {
 
         // A stale focus target that is no longer registered falls back to the first
         let stale = AgentId("gone".to_string());
-        assert_eq!(next_focus_target(&agents, Some(&stale)), Some(parent.clone()));
+        assert_eq!(
+            next_focus_target(&agents, Some(&stale)),
+            Some(parent.clone())
+        );
 
         // Parent descends into its first child, then cycles siblings, then wraps to parent
-        assert_eq!(next_focus_target(&agents, Some(&parent)), Some(child_a.clone()));
-        assert_eq!(next_focus_target(&agents, Some(&child_a)), Some(child_b.clone()));
-        assert_eq!(next_focus_target(&agents, Some(&child_b)), Some(parent.clone()));
+        assert_eq!(
+            next_focus_target(&agents, Some(&parent)),
+            Some(child_a.clone())
+        );
+        assert_eq!(
+            next_focus_target(&agents, Some(&child_a)),
+            Some(child_b.clone())
+        );
+        assert_eq!(
+            next_focus_target(&agents, Some(&child_b)),
+            Some(parent.clone())
+        );
 
         // A lone agent has nowhere to go
         let orphan = registry(vec![mock_agent("orphan", None, Some(1))]);
@@ -1049,8 +1197,20 @@ mod tests {
         let mut state = DaemonState::new(Config::default());
         let parent = AgentId("parent".to_string());
         let child = AgentId("child".to_string());
-        state.register_agent(parent.clone(), ProjectId("p".to_string()), 1, "agent.parent".to_string(), None);
-        state.register_agent(child.clone(), ProjectId("p".to_string()), 2, "agent.child".to_string(), Some(parent.clone()));
+        state.register_agent(
+            parent.clone(),
+            ProjectId("p".to_string()),
+            1,
+            "agent.parent".to_string(),
+            None,
+        );
+        state.register_agent(
+            child.clone(),
+            ProjectId("p".to_string()),
+            2,
+            "agent.child".to_string(),
+            Some(parent.clone()),
+        );
 
         // The parent's window dies and it leaves the registry
         state.agents.remove(&parent);
@@ -1069,8 +1229,14 @@ mod tests {
         ]);
         let solo_1 = AgentId("solo_1".to_string());
         let solo_2 = AgentId("solo_2".to_string());
-        assert_eq!(next_focus_target(&flat, Some(&solo_1)), Some(solo_2.clone()));
-        assert_eq!(next_focus_target(&flat, Some(&solo_2)), Some(solo_1.clone()));
+        assert_eq!(
+            next_focus_target(&flat, Some(&solo_1)),
+            Some(solo_2.clone())
+        );
+        assert_eq!(
+            next_focus_target(&flat, Some(&solo_2)),
+            Some(solo_1.clone())
+        );
 
         // A root's subtree is traversed before moving on to the next root
         let mixed = registry(vec![
@@ -1083,17 +1249,29 @@ mod tests {
         let root_b = AgentId("root_b".to_string());
         assert_eq!(next_focus_target(&mixed, Some(&root_a)), Some(kid.clone()));
         assert_eq!(next_focus_target(&mixed, Some(&kid)), Some(root_b.clone()));
-        assert_eq!(next_focus_target(&mixed, Some(&root_b)), Some(root_a.clone()));
+        assert_eq!(
+            next_focus_target(&mixed, Some(&root_b)),
+            Some(root_a.clone())
+        );
     }
 
     #[test]
     fn test_lifecycle_hooks_execution() {
-        let out_path = std::env::temp_dir().join(format!("swayve-{}-lifecycle-hook.txt", std::process::id())).to_string_lossy().into_owned();
+        let out_path = std::env::temp_dir()
+            .join(format!("swayve-{}-lifecycle-hook.txt", std::process::id()))
+            .to_string_lossy()
+            .into_owned();
         let _ = std::fs::remove_file(&out_path);
 
         let mut config = Config::default();
-        config.hooks.on_agent_spawn = Some(format!("echo \"spawn $SWAYVE_AGENT_ID $SWAYVE_AGENT_STATUS\" >> {}", out_path));
-        config.hooks.on_agent_status_change = Some(format!("echo \"status $SWAYVE_AGENT_ID $SWAYVE_AGENT_STATUS\" >> {}", out_path));
+        config.hooks.on_agent_spawn = Some(format!(
+            "echo \"spawn $SWAYVE_AGENT_ID $SWAYVE_AGENT_STATUS\" >> {}",
+            out_path
+        ));
+        config.hooks.on_agent_status_change = Some(format!(
+            "echo \"status $SWAYVE_AGENT_ID $SWAYVE_AGENT_STATUS\" >> {}",
+            out_path
+        ));
 
         let mut state = DaemonState::new(config);
         let agent_id = AgentId("test_hook_agent".to_string());
@@ -1158,9 +1336,21 @@ mod tests {
         let parent = AgentId("p".to_string());
         let child = AgentId("c".to_string());
         let project = ProjectId("proj".to_string());
-        let root = state.register_agent(parent.clone(), project.clone(), 1, "agent.p".to_string(), None);
+        let root = state.register_agent(
+            parent.clone(),
+            project.clone(),
+            1,
+            "agent.p".to_string(),
+            None,
+        );
         assert_eq!(root, None);
-        let sub = state.register_agent(child.clone(), project, 2, "agent.c".to_string(), Some(parent));
+        let sub = state.register_agent(
+            child.clone(),
+            project,
+            2,
+            "agent.c".to_string(),
+            Some(parent),
+        );
         assert_eq!(sub, Some(MonitorRequest { agent_id: child }));
     }
 
@@ -1169,8 +1359,20 @@ mod tests {
         let mut state = DaemonState::new(Config::default());
         let parent = AgentId("p".to_string());
         let project = ProjectId("proj".to_string());
-        state.register_agent(parent.clone(), project.clone(), 1, "agent.p".to_string(), None);
-        let sub = state.register_agent(AgentId("c".to_string()), project, 2, "agent.c".to_string(), Some(parent));
+        state.register_agent(
+            parent.clone(),
+            project.clone(),
+            1,
+            "agent.p".to_string(),
+            None,
+        );
+        let sub = state.register_agent(
+            AgentId("c".to_string()),
+            project,
+            2,
+            "agent.c".to_string(),
+            Some(parent),
+        );
         assert_eq!(sub, None);
     }
 
@@ -1180,8 +1382,20 @@ mod tests {
         let project = ProjectId("proj".to_string());
         let parent = AgentId("p".to_string());
         let child = AgentId("c".to_string());
-        state.register_agent(parent.clone(), project.clone(), 1, "agent.p".to_string(), None);
-        state.register_agent(child.clone(), project, 2, "agent.c".to_string(), Some(parent.clone()));
+        state.register_agent(
+            parent.clone(),
+            project.clone(),
+            1,
+            "agent.p".to_string(),
+            None,
+        );
+        state.register_agent(
+            child.clone(),
+            project,
+            2,
+            "agent.c".to_string(),
+            Some(parent.clone()),
+        );
         state.con_to_agent.insert(10, parent.clone());
         let actions = state.on_window_destroyed(10);
         assert_eq!(actions.len(), 1);
@@ -1196,11 +1410,26 @@ mod tests {
     fn test_reregister_keeps_container_binding() {
         let mut state = DaemonState::new(Config::default());
         let a = AgentId("a".to_string());
-        state.register_agent(a.clone(), ProjectId("p1".to_string()), 1, "agent.a".to_string(), None);
-        assert_eq!(register_agent_window("agent.a", 10, &mut state), Some(a.clone()));
+        state.register_agent(
+            a.clone(),
+            ProjectId("p1".to_string()),
+            1,
+            "agent.a".to_string(),
+            None,
+        );
+        assert_eq!(
+            register_agent_window("agent.a", 10, &mut state),
+            Some(a.clone())
+        );
         state.agents.get_mut(&a).unwrap().status = AgentStatus::Thinking;
 
-        state.register_agent(a.clone(), ProjectId("p2".to_string()), 2, "agent.a".to_string(), None);
+        state.register_agent(
+            a.clone(),
+            ProjectId("p2".to_string()),
+            2,
+            "agent.a".to_string(),
+            None,
+        );
 
         let agent = state.agents.get(&a).unwrap();
         assert_eq!(agent.container_id, Some(10));
@@ -1214,7 +1443,13 @@ mod tests {
     fn test_rebind_releases_old_container() {
         let mut state = DaemonState::new(Config::default());
         let a = AgentId("a".to_string());
-        state.register_agent(a.clone(), ProjectId("p".to_string()), 1, "agent.a".to_string(), None);
+        state.register_agent(
+            a.clone(),
+            ProjectId("p".to_string()),
+            1,
+            "agent.a".to_string(),
+            None,
+        );
         register_agent_window("agent.a", 10, &mut state);
         register_agent_window("agent.a", 20, &mut state);
         assert!(state.on_window_destroyed(10).is_empty());
@@ -1303,7 +1538,13 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(32);
         state.push_diff_subscriber(tx);
         for n in ["a1", "a2"] {
-            state.register_agent(AgentId(n.to_string()), ProjectId("proj".to_string()), 1, format!("app.{n}"), None);
+            state.register_agent(
+                AgentId(n.to_string()),
+                ProjectId("proj".to_string()),
+                1,
+                format!("app.{n}"),
+                None,
+            );
         }
         state.broadcast_status();
         assert!(rx.try_recv().unwrap().contains("\"snapshot\":true"));
@@ -1322,7 +1563,13 @@ mod tests {
         let mut state = DaemonState::new(Config::default());
         let (tx, mut rx) = mpsc::channel(32);
         state.push_diff_subscriber(tx);
-        state.register_agent(AgentId("a1".to_string()), ProjectId("proj".to_string()), 1, "app.a1".to_string(), None);
+        state.register_agent(
+            AgentId("a1".to_string()),
+            ProjectId("proj".to_string()),
+            1,
+            "app.a1".to_string(),
+            None,
+        );
         state.broadcast_status();
         assert!(rx.try_recv().unwrap().contains("\"snapshot\":true"));
         drop(rx);
@@ -1335,7 +1582,13 @@ mod tests {
         let mut state = DaemonState::new(Config::default());
         let (tx, mut rx) = mpsc::channel(1);
         state.push_diff_subscriber(tx);
-        state.register_agent(AgentId("a1".to_string()), ProjectId("proj".to_string()), 1, "app.a1".to_string(), None);
+        state.register_agent(
+            AgentId("a1".to_string()),
+            ProjectId("proj".to_string()),
+            1,
+            "app.a1".to_string(),
+            None,
+        );
         state.broadcast_status(); // snapshot fills the channel
         state.update_status(&AgentId("a1".to_string()), AgentStatus::Thinking);
         state.broadcast_status(); // diff dropped
@@ -1373,9 +1626,10 @@ mod tests {
                     state.broadcast_status();
                 }
                 let mean_us = start.elapsed().as_secs_f64() * 1e6 / 200.0;
-                let payload_bytes = serde_json::to_string(&state.agents.values().collect::<Vec<_>>())
-                    .unwrap()
-                    .len();
+                let payload_bytes =
+                    serde_json::to_string(&state.agents.values().collect::<Vec<_>>())
+                        .unwrap()
+                        .len();
                 println!("N={n} K={k} mean_us={mean_us:.1} payload_bytes={payload_bytes}");
                 drop(rxs);
             }
@@ -1407,7 +1661,11 @@ mod tests {
                 let id = AgentId("agent_0".to_string());
                 let start = std::time::Instant::now();
                 for i in 0..200 {
-                    let s = if i % 2 == 0 { AgentStatus::Thinking } else { AgentStatus::Idle };
+                    let s = if i % 2 == 0 {
+                        AgentStatus::Thinking
+                    } else {
+                        AgentStatus::Idle
+                    };
                     state.update_status(&id, s);
                     state.broadcast_status();
                 }
@@ -1473,7 +1731,10 @@ mod tests {
         let cmd = lifecycle_hook_command("echo hi", &AgentId("a-1".to_string()), "thinking");
         assert_eq!(cmd.get_program(), "sh");
         assert_eq!(cmd.get_args().collect::<Vec<_>>(), ["-c", "echo hi"]);
-        let envs: Vec<_> = cmd.get_envs().map(|(k, v)| (k.to_os_string(), v.map(|v| v.to_os_string()))).collect();
+        let envs: Vec<_> = cmd
+            .get_envs()
+            .map(|(k, v)| (k.to_os_string(), v.map(|v| v.to_os_string())))
+            .collect();
         assert!(envs.contains(&("SWAYVE_AGENT_ID".into(), Some("a-1".into()))));
         assert!(envs.contains(&("SWAYVE_AGENT_STATUS".into(), Some("thinking".into()))));
     }
@@ -1482,10 +1743,19 @@ mod tests {
     fn test_agent_status_to_str_all_variants() {
         assert_eq!(agent_status_to_str(&AgentStatus::Idle), "idle");
         assert_eq!(agent_status_to_str(&AgentStatus::Thinking), "thinking");
-        assert_eq!(agent_status_to_str(&AgentStatus::ExecutingTool), "executing_tool");
-        assert_eq!(agent_status_to_str(&AgentStatus::AwaitingHumanInput), "awaiting_human_input");
+        assert_eq!(
+            agent_status_to_str(&AgentStatus::ExecutingTool),
+            "executing_tool"
+        );
+        assert_eq!(
+            agent_status_to_str(&AgentStatus::AwaitingHumanInput),
+            "awaiting_human_input"
+        );
         assert_eq!(agent_status_to_str(&AgentStatus::Completed), "completed");
-        assert_eq!(agent_status_to_str(&AgentStatus::Failed("boom".to_string())), "failed");
+        assert_eq!(
+            agent_status_to_str(&AgentStatus::Failed("boom".to_string())),
+            "failed"
+        );
     }
 
     #[test]

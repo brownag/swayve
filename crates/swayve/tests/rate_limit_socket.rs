@@ -45,7 +45,10 @@ async fn test_over_limit_lines_drop_and_client_recovers() {
     {
         delivered += 1;
     }
-    assert!((200..=205).contains(&delivered), "delivered {delivered}, expected 200 to 205");
+    assert!(
+        (200..=205).contains(&delivered),
+        "delivered {delivered}, expected 200 to 205"
+    );
 
     // The client is still connected: poll until one more line is delivered.
     // Polling, not sleeping, to order events: the bucket refills 1 token per 10 ms.

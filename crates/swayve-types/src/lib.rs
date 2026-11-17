@@ -144,9 +144,7 @@ pub enum AgentIPCMessage {
         params: RegisterParams,
     },
     #[serde(rename = "agent.update_status")]
-    UpdateStatus {
-        params: UpdateStatusParams,
-    },
+    UpdateStatus { params: UpdateStatusParams },
     /// Ask the daemon to advance focus to the next window in the agent hierarchy.
     #[serde(rename = "daemon.focus")]
     Focus,
@@ -392,7 +390,8 @@ mod tests {
         assert_eq!(frame.upsert[0].id.0, "agent-1");
         assert_eq!(frame.remove, vec![AgentId("agent-old".to_string())]);
 
-        let frame_via_trait: DiffFrame = frame_json.parse().expect("should parse via FromStr trait");
+        let frame_via_trait: DiffFrame =
+            frame_json.parse().expect("should parse via FromStr trait");
         assert_eq!(frame, frame_via_trait);
 
         assert_eq!(DiffFrame::from_str("{not valid json"), None);

@@ -6,7 +6,7 @@ use swayve::cli::register_and_wait;
 use swayve::config::Config;
 use swayve::daemon::{DaemonEvent, run_daemon_loops, start_daemon_ipc};
 use swayve::sway::SwayCommand;
-use swayve::types::{AgentId, AgentIPCMessage, ProjectId, RegisterParams};
+use swayve::types::{AgentIPCMessage, AgentId, ProjectId, RegisterParams};
 use tokio::fs;
 use tokio::net::UnixStream;
 use tokio::sync::mpsc;
@@ -55,7 +55,11 @@ async fn test_register_and_wait_sees_registration_and_times_out_otherwise() {
     let start = Instant::now();
     let never = "{\"method\":\"daemon.subscribe\"}\n";
     assert!(!register_and_wait(socket_path, never, "ghost-9", Duration::from_millis(300)).await);
-    assert!(start.elapsed() < Duration::from_secs(1), "timeout took {:?}", start.elapsed());
+    assert!(
+        start.elapsed() < Duration::from_secs(1),
+        "timeout took {:?}",
+        start.elapsed()
+    );
 
     listener.abort();
     daemon.abort();

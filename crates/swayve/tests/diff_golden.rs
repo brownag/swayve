@@ -8,7 +8,9 @@ use std::time::Duration;
 use swayve::config::Config;
 use swayve::daemon::{DaemonEvent, run_daemon_loops, start_daemon_ipc};
 use swayve::sway::SwayCommand;
-use swayve::types::{AgentId, AgentIPCMessage, AgentStatus, ProjectId, RegisterParams, UpdateStatusParams};
+use swayve::types::{
+    AgentIPCMessage, AgentId, AgentStatus, ProjectId, RegisterParams, UpdateStatusParams,
+};
 use tokio::fs;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
@@ -41,7 +43,9 @@ async fn test_subscribe_diff_bytes_are_pinned() {
     wait_for_socket(socket_path).await;
 
     let line = |msg: AgentIPCMessage| serde_json::to_string(&msg).unwrap() + "\n";
-    let mut writer = UnixStream::connect(socket_path).await.expect("connect writer");
+    let mut writer = UnixStream::connect(socket_path)
+        .await
+        .expect("connect writer");
     writer
         .write_all(
             line(AgentIPCMessage::Register {
@@ -62,35 +66,53 @@ async fn test_subscribe_diff_bytes_are_pinned() {
     writer.flush().await.unwrap();
 
     // Subscribe. The first snapshot goes out on the next broadcast, so trigger one.
-    let diff = UnixStream::connect(socket_path).await.expect("connect diff");
+    let diff = UnixStream::connect(socket_path)
+        .await
+        .expect("connect diff");
     let (r, mut w) = diff.into_split();
-    w.write_all(b"{\"method\":\"daemon.subscribe_diff\"}\n").await.unwrap();
+    w.write_all(b"{\"method\":\"daemon.subscribe_diff\"}\n")
+        .await
+        .unwrap();
     let mut lines = BufReader::new(r).lines();
     writer
         .write_all(
             line(AgentIPCMessage::UpdateStatus {
-                params: UpdateStatusParams { agent_id: AgentId("golden-1".to_string()), status: AgentStatus::Thinking },
+                params: UpdateStatusParams {
+                    agent_id: AgentId("golden-1".to_string()),
+                    status: AgentStatus::Thinking,
+                },
             })
             .as_bytes(),
         )
         .await
         .unwrap();
     writer.flush().await.unwrap();
-    let snapshot = timeout(Duration::from_secs(2), lines.next_line()).await.unwrap().unwrap().unwrap();
+    let snapshot = timeout(Duration::from_secs(2), lines.next_line())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
     println!("SNAPSHOT={snapshot}");
 
     // A delta: change the status, expect one upsert line.
     writer
         .write_all(
             line(AgentIPCMessage::UpdateStatus {
-                params: UpdateStatusParams { agent_id: AgentId("golden-1".to_string()), status: AgentStatus::Completed },
+                params: UpdateStatusParams {
+                    agent_id: AgentId("golden-1".to_string()),
+                    status: AgentStatus::Completed,
+                },
             })
             .as_bytes(),
         )
         .await
         .unwrap();
     writer.flush().await.unwrap();
-    let delta = timeout(Duration::from_secs(2), lines.next_line()).await.unwrap().unwrap().unwrap();
+    let delta = timeout(Duration::from_secs(2), lines.next_line())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
     println!("DELTA={delta}");
 
     assert_eq!(snapshot, EXPECTED_SNAPSHOT);

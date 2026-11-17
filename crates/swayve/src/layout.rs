@@ -67,7 +67,9 @@ impl LayoutManager {
 
                         // 2. Determine if it's the first child or a subsequent child
                         let has_siblings = state.agents().values().any(|a| {
-                            a.parent_id.as_ref() == Some(&p_id) && a.id != agent.id && a.container_id.is_some()
+                            a.parent_id.as_ref() == Some(&p_id)
+                                && a.id != agent.id
+                                && a.container_id.is_some()
                         });
 
                         if !has_siblings {
@@ -80,7 +82,9 @@ impl LayoutManager {
                                     con_id,
                                     mark: children_mark.clone(),
                                 });
-                                commands.push(SwayCommand::SetLayoutTabbed { mark: children_mark });
+                                commands.push(SwayCommand::SetLayoutTabbed {
+                                    mark: children_mark,
+                                });
                             }
                         } else {
                             // Subsequent child
@@ -166,7 +170,7 @@ mod tests {
         let commands = lm.compute_commands(action, &state);
 
         assert_eq!(commands.len(), 2);
-        
+
         // Verify MarkWindow
         let has_mark = commands.iter().any(|c| {
             if let SwayCommand::MarkWindow { con_id, .. } = c {
@@ -206,7 +210,7 @@ mod tests {
             app_id.clone(),
             None,
         );
-        
+
         if let Some(agent) = state.agents.get_mut(&parent_id) {
             agent.mark = parent_mark.to_string();
             agent.container_id = Some(10);
@@ -234,13 +238,21 @@ mod tests {
             Some(parent_id.clone()),
         );
         if let Some(a) = state.agents.get_mut(&child_id) {
-             a.container_id = Some(42);
+            a.container_id = Some(42);
         }
 
         let commands = lm.compute_commands(action, &state);
 
-        assert!(commands.iter().any(|c| matches!(c, SwayCommand::SplitHorizontal { .. })));
-        assert!(commands.iter().any(|c| matches!(c, SwayCommand::SetLayoutTabbed { .. })));
+        assert!(
+            commands
+                .iter()
+                .any(|c| matches!(c, SwayCommand::SplitHorizontal { .. }))
+        );
+        assert!(
+            commands
+                .iter()
+                .any(|c| matches!(c, SwayCommand::SetLayoutTabbed { .. }))
+        );
         assert!(commands.iter().any(|c| {
             if let SwayCommand::MarkWindow { con_id, mark } = c {
                 *con_id == 42 && mark == children_mark
@@ -313,9 +325,21 @@ mod tests {
         let commands = lm.compute_commands(action, &state);
 
         assert_eq!(commands.len(), 3);
-        assert!(commands.iter().any(|c| matches!(c, SwayCommand::MoveToContainer { .. })));
-        assert!(commands.iter().any(|c| matches!(c, SwayCommand::MarkWindow { con_id: 42, .. })));
-        assert!(commands.iter().any(|c| matches!(c, SwayCommand::MoveToWorkspace { .. })));
+        assert!(
+            commands
+                .iter()
+                .any(|c| matches!(c, SwayCommand::MoveToContainer { .. }))
+        );
+        assert!(
+            commands
+                .iter()
+                .any(|c| matches!(c, SwayCommand::MarkWindow { con_id: 42, .. }))
+        );
+        assert!(
+            commands
+                .iter()
+                .any(|c| matches!(c, SwayCommand::MoveToWorkspace { .. }))
+        );
     }
 
     /// A parent with `children` registered beneath it, each already given a window.
@@ -323,7 +347,13 @@ mod tests {
         let mut state = DaemonState::new(Config::default());
         let parent_id = AgentId("parent".to_string());
         let project = ProjectId("proj".to_string());
-        state.register_agent(parent_id.clone(), project.clone(), 1, "agent.parent".to_string(), None);
+        state.register_agent(
+            parent_id.clone(),
+            project.clone(),
+            1,
+            "agent.parent".to_string(),
+            None,
+        );
 
         for (idx, (name, con_id)) in children.iter().enumerate() {
             let child = AgentId(name.to_string());

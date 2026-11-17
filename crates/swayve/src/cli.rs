@@ -1,7 +1,7 @@
 use crate::config::load_config;
-use crate::daemon::{run_daemon_loops, start_daemon_ipc_with_limits, DaemonEvent};
-use crate::sway::{run_event_listener, SwayCommand, SwayEvent, SwayManager};
-use crate::types::{AgentId, AgentIPCMessage, ProjectId, RegisterParams};
+use crate::daemon::{DaemonEvent, run_daemon_loops, start_daemon_ipc_with_limits};
+use crate::sway::{SwayCommand, SwayEvent, SwayManager, run_event_listener};
+use crate::types::{AgentIPCMessage, AgentId, ProjectId, RegisterParams};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::env;
@@ -129,7 +129,10 @@ pub async fn run_cli() -> Result<()> {
     let args = Cli::parse();
     let config = load_config();
     // Resolved lazily: init-shell and panel never touch the socket.
-    let socket_path = if matches!(args.command, Commands::InitShell | Commands::Panel { .. } | Commands::Hud { socket: Some(_) }) {
+    let socket_path = if matches!(
+        args.command,
+        Commands::InitShell | Commands::Panel { .. } | Commands::Hud { socket: Some(_) }
+    ) {
         String::new()
     } else if let Ok(p) = env::var("SWAYVE_SOCKET")
         && !p.trim().is_empty()
@@ -231,7 +234,9 @@ fi
                     lines_per_sec: ipc_lines_per_sec,
                     burst: ipc_burst,
                 };
-                if let Err(e) = start_daemon_ipc_with_limits(&socket_path_str, event_tx, limits).await {
+                if let Err(e) =
+                    start_daemon_ipc_with_limits(&socket_path_str, event_tx, limits).await
+                {
                     eprintln!("[daemon] Socket server error: {:?}", e);
                 }
             });
@@ -283,11 +288,24 @@ fi
                     },
                 };
                 let payload = serde_json::to_string(&reg_msg)? + "\n";
-                if !register_and_wait(socket_path, &payload, &agent_id, std::time::Duration::from_secs(2)).await {
-                    println!("[spawn] Warning: daemon did not list {} within 2s; launching anyway", agent_id);
+                if !register_and_wait(
+                    socket_path,
+                    &payload,
+                    &agent_id,
+                    std::time::Duration::from_secs(2),
+                )
+                .await
+                {
+                    println!(
+                        "[spawn] Warning: daemon did not list {} within 2s; launching anyway",
+                        agent_id
+                    );
                 }
             } else {
-                println!("[spawn] Warning: Could not connect to daemon socket at {}. Running in standalone mode.", socket_path);
+                println!(
+                    "[spawn] Warning: Could not connect to daemon socket at {}. Running in standalone mode.",
+                    socket_path
+                );
             }
 
             if let Some(hint) = missing_hooks_hint(&agent) {
@@ -344,9 +362,10 @@ fi
                 // Search for orchestrator window recursively
                 fn find_orchestrator(node: &swayipc_async::Node) -> bool {
                     if let Some(app_id) = &node.app_id
-                        && app_id == "agent.orchestrator" {
-                            return true;
-                        }
+                        && app_id == "agent.orchestrator"
+                    {
+                        return true;
+                    }
                     for child in &node.nodes {
                         if find_orchestrator(child) {
                             return true;
@@ -363,7 +382,8 @@ fi
                 let exists = find_orchestrator(&tree);
                 if exists {
                     println!("[panel] Orchestrator panel exists. Toggling scratchpad.");
-                    conn.run_command("[app_id=\"agent.orchestrator\"] scratchpad show").await?;
+                    conn.run_command("[app_id=\"agent.orchestrator\"] scratchpad show")
+                        .await?;
                 } else {
                     println!("[panel] Orchestrator panel not found. Spawning...");
                     Command::new(&config.terminal.default_emulator)
@@ -405,10 +425,11 @@ fi
 
                 fn collect_agents(node: &swayipc_async::Node, agents: &mut Vec<(String, String)>) {
                     if let Some(app_id) = &node.app_id
-                        && app_id.starts_with("agent.") {
-                            let title = node.name.clone().unwrap_or_else(|| "Unknown".to_string());
-                            agents.push((app_id.clone(), title));
-                        }
+                        && app_id.starts_with("agent.")
+                    {
+                        let title = node.name.clone().unwrap_or_else(|| "Unknown".to_string());
+                        agents.push((app_id.clone(), title));
+                    }
                     for child in &node.nodes {
                         collect_agents(child, agents);
                     }
@@ -472,7 +493,12 @@ fn next_flat_agent_index(agents: &[(i64, bool)]) -> Option<usize> {
     if agents.is_empty() {
         return None;
     }
-    Some(agents.iter().position(|&(_, f)| f).map_or(0, |i| (i + 1) % agents.len()))
+    Some(
+        agents
+            .iter()
+            .position(|&(_, f)| f)
+            .map_or(0, |i| (i + 1) % agents.len()),
+    )
 }
 
 /// Cycle focus across agent windows by talking to Sway directly, ignoring hierarchy.
@@ -487,9 +513,10 @@ async fn focus_cycle_standalone() -> Result<()> {
 
     fn collect_agents_focus(node: &swayipc_async::Node, agents: &mut Vec<(i64, bool)>) {
         if let Some(app_id) = &node.app_id
-            && app_id.starts_with("agent.") {
-                agents.push((node.id, node.focused));
-            }
+            && app_id.starts_with("agent.")
+        {
+            agents.push((node.id, node.focused));
+        }
         for child in &node.nodes {
             collect_agents_focus(child, agents);
         }
@@ -506,7 +533,8 @@ async fn focus_cycle_standalone() -> Result<()> {
         return Ok(());
     };
     let (target_id, _) = agents[next_idx];
-    conn.run_command(&format!("[con_id=\"{}\"] focus", target_id)).await?;
+    conn.run_command(&format!("[con_id=\"{}\"] focus", target_id))
+        .await?;
     println!("[focus] Focused container {}", target_id);
 
     Ok(())
@@ -514,7 +542,10 @@ async fn focus_cycle_standalone() -> Result<()> {
 
 /// Folds one `subscribe_diff` line into `map`. Returns `false`, changing nothing,
 /// when the line is not JSON.
-fn fold_diff_line(map: &mut std::collections::HashMap<String, crate::types::AgentWindow>, line: &str) -> bool {
+fn fold_diff_line(
+    map: &mut std::collections::HashMap<String, crate::types::AgentWindow>,
+    line: &str,
+) -> bool {
     let Ok(frame) = serde_json::from_str::<crate::types::DiffFrame>(line) else {
         return false;
     };
@@ -547,7 +578,12 @@ pub struct SpawnRequest<'a> {
 
 /// Expands a terminal template. `{command}` is replaced by the argv entries as-is (no shell
 /// splitting); `{app_id}` and `{title}` are substituted in every other entry.
-pub fn expand_terminal_args(template: &[String], app_id: &str, title: &str, command: &[String]) -> Vec<String> {
+pub fn expand_terminal_args(
+    template: &[String],
+    app_id: &str,
+    title: &str,
+    command: &[String],
+) -> Vec<String> {
     let mut out = Vec::new();
     for arg in template {
         if arg == "{command}" {
@@ -562,13 +598,28 @@ pub fn expand_terminal_args(template: &[String], app_id: &str, title: &str, comm
 /// Terminal argv for the orchestrator panel: `swayve status --watch` as separate entries.
 pub fn panel_terminal_args(template: &[String]) -> Vec<String> {
     let cmd = ["swayve", "status", "--watch"].map(String::from);
-    expand_terminal_args(template, "agent.orchestrator", "Swayve Orchestrator HUD", &cmd)
+    expand_terminal_args(
+        template,
+        "agent.orchestrator",
+        "Swayve Orchestrator HUD",
+        &cmd,
+    )
 }
 
 /// Builds the spawn plan. `term_template` is `config.terminal.args`. `{command}` is replaced by
 /// the shell-split command; `{app_id}` and `{title}` are replaced by the derived values.
 pub fn spawn_plan(req: SpawnRequest<'_>) -> SpawnPlan {
-    let SpawnRequest { agent, wave, command, prompt, term_template, socket_path, project, now_ms, parent } = req;
+    let SpawnRequest {
+        agent,
+        wave,
+        command,
+        prompt,
+        term_template,
+        socket_path,
+        project,
+        now_ms,
+        parent,
+    } = req;
     let base_command = command.unwrap_or_else(|| agent.to_string());
     let actual_command = if let Some(p) = prompt {
         let escaped_prompt = p.replace('\'', "'\\''");
@@ -597,7 +648,13 @@ pub fn spawn_plan(req: SpawnRequest<'_>) -> SpawnPlan {
     if let Some(p) = parent {
         env.push(("SWAYVE_PARENT_ID".to_string(), p.to_string()));
     }
-    SpawnPlan { agent_id, app_id, title, term_args, env }
+    SpawnPlan {
+        agent_id,
+        app_id,
+        title,
+        term_args,
+        env,
+    }
 }
 
 /// Warning text when an agent's Swayve hooks are not installed, or `None` when they are (or the agent has none).
@@ -605,18 +662,24 @@ fn missing_hooks_hint(agent: &str) -> Option<&'static str> {
     let home = env::var_os("HOME").map(std::path::PathBuf::from);
     let (files, marker, hint): (Vec<std::path::PathBuf>, &str, &str) = match agent {
         "claude" => (
-            [Some(std::path::PathBuf::from(".claude/settings.json")), home.map(|h| h.join(".claude/settings.json"))]
-                .into_iter()
-                .flatten()
-                .collect(),
+            [
+                Some(std::path::PathBuf::from(".claude/settings.json")),
+                home.map(|h| h.join(".claude/settings.json")),
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
             "agent.update_status",
             "Swayve hooks not found in Claude settings; status will not update. Run `make install-hooks`.",
         ),
         "antigravity" => (
-            [Some(std::path::PathBuf::from(".agents/hooks.json")), home.map(|h| h.join(".gemini/config/hooks.json"))]
-                .into_iter()
-                .flatten()
-                .collect(),
+            [
+                Some(std::path::PathBuf::from(".agents/hooks.json")),
+                home.map(|h| h.join(".gemini/config/hooks.json")),
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
             "sidecar.mjs",
             "Swayve hooks not found in Antigravity hooks.json; status will not update. Run `make install-antigravity-hooks`.",
         ),
@@ -634,7 +697,9 @@ pub fn resolve_spawn_dir(arg: Option<&str>, cwd: &std::path::Path) -> Result<std
         Some(a) => cwd.join(a),
         None => cwd.to_path_buf(),
     };
-    let p = p.canonicalize().with_context(|| format!("--dir {} does not exist", p.display()))?;
+    let p = p
+        .canonicalize()
+        .with_context(|| format!("--dir {} does not exist", p.display()))?;
     anyhow::ensure!(p.is_dir(), "--dir {} is not a directory", p.display());
     Ok(p)
 }
@@ -663,7 +728,9 @@ pub async fn register_and_wait(
     let deadline = tokio::time::Instant::now() + timeout;
     loop {
         if let Ok(mut s) = UnixStream::connect(socket_path).await
-            && s.write_all(b"{\"method\":\"daemon.subscribe\"}\n").await.is_ok()
+            && s.write_all(b"{\"method\":\"daemon.subscribe\"}\n")
+                .await
+                .is_ok()
         {
             let (r, _) = s.into_split();
             let first = tokio::time::timeout(
@@ -690,7 +757,10 @@ async fn run_status_watch(socket_path: &str, diff: bool) -> Result<()> {
     let mut stream = match UnixStream::connect(socket_path).await {
         Ok(s) => s,
         Err(e) => {
-            println!("[status] Could not connect to daemon socket at {}: {:?}", socket_path, e);
+            println!(
+                "[status] Could not connect to daemon socket at {}: {:?}",
+                socket_path, e
+            );
             return Ok(());
         }
     };
@@ -706,7 +776,8 @@ async fn run_status_watch(socket_path: &str, diff: bool) -> Result<()> {
     let (reader, _) = stream.into_split();
     let buf_reader = BufReader::new(reader);
     let mut lines = buf_reader.lines();
-    let mut map: std::collections::HashMap<String, crate::types::AgentWindow> = std::collections::HashMap::new();
+    let mut map: std::collections::HashMap<String, crate::types::AgentWindow> =
+        std::collections::HashMap::new();
 
     while let Some(line) = lines.next_line().await? {
         if line.trim().is_empty() {
@@ -821,10 +892,21 @@ mod tests {
 
     #[test]
     fn test_panel_argv() {
-        let t: Vec<String> = ["-e", "{command}", "--app-id", "{app_id}", "-T", "{title}"].map(String::from).to_vec();
+        let t: Vec<String> = ["-e", "{command}", "--app-id", "{app_id}", "-T", "{title}"]
+            .map(String::from)
+            .to_vec();
         assert_eq!(
             panel_terminal_args(&t),
-            ["-e", "swayve", "status", "--watch", "--app-id", "agent.orchestrator", "-T", "Swayve Orchestrator HUD"]
+            [
+                "-e",
+                "swayve",
+                "status",
+                "--watch",
+                "--app-id",
+                "agent.orchestrator",
+                "-T",
+                "Swayve Orchestrator HUD"
+            ]
         );
     }
 
@@ -833,13 +915,29 @@ mod tests {
         let path = std::env::temp_dir().join(format!("swayve-{}-no-such.sock", std::process::id()));
         let line = "{\"method\":\"daemon.subscribe\"}\n";
         let start = std::time::Instant::now();
-        let ok = register_and_wait(path.to_str().unwrap(), line, "x", std::time::Duration::from_millis(200)).await;
+        let ok = register_and_wait(
+            path.to_str().unwrap(),
+            line,
+            "x",
+            std::time::Duration::from_millis(200),
+        )
+        .await;
         assert!(!ok);
         assert!(start.elapsed() < std::time::Duration::from_secs(1));
     }
 
     fn base() -> SpawnRequest<'static> {
-        SpawnRequest { agent: "pi", wave: "w1", command: None, prompt: None, term_template: &[], socket_path: "s", project: "p", now_ms: 1, parent: None }
+        SpawnRequest {
+            agent: "pi",
+            wave: "w1",
+            command: None,
+            prompt: None,
+            term_template: &[],
+            socket_path: "s",
+            project: "p",
+            now_ms: 1,
+            parent: None,
+        }
     }
 
     #[test]
@@ -850,35 +948,55 @@ mod tests {
     #[test]
     fn test_spawn_plan_escapes_single_quote_in_prompt() {
         let tmpl = vec!["{command}".to_string()];
-        let plan = spawn_plan(SpawnRequest { prompt: Some("it's"), term_template: &tmpl, ..base() });
+        let plan = spawn_plan(SpawnRequest {
+            prompt: Some("it's"),
+            term_template: &tmpl,
+            ..base()
+        });
         assert_eq!(plan.term_args, vec!["bash", "-c", "pi \"it's\""]);
     }
 
     #[test]
     fn test_spawn_plan_shell_template_quoted_prompt_argv() {
         let tmpl: Vec<String> = ["-e", "{command}"].map(String::from).to_vec();
-        let plan = spawn_plan(SpawnRequest { prompt: Some("it's"), term_template: &tmpl, ..base() });
+        let plan = spawn_plan(SpawnRequest {
+            prompt: Some("it's"),
+            term_template: &tmpl,
+            ..base()
+        });
         assert_eq!(plan.term_args, ["-e", "bash", "-c", "pi \"it's\""]);
     }
 
     #[test]
     fn test_spawn_plan_quoted_whitespace_arg_stays_one_entry() {
         let tmpl = vec!["{command}".to_string()];
-        let plan = spawn_plan(SpawnRequest { command: Some("tool --path \"/run/my dir/x\"".to_string()), term_template: &tmpl, ..base() });
+        let plan = spawn_plan(SpawnRequest {
+            command: Some("tool --path \"/run/my dir/x\"".to_string()),
+            term_template: &tmpl,
+            ..base()
+        });
         assert_eq!(plan.term_args, ["tool", "--path", "/run/my dir/x"]);
     }
 
     // Pi's register() derives `agent.<agentId>`; keep this in sync (swayve-client.ts).
     #[test]
     fn test_spawn_plan_app_id_pin() {
-        let plan = spawn_plan(SpawnRequest { agent: "claude", wave: "w2", now_ms: 100007, ..base() });
+        let plan = spawn_plan(SpawnRequest {
+            agent: "claude",
+            wave: "w2",
+            now_ms: 100007,
+            ..base()
+        });
         assert_eq!(plan.agent_id, "claude-w2-7");
         assert_eq!(plan.app_id, "agent.claude-w2-7");
     }
 
     #[test]
     fn test_spawn_plan_ids_follow_clock_suffix() {
-        let plan = spawn_plan(SpawnRequest { now_ms: 12345, ..base() });
+        let plan = spawn_plan(SpawnRequest {
+            now_ms: 12345,
+            ..base()
+        });
         assert_eq!(plan.agent_id, "pi-w1-12345");
         assert_eq!(plan.app_id, "agent.pi-w1-12345");
         assert_eq!(plan.title, "Agent [pi]: w1");
@@ -886,38 +1004,73 @@ mod tests {
 
     #[test]
     fn test_spawn_plan_distinct_clock_gives_distinct_ids() {
-        let a = spawn_plan(SpawnRequest { now_ms: 1, ..base() });
-        let b = spawn_plan(SpawnRequest { now_ms: 2, ..base() });
+        let a = spawn_plan(SpawnRequest {
+            now_ms: 1,
+            ..base()
+        });
+        let b = spawn_plan(SpawnRequest {
+            now_ms: 2,
+            ..base()
+        });
         assert_ne!(a.agent_id, b.agent_id);
         assert_ne!(a.app_id, b.app_id);
     }
 
     #[test]
     fn test_spawn_plan_substitutes_app_id_and_title() {
-        let tmpl: Vec<String> = ["--app-id", "{app_id}", "--title", "{title}"].iter().map(|s| s.to_string()).collect();
-        let plan = spawn_plan(SpawnRequest { term_template: &tmpl, now_ms: 7, ..base() });
-        assert_eq!(plan.term_args, vec!["--app-id", "agent.pi-w1-7", "--title", "Agent [pi]: w1"]);
+        let tmpl: Vec<String> = ["--app-id", "{app_id}", "--title", "{title}"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let plan = spawn_plan(SpawnRequest {
+            term_template: &tmpl,
+            now_ms: 7,
+            ..base()
+        });
+        assert_eq!(
+            plan.term_args,
+            vec!["--app-id", "agent.pi-w1-7", "--title", "Agent [pi]: w1"]
+        );
     }
 
     #[test]
     fn test_spawn_plan_env_carries_socket_agent_project() {
-        let plan = spawn_plan(SpawnRequest { socket_path: "/run/s.sock", project: "proj", now_ms: 5, ..base() });
+        let plan = spawn_plan(SpawnRequest {
+            socket_path: "/run/s.sock",
+            project: "proj",
+            now_ms: 5,
+            ..base()
+        });
         let e = |k: &str, v: &str| (k.to_string(), v.to_string());
         assert_eq!(
             plan.env,
-            vec![e("SWAYVE_SOCKET", "/run/s.sock"), e("SWAYVE_AGENT_ID", "pi-w1-5"), e("SWAYVE_PROJECT_ID", "proj")]
+            vec![
+                e("SWAYVE_SOCKET", "/run/s.sock"),
+                e("SWAYVE_AGENT_ID", "pi-w1-5"),
+                e("SWAYVE_PROJECT_ID", "proj")
+            ]
         );
     }
 
     #[test]
     fn test_spawn_plan_sets_parent_env_when_given() {
-        let plan = spawn_plan(SpawnRequest { now_ms: 5, parent: Some("A-c1-14404"), ..base() });
-        assert!(plan.env.contains(&("SWAYVE_PARENT_ID".to_string(), "A-c1-14404".to_string())));
+        let plan = spawn_plan(SpawnRequest {
+            now_ms: 5,
+            parent: Some("A-c1-14404"),
+            ..base()
+        });
+        assert!(
+            plan.env
+                .contains(&("SWAYVE_PARENT_ID".to_string(), "A-c1-14404".to_string()))
+        );
     }
 
     #[test]
     fn test_spawn_plan_omits_parent_env_when_absent() {
-        let plan = spawn_plan(SpawnRequest { now_ms: 5, ..base() });
+        let plan = spawn_plan(SpawnRequest {
+            now_ms: 5,
+            ..base()
+        });
         assert!(plan.env.iter().all(|(k, _)| k != "SWAYVE_PARENT_ID"));
     }
 
@@ -936,7 +1089,9 @@ mod tests {
     fn test_fold_diff_snapshot_clears_then_upserts() {
         let mut map = std::collections::HashMap::new();
         map.insert("a".to_string(), diff_agent("a"));
-        let line = serde_json::json!({"snapshot": true, "upsert": [diff_agent_json("b")], "remove": []}).to_string();
+        let line =
+            serde_json::json!({"snapshot": true, "upsert": [diff_agent_json("b")], "remove": []})
+                .to_string();
         assert!(fold_diff_line(&mut map, &line));
         assert!(!map.contains_key("a"));
         assert!(map.contains_key("b"));
@@ -945,7 +1100,9 @@ mod tests {
     #[test]
     fn test_fold_diff_upsert_then_remove() {
         let mut map = std::collections::HashMap::new();
-        let up = serde_json::json!({"snapshot": false, "upsert": [diff_agent_json("c")], "remove": []}).to_string();
+        let up =
+            serde_json::json!({"snapshot": false, "upsert": [diff_agent_json("c")], "remove": []})
+                .to_string();
         assert!(fold_diff_line(&mut map, &up));
         assert!(map.contains_key("c"));
         let rm = serde_json::json!({"snapshot": false, "upsert": [], "remove": ["c"]}).to_string();
@@ -965,8 +1122,14 @@ mod tests {
     #[test]
     fn test_flat_fallback_cycles_agent_windows_in_tree_order() {
         assert_eq!(next_flat_agent_index(&[]), None);
-        assert_eq!(next_flat_agent_index(&[(1, false), (2, true), (3, false)]), Some(2));
-        assert_eq!(next_flat_agent_index(&[(1, false), (2, false), (3, true)]), Some(0));
+        assert_eq!(
+            next_flat_agent_index(&[(1, false), (2, true), (3, false)]),
+            Some(2)
+        );
+        assert_eq!(
+            next_flat_agent_index(&[(1, false), (2, false), (3, true)]),
+            Some(0)
+        );
         assert_eq!(next_flat_agent_index(&[(1, false), (2, false)]), Some(0));
         assert_eq!(next_flat_agent_index(&[(1, true)]), Some(0));
     }
@@ -1042,7 +1205,8 @@ mod tests {
         let cli = Cli::try_parse_from(["swayve", "hud"]).unwrap();
         assert!(matches!(cli.command, Commands::Hud { socket: None }));
         let custom = std::env::temp_dir().join("swayve_hud_test.sock");
-        let cli = Cli::try_parse_from(["swayve", "hud", "--socket", custom.to_str().unwrap()]).unwrap();
+        let cli =
+            Cli::try_parse_from(["swayve", "hud", "--socket", custom.to_str().unwrap()]).unwrap();
         if let Commands::Hud { socket } = cli.command {
             assert_eq!(socket, Some(custom));
         } else {
@@ -1073,11 +1237,26 @@ mod tests {
     fn test_format_status_ansi_codes() {
         use crate::types::AgentStatus;
         assert_eq!(format_status(&AgentStatus::Idle), "\x1B[90mIdle\x1B[0m");
-        assert_eq!(format_status(&AgentStatus::Thinking), "\x1B[38;5;208mThinking\x1B[0m");
-        assert_eq!(format_status(&AgentStatus::ExecutingTool), "\x1B[36mExecutingTool\x1B[0m");
-        assert_eq!(format_status(&AgentStatus::AwaitingHumanInput), "\x1B[5;1;31mAwaitingInput\x1B[0m");
-        assert_eq!(format_status(&AgentStatus::Completed), "\x1B[32mCompleted\x1B[0m");
-        assert_eq!(format_status(&AgentStatus::Failed("error".to_string())), "\x1B[31mFailed(error)\x1B[0m");
+        assert_eq!(
+            format_status(&AgentStatus::Thinking),
+            "\x1B[38;5;208mThinking\x1B[0m"
+        );
+        assert_eq!(
+            format_status(&AgentStatus::ExecutingTool),
+            "\x1B[36mExecutingTool\x1B[0m"
+        );
+        assert_eq!(
+            format_status(&AgentStatus::AwaitingHumanInput),
+            "\x1B[5;1;31mAwaitingInput\x1B[0m"
+        );
+        assert_eq!(
+            format_status(&AgentStatus::Completed),
+            "\x1B[32mCompleted\x1B[0m"
+        );
+        assert_eq!(
+            format_status(&AgentStatus::Failed("error".to_string())),
+            "\x1B[31mFailed(error)\x1B[0m"
+        );
     }
 
     #[test]
@@ -1087,11 +1266,12 @@ mod tests {
         std::fs::create_dir_all(base.join("sub")).unwrap();
         let canon = base.canonicalize().unwrap();
         assert_eq!(resolve_spawn_dir(None, &base).unwrap(), canon);
-        assert_eq!(resolve_spawn_dir(Some("sub"), &base).unwrap(), canon.join("sub"));
+        assert_eq!(
+            resolve_spawn_dir(Some("sub"), &base).unwrap(),
+            canon.join("sub")
+        );
         assert!(resolve_spawn_dir(Some("missing"), &base).is_err());
         assert!(resolve_spawn_dir(Some("sub/../../"), &base).is_ok());
         let _ = std::fs::remove_dir_all(&base);
     }
 }
-
-

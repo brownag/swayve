@@ -255,7 +255,9 @@ mod tests {
         let resolved = resolve_socket_path_with(lookup).unwrap();
         assert_eq!(
             resolved,
-            PathBuf::from("/run/user/1000").join("swayve").join("swayve.sock")
+            PathBuf::from("/run/user/1000")
+                .join("swayve")
+                .join("swayve.sock")
         );
     }
 
@@ -270,7 +272,9 @@ mod tests {
         let resolved = resolve_socket_path_with(lookup).unwrap();
         assert_eq!(
             resolved,
-            PathBuf::from("/run/user/1000").join("swayve").join("swayve.sock")
+            PathBuf::from("/run/user/1000")
+                .join("swayve")
+                .join("swayve.sock")
         );
     }
 
@@ -383,10 +387,15 @@ mod tests {
         };
 
         let mut offline_count = 0;
-        let result = run_client_with_options(&non_existent_path, &options, |_| Ok(()), || {
-            offline_count += 1;
-            Ok(())
-        });
+        let result = run_client_with_options(
+            &non_existent_path,
+            &options,
+            |_| Ok(()),
+            || {
+                offline_count += 1;
+                Ok(())
+            },
+        );
         assert!(result.is_ok());
         assert_eq!(offline_count, 2);
     }
@@ -401,9 +410,12 @@ mod tests {
             reset_backoff_on_frame: true,
         };
 
-        let result = run_client_with_options(&non_existent_path, &options, |_| Ok(()), || {
-            Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed"))
-        });
+        let result = run_client_with_options(
+            &non_existent_path,
+            &options,
+            |_| Ok(()),
+            || Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed")),
+        );
         assert!(result.is_err());
     }
 }
