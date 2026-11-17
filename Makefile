@@ -38,8 +38,8 @@ hud: ## Run the live terminal HUD (swayve-hud)
 	cargo run -p swayve-hud
 
 install-user: ## Install swayve and swayve-hud to ~/.local/bin (no sudo; override INSTALL_ROOT)
-	cargo install --locked --path crates/swayve --root $(INSTALL_ROOT)
-	cargo install --locked --path crates/swayve-hud --root $(INSTALL_ROOT)
+	cargo install --locked --path crates/swayve --root "$(INSTALL_ROOT)"
+	cargo install --locked --path crates/swayve-hud --root "$(INSTALL_ROOT)"
 
 install-hooks: ## Merge Swayve status hooks into ~/.claude/settings.json (see integrations/claude/README.md)
 	integrations/claude/install-hooks.sh --global

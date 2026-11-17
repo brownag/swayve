@@ -137,7 +137,8 @@ pub async fn run_cli() -> Result<()> {
     } else if let Ok(p) = env::var("SWAYVE_SOCKET")
         && !p.trim().is_empty()
     {
-        p
+        // Absolute now, so spawn's --dir (child cwd) cannot change which socket it names.
+        std::path::absolute(&p)?.to_string_lossy().into_owned()
     } else {
         let dir = swayve_runtime_dir()?;
         ensure_private_dir(&dir)?;
