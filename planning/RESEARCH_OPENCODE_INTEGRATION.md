@@ -2,6 +2,13 @@
 
 Last researched: 2026-11-17
 
+## Verification Record (2026-11-17)
+
+- First-party server plugin docs confirm `Plugin.define({ id, setup(ctx) })`, `ctx.event.subscribe({ types, signal })` as an async iterable, and cleanup via `AbortController.abort()`. Server plugins do not receive `server.connected`.
+- Current public event schema names verified for the integration: `session.created`, `session.execution.started`, `session.execution.succeeded`, `session.execution.failed`, `session.execution.interrupted`, `session.tool.called`, `session.tool.success`, and `session.tool.failed`. Event payloads carry session identity in their properties; creation carries session info including `id` and `directory`. Session `directory` is the workspace source when present.
+- OpenCode docs do not specify a supported release pin. API verification date is 2026-11-17; no release version is asserted.
+- `ctx.location.directory` identifies the plugin load location, not necessarily each session's workspace. It is only an explicitly documented fallback when event session directory is unavailable.
+
 ## Summary
 
 OpenCode's documented extension point is its server-side JavaScript/TypeScript plugin API. A Swayve integration can live as a local plugin under `.opencode/plugins/` (or as a configured package/path); it need not depend on shell lifecycle hooks. The plugin can subscribe to the event stream and clean up its subscription on unload. Before implementation, verify the exact current event names and payloads against OpenCode's published API/types and a supported OpenCode release.
@@ -28,6 +35,7 @@ An OpenCode plugin could map OpenCode session/tool events directly to Swayve mes
 - OpenCode Plugins: https://opencode.ai/docs/plugins
 - OpenCode Build Plugins: https://opencode.ai/docs/build/plugins
 - OpenCode Server Plugin API: https://opencode.ai/docs/build/plugins/server
+- OpenCode API event schemas: https://opencode.ai/docs/api#schema-OpenCodeEvent
 - Swayve Claude integration: `integrations/claude/README.md`, `integrations/claude/install-hooks.sh`, `integrations/claude/test-hooks.sh`
 - Swayve Antigravity integration: `integrations/antigravity/README.md`, `integrations/antigravity/sidecar.mjs`, `integrations/antigravity/sidecar.test.mjs`
 - Swayve goal inventory: `planning/GOALS.md`
