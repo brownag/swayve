@@ -29,7 +29,7 @@ mkdir -p "$(dirname "$TARGET_FILE")"
 
 # Replace only the "swayve-sidecar" key; keep every other hook the user has.
 python3 - "$TARGET_FILE" "$SIDECAR" <<'PY'
-import json, os, sys
+import json, os, shlex, sys
 
 path, sidecar = sys.argv[1], sys.argv[2]
 doc = {}
@@ -38,7 +38,7 @@ if os.path.exists(path) and os.path.getsize(path) > 0:
         doc = json.load(f)
 
 def cmd(event):
-    return f"exec node {sidecar} hook {event}"
+    return f"exec node {shlex.quote(sidecar)} hook {event}"
 
 doc["swayve-sidecar"] = {
     "SessionStart": [{"type": "command", "command": cmd("SessionStart")}],

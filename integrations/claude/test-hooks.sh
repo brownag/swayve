@@ -98,7 +98,8 @@ send_hook_payload() {
     local status="$1"
     local payload="{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"claude-test\",\"status\":$status}}"
     if command -v nc >/dev/null 2>&1; then
-        printf '%s\n' "$payload" | nc -N -U "$SOCKET_PATH" 2>/dev/null || true
+        # -N for OpenBSD nc (EOF); Ncat rejects it, so retry with a timeout.
+        printf '%s\n' "$payload" | nc -N -U "$SOCKET_PATH" 2>/dev/null || printf '%s\n' "$payload" | nc -w 1 -U "$SOCKET_PATH" 2>/dev/null || true
     elif command -v socat >/dev/null 2>&1; then
         printf '%s\n' "$payload" | socat - UNIX-CONNECT:"$SOCKET_PATH" 2>/dev/null || true
     fi
