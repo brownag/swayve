@@ -1,4 +1,4 @@
-.PHONY: help all build check test clean reload run daemon daemon-dry hud install-user
+.PHONY: help all build check test clean reload run daemon daemon-dry hud install-user install-hooks install-antigravity-hooks
 
 .DEFAULT_GOAL := help
 
@@ -40,6 +40,12 @@ hud: ## Run the live terminal HUD (swayve-hud)
 install-user: ## Install swayve and swayve-hud to ~/.local/bin (no sudo; override INSTALL_ROOT)
 	cargo install --locked --path crates/swayve --root $(INSTALL_ROOT)
 	cargo install --locked --path crates/swayve-hud --root $(INSTALL_ROOT)
+
+install-hooks: ## Merge Swayve status hooks into ~/.claude/settings.json (see integrations/claude/README.md)
+	integrations/claude/install-hooks.sh --global
+
+install-antigravity-hooks: ## Merge Swayve sidecar hooks into ~/.gemini/config/hooks.json
+	integrations/antigravity/install-hooks.sh
 
 reload: ## Reload Sway compositor configuration
 	swaymsg reload
