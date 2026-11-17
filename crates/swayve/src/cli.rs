@@ -153,7 +153,7 @@ _swayve_send_status() {
     local status="$1"
     local msg="{\"method\":\"agent.update_status\",\"params\":{\"agent_id\":\"$SWAYVE_AGENT_ID\",\"status\":\"$status\"}}"
     if command -v nc >/dev/null 2>&1; then
-        printf '%s\n' "$msg" | nc -U "$SWAYVE_SOCKET" 2>/dev/null || true
+        printf '%s\n' "$msg" | nc -N -U "$SWAYVE_SOCKET" 2>/dev/null || true
     elif command -v socat >/dev/null 2>&1; then
         printf '%s\n' "$msg" | socat - UNIX-CONNECT:"$SWAYVE_SOCKET" 2>/dev/null || true
     fi
@@ -290,6 +290,9 @@ fi
                 println!("[spawn] Warning: Could not connect to daemon socket at {}. Running in standalone mode.", socket_path);
             }
 
+            if let Some(hint) = missing_hooks_hint(&agent) {
+                println!("[spawn] Warning: {}", hint);
+            }
             let term_args = plan.term_args;
 
             println!(
@@ -597,6 +600,34 @@ pub fn spawn_plan(req: SpawnRequest<'_>) -> SpawnPlan {
     SpawnPlan { agent_id, app_id, title, term_args, env }
 }
 
+/// Warning text when an agent's Swayve hooks are not installed, or `None` when they are (or the agent has none).
+fn missing_hooks_hint(agent: &str) -> Option<&'static str> {
+    let home = env::var_os("HOME").map(std::path::PathBuf::from);
+    let (files, marker, hint): (Vec<std::path::PathBuf>, &str, &str) = match agent {
+        "claude" => (
+            [Some(std::path::PathBuf::from(".claude/settings.json")), home.map(|h| h.join(".claude/settings.json"))]
+                .into_iter()
+                .flatten()
+                .collect(),
+            "agent.update_status",
+            "Swayve hooks not found in Claude settings; status will not update. Run `make install-hooks`.",
+        ),
+        "antigravity" => (
+            [Some(std::path::PathBuf::from(".agents/hooks.json")), home.map(|h| h.join(".gemini/config/hooks.json"))]
+                .into_iter()
+                .flatten()
+                .collect(),
+            "sidecar.mjs",
+            "Swayve hooks not found in Antigravity hooks.json; status will not update. Run `make install-antigravity-hooks`.",
+        ),
+        _ => return None,
+    };
+    let installed = files
+        .iter()
+        .any(|p| std::fs::read_to_string(p).is_ok_and(|t| t.contains(marker)));
+    (!installed).then_some(hint)
+}
+
 /// Resolves the agent's working directory: `arg` (relative to `cwd`) or `cwd` itself. Must exist and be a directory.
 pub fn resolve_spawn_dir(arg: Option<&str>, cwd: &std::path::Path) -> Result<std::path::PathBuf> {
     let p = match arg {
@@ -809,6 +840,11 @@ mod tests {
 
     fn base() -> SpawnRequest<'static> {
         SpawnRequest { agent: "pi", wave: "w1", command: None, prompt: None, term_template: &[], socket_path: "s", project: "p", now_ms: 1, parent: None }
+    }
+
+    #[test]
+    fn test_missing_hooks_hint_only_for_hook_based_agents() {
+        assert!(missing_hooks_hint("pi").is_none());
     }
 
     #[test]
