@@ -52,6 +52,7 @@ Recon base: Orchestration 38 and `planning/RESEARCH_OPENCODE_INTEGRATION.md`; fo
 - **D6 (2026-11-17): Acceptance gate.** Require positive live evidence plus the focused mock-socket suite. Run `make all` only if work expands outside the OpenCode integration.
 - **D7 (2026-11-17): Planning and branch.** Track planning artifacts in separate `docs(planning):` commits; remain on `feat/opencode-integration1`; no remote operations.
 - **D8 (2026-11-17): G90 deferred.** Observe but do not implement parent mapping.
+- **D9 (2026-11-17): Runtime patch-version allowance.** User authorized proceeding with installed OpenCode v2.3.2 despite the plan's v2.3.0-only constraint. Keep the scope and single-turn/model constraints unchanged; characterize any evidence as v2.3.2, not v2.3.0.
 
 ## Hazard Notes
 
