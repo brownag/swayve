@@ -45,12 +45,12 @@ Validate the Swayve OpenCode plugin against the installed OpenCode v2.3.0 runtim
 Fix the OpenCode plugin's lifecycle extraction to use the observed v2.3.2 `event.data` payload, cover it with mock-socket tests, and document the tested contract without requiring another live model turn.
 
 ### Tasks
-- [ ] Read `event.data.sessionID` for registration and lifecycle status events.
-- [ ] Derive the project basename from `session.created`'s `event.data.location.directory`, falling back to the plugin load directory.
-- [ ] Preserve current status mapping, best-effort socket behavior, cleanup, and unsupported parent mapping.
-- [ ] Update mock events/assertions to use the observed v2.3.2 `data` payload shape; cover registration, lifecycle statuses, missing identity/location fallback, duplicate creation, cleanup, and unavailable socket behavior.
-- [ ] Update the OpenCode README to state the tested v2.3.2 payload contract without claiming broader compatibility.
-- [ ] Run `node --experimental-strip-types --test integrations/opencode/sidecar.test.mjs` and `git diff --check`.
+- [x] Read `event.data.sessionID` for registration and lifecycle status events.
+- [x] Derive the project basename from `session.created`'s `event.data.location.directory`, falling back to the plugin load directory.
+- [x] Preserve current status mapping, best-effort socket behavior, cleanup, and unsupported parent mapping.
+- [x] Update mock events/assertions to use the observed v2.3.2 `data` payload shape; cover registration, lifecycle statuses, missing identity/location fallback, duplicate creation, cleanup, and unavailable socket behavior.
+- [x] Update the OpenCode README to state the tested v2.3.2 payload contract without claiming broader compatibility.
+- [x] Run `node --experimental-strip-types --test integrations/opencode/sidecar.test.mjs` and `git diff --check`.
 
 ### Notes
 - The follow-up planning choice is tracked separately from implementation. Existing unrelated modification to `planning/RESEARCH_OPENCODE_INTEGRATION.md` must remain untouched and unstaged.
