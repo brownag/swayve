@@ -123,5 +123,5 @@ async fn test_subscribe_diff_bytes_are_pinned() {
     let _ = fs::remove_file(socket_path).await;
 }
 
-const EXPECTED_SNAPSHOT: &str = r#"{"remove":[],"snapshot":true,"upsert":[{"app_id":"agent.pi.golden-1","container_id":null,"id":"golden-1","mark":"mark_golden_1","parent_id":null,"project":"golden-proj","status":"thinking"}]}"#;
-const EXPECTED_DELTA: &str = r#"{"remove":[],"snapshot":false,"upsert":[{"app_id":"agent.pi.golden-1","container_id":null,"id":"golden-1","mark":"mark_golden_1","parent_id":null,"project":"golden-proj","status":"completed"}]}"#;
+const EXPECTED_SNAPSHOT: &str = r#"{"remove":[],"snapshot":true,"upsert":[{"app_id":"agent.pi.golden-1","container_id":null,"hosting_window_agent_id":null,"id":"golden-1","kind":"window","mark":"mark_golden_1","parent_id":null,"project":"golden-proj","status":"thinking"}]}"#;
+const EXPECTED_DELTA: &str = r#"{"remove":[],"snapshot":false,"upsert":[{"app_id":"agent.pi.golden-1","container_id":null,"hosting_window_agent_id":null,"id":"golden-1","kind":"window","mark":"mark_golden_1","parent_id":null,"project":"golden-proj","status":"completed"}]}"#;

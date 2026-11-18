@@ -110,6 +110,20 @@ impl fmt::Display for AgentStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentKind {
+    Window,
+    OpenCodeSession,
+    Other,
+}
+
+impl Default for AgentKind {
+    fn default() -> Self {
+        Self::Window
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentWindow {
     pub id: AgentId,
     pub project: ProjectId,
@@ -118,6 +132,10 @@ pub struct AgentWindow {
     pub app_id: String,
     pub mark: String,
     pub status: AgentStatus,
+    #[serde(default)]
+    pub kind: AgentKind,
+    #[serde(default)]
+    pub hosting_window_agent_id: Option<AgentId>,
 }
 
 impl AgentWindow {
@@ -143,6 +161,11 @@ pub enum AgentIPCMessage {
         id: Option<serde_json::Value>,
         params: RegisterParams,
     },
+    #[serde(rename = "agent.register_opencode_session")]
+    RegisterOpenCodeSession {
+        id: Option<serde_json::Value>,
+        params: RegisterParams,
+    },
     #[serde(rename = "agent.update_status")]
     UpdateStatus { params: UpdateStatusParams },
     /// Ask the daemon to advance focus to the next window in the agent hierarchy.
@@ -154,6 +177,21 @@ pub enum AgentIPCMessage {
     /// Subscribe to diff-based agent status updates (snapshot first, then deltas).
     #[serde(rename = "daemon.subscribe_diff")]
     SubscribeDiff,
+    #[serde(rename = "agent.bind_window")]
+    BindWindow { params: BindWindowParams },
+    #[serde(rename = "agent.retire")]
+    Retire { params: RetireAgentParams },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BindWindowParams {
+    pub session_agent_id: AgentId,
+    pub window_agent_id: Option<AgentId>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetireAgentParams {
+    pub agent_id: AgentId,
 }
 
 /// Parameters supplied when registering a newly spawned agent.
@@ -311,6 +349,7 @@ mod tests {
             "app_id": "ghostty",
             "mark": "mark_agent_1",
             "status": "idle",
+            "kind": "window",
             "extra_field": "ignored"
         });
 
@@ -322,6 +361,8 @@ mod tests {
         assert_eq!(window.app_id, "ghostty");
         assert_eq!(window.mark, "mark_agent_1");
         assert_eq!(window.status, AgentStatus::Idle);
+        assert_eq!(window.kind, AgentKind::Window);
+        assert_eq!(window.hosting_window_agent_id, None);
 
         let val_nulls = serde_json::json!({
             "id": "agent-2",
@@ -366,6 +407,17 @@ mod tests {
             "status": "completed"
         });
         assert_eq!(AgentWindow::from_value(&val_bad_container), None);
+    }
+
+    #[test]
+    fn agent_window_new_fields_default_for_legacy_payloads() {
+        let value = serde_json::json!({
+            "id": "legacy", "project": "proj", "app_id": "foot",
+            "mark": "mark_legacy", "status": "idle"
+        });
+        let agent = AgentWindow::from_value(&value).unwrap();
+        assert_eq!(agent.kind, AgentKind::Window);
+        assert_eq!(agent.hosting_window_agent_id, None);
     }
 
     #[test]

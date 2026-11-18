@@ -14,8 +14,8 @@ use tokio::net::UnixStream;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
-const AGENT_A: &str = r#"{"id":"golden-a","project":"golden-proj","parent_id":null,"container_id":null,"app_id":"agent.pi.golden-a","mark":"mark_golden_a","status":"idle"}"#;
-const AGENT_B: &str = r#"{"id":"golden-b","project":"golden-proj","parent_id":null,"container_id":null,"app_id":"agent.pi.golden-b","mark":"mark_golden_b","status":"awaiting_human_input"}"#;
+const AGENT_A: &str = r#"{"id":"golden-a","project":"golden-proj","parent_id":null,"container_id":null,"app_id":"agent.pi.golden-a","mark":"mark_golden_a","status":"idle","kind":"window","hosting_window_agent_id":null}"#;
+const AGENT_B: &str = r#"{"id":"golden-b","project":"golden-proj","parent_id":null,"container_id":null,"app_id":"agent.pi.golden-b","mark":"mark_golden_b","status":"awaiting_human_input","kind":"window","hosting_window_agent_id":null}"#;
 
 async fn wait_for_socket(path: &str) {
     for _ in 0..200 {

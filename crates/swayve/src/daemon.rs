@@ -2,7 +2,8 @@ use crate::config::Config;
 use crate::layout::{LayoutAction, LayoutManager};
 use crate::sway::{SwayCommand, SwayEvent};
 use crate::types::{
-    AgentIPCMessage, AgentId, AgentRegistry, AgentStatus, AgentWindow, DiffFrame, ProjectId,
+    AgentIPCMessage, AgentId, AgentKind, AgentRegistry, AgentStatus, AgentWindow, DiffFrame,
+    ProjectId,
 };
 use anyhow::Result;
 use std::collections::HashMap;
@@ -31,6 +32,7 @@ pub struct DaemonState {
     pub pid_to_agent: HashMap<u32, AgentId>,
     pub con_to_agent: HashMap<i64, AgentId>,
     pub subscribers: Vec<Subscriber>,
+    pub agent_kinds: HashMap<AgentId, AgentKind>,
 }
 
 impl DaemonState {
@@ -41,6 +43,7 @@ impl DaemonState {
             pid_to_agent: HashMap::new(),
             con_to_agent: HashMap::new(),
             subscribers: Vec::new(),
+            agent_kinds: HashMap::new(),
         }
     }
 
@@ -156,7 +159,32 @@ impl DaemonState {
         app_id: String,
         parent_id: Option<AgentId>,
     ) -> Option<MonitorRequest> {
-        let is_subagent = if let Some(ref p_id) = parent_id {
+        self.register_agent_kind(agent_id, project_id, pid, app_id, parent_id, AgentKind::Window)
+    }
+
+    fn register_agent_kind(
+        &mut self,
+        agent_id: AgentId,
+        project_id: ProjectId,
+        pid: u32,
+        app_id: String,
+        parent_id: Option<AgentId>,
+        kind: AgentKind,
+    ) -> Option<MonitorRequest> {
+        if self
+            .agent_kinds
+            .get(&agent_id)
+            .is_some_and(|existing| existing != &kind)
+        {
+            eprintln!(
+                "[daemon] Refusing agent kind change during re-registration: {}",
+                agent_id.0
+            );
+            return None;
+        }
+        let is_window = kind == AgentKind::Window;
+        let parent_id = if is_window { parent_id } else { None };
+        let is_subagent = if is_window && let Some(ref p_id) = parent_id {
             self.agents.contains_key(p_id)
         } else {
             false
@@ -185,9 +213,17 @@ impl DaemonState {
             app_id,
             mark,
             status,
+            kind: kind.clone(),
+            hosting_window_agent_id: self.agents.get(&agent_id)
+                .and_then(|old| old.hosting_window_agent_id.clone()),
         };
         self.agents.insert(agent_id.clone(), agent);
-        self.pid_to_agent.insert(pid, agent_id.clone());
+        self.agent_kinds.insert(agent_id.clone(), kind);
+        if is_window {
+            self.pid_to_agent.insert(pid, agent_id.clone());
+        } else {
+            self.pid_to_agent.retain(|_, id| id != &agent_id);
+        }
 
         if let Some(ref hook) = self.config.hooks.on_agent_spawn {
             execute_lifecycle_hook(hook, &agent_id, "idle");
@@ -290,8 +326,14 @@ impl DaemonState {
             return Vec::new();
         }
         println!("[daemon] Sway window destroyed for agent: {}", agent_id.0);
+        for agent in self.agents.values_mut() {
+            if agent.hosting_window_agent_id.as_ref() == Some(&agent_id) {
+                agent.hosting_window_agent_id = None;
+            }
+        }
         let parent_id = self.agents.get(&agent_id).and_then(|a| a.parent_id.clone());
         if self.agents.remove(&agent_id).is_some() {
+            self.agent_kinds.remove(&agent_id);
             self.pid_to_agent.retain(|_, id| id != &agent_id);
         }
         promote_orphans(self, &agent_id);
@@ -299,6 +341,48 @@ impl DaemonState {
             agent_id,
             parent_id,
         }]
+    }
+
+    fn bind_window(&mut self, session_id: &AgentId, window_id: Option<&AgentId>) -> bool {
+        if self.agent_kinds.get(session_id) != Some(&AgentKind::OpenCodeSession) {
+            return false;
+        }
+        if let Some(window_id) = window_id {
+            let Some(target) = self.agents.get(window_id) else {
+                return false;
+            };
+            let Some(container_id) = target.container_id else {
+                return false;
+            };
+            let unambiguous = self
+                .agents
+                .values()
+                .filter(|agent| agent.container_id == Some(container_id))
+                .count()
+                == 1
+                && self.con_to_agent.get(&container_id) == Some(window_id);
+            if window_id == session_id
+                || self.agent_kinds.get(window_id) != Some(&AgentKind::Window)
+                || !unambiguous
+            {
+                return false;
+            }
+        }
+        let Some(session) = self.agents.get_mut(session_id) else {
+            return false;
+        };
+        session.hosting_window_agent_id = window_id.cloned();
+        true
+    }
+
+    fn retire_session(&mut self, agent_id: &AgentId) -> bool {
+        if self.agent_kinds.get(agent_id) != Some(&AgentKind::OpenCodeSession) {
+            return false;
+        }
+        self.agents.remove(agent_id);
+        self.agent_kinds.remove(agent_id);
+        self.pid_to_agent.retain(|_, id| id != agent_id);
+        true
     }
 
     pub fn spawn_monitor_terminal(&self, agent_id: &AgentId) {
@@ -593,6 +677,17 @@ pub async fn run_daemon_loops(
                         }
                         state.broadcast_status();
                     }
+                    AgentIPCMessage::RegisterOpenCodeSession { id: _, params } => {
+                        state.register_agent_kind(
+                            params.agent_id,
+                            params.project_id,
+                            params.pid,
+                            params.app_id,
+                            params.parent_agent_id,
+                            AgentKind::OpenCodeSession,
+                        );
+                        state.broadcast_status();
+                    }
                     AgentIPCMessage::UpdateStatus { params } => {
                         println!(
                             "[daemon] Agent {} status update: {:?}",
@@ -625,6 +720,14 @@ pub async fn run_daemon_loops(
                     AgentIPCMessage::SubscribeStatus => {}
                     // Routed to DaemonEvent::SubscribeDiff by handle_client; never arrives here.
                     AgentIPCMessage::SubscribeDiff => {}
+                    AgentIPCMessage::BindWindow { params } => {
+                        state.bind_window(&params.session_agent_id, params.window_agent_id.as_ref());
+                        state.broadcast_status();
+                    }
+                    AgentIPCMessage::Retire { params } => {
+                        state.retire_session(&params.agent_id);
+                        state.broadcast_status();
+                    }
                 }
             }
             DaemonEvent::Sway(sway_event) => {
@@ -1105,11 +1208,77 @@ mod tests {
             container_id: con_id,
             app_id: format!("agent.{}", id),
             status: AgentStatus::Idle,
+            kind: AgentKind::Window,
+            hosting_window_agent_id: None,
         }
     }
 
     fn registry(agents: Vec<AgentWindow>) -> HashMap<AgentId, AgentWindow> {
         agents.into_iter().map(|a| (a.id.clone(), a)).collect()
+    }
+
+    #[test]
+    fn explicit_window_binding_validates_kinds_and_clears_idempotently() {
+        let mut state = DaemonState::new(Config::default());
+        state.register_agent(
+            AgentId("win".into()),
+            ProjectId("p".into()),
+            1,
+            "agent.win".into(),
+            None,
+        );
+        state.agents.get_mut(&AgentId("win".into())).unwrap().container_id = Some(12);
+        state.con_to_agent.insert(12, AgentId("win".into()));
+        state.register_agent_kind(
+            AgentId("session".into()),
+            ProjectId("p".into()),
+            2,
+            "opencode".into(),
+            None,
+            AgentKind::OpenCodeSession,
+        );
+
+        let session = AgentId("session".into());
+        let window = AgentId("win".into());
+        assert!(state.bind_window(&session, Some(&window)));
+        assert_eq!(
+            state.agents[&session].hosting_window_agent_id,
+            Some(window.clone())
+        );
+        assert!(state.bind_window(&session, Some(&window)));
+        assert!(!state.bind_window(&session, Some(&AgentId("stale".into()))));
+        assert!(!state.bind_window(&window, Some(&session)));
+        assert!(state.bind_window(&session, None));
+        assert!(state.bind_window(&session, None));
+        assert_eq!(state.agents[&session].hosting_window_agent_id, None);
+    }
+
+    #[test]
+    fn retiring_session_is_guarded_and_window_destruction_unbinds() {
+        let mut state = DaemonState::new(Config::default());
+        let window = AgentId("window".into());
+        let session = AgentId("session".into());
+        state.register_agent(window.clone(), ProjectId("p".into()), 1, "agent.window".into(), None);
+        state.agents.get_mut(&window).unwrap().container_id = Some(77);
+        state.con_to_agent.insert(77, window.clone());
+        state.register_agent_kind(
+            session.clone(),
+            ProjectId("p".into()),
+            2,
+            "opencode".into(),
+            None,
+            AgentKind::OpenCodeSession,
+        );
+        assert!(state.bind_window(&session, Some(&window)));
+        assert!(!state.retire_session(&window));
+        assert!(state.agents.contains_key(&window));
+        assert!(state.on_window_destroyed(77).len() == 1);
+        assert!(state.agents.contains_key(&session));
+        assert_eq!(state.agents[&session].hosting_window_agent_id, None);
+        assert!(!state.bind_window(&session, Some(&window)));
+        assert!(state.retire_session(&session));
+        assert!(!state.agents.contains_key(&session));
+        assert!(!state.retire_session(&session));
     }
 
     #[test]

@@ -312,6 +312,8 @@ mod tests {
                 app_id: "foot".to_string(),
                 mark: "mark_z".to_string(),
                 status: AgentStatus::Completed,
+                kind: crate::types::AgentKind::Window,
+                hosting_window_agent_id: None,
             },
         );
         map.insert(
@@ -324,6 +326,8 @@ mod tests {
                 app_id: "ghostty".to_string(),
                 mark: "mark_a".to_string(),
                 status: AgentStatus::Thinking,
+                kind: crate::types::AgentKind::Window,
+                hosting_window_agent_id: None,
             },
         );
 

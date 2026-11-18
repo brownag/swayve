@@ -6,7 +6,8 @@ use std::time::Duration;
 use swayve::daemon::{DaemonEvent, run_daemon_loops, start_daemon_ipc};
 use swayve::sway::{SwayCommand, SwayEvent};
 use swayve::types::{
-    AgentIPCMessage, AgentId, AgentStatus, ProjectId, RegisterParams, UpdateStatusParams,
+    AgentIPCMessage, AgentId, AgentStatus, BindWindowParams, ProjectId, RegisterParams,
+    RetireAgentParams, UpdateStatusParams,
 };
 use tokio::fs;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -65,6 +66,108 @@ async fn wait_for_listed(socket_path: &str, want: &str) {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     panic!("agent {want} not listed after 2s");
+}
+
+#[tokio::test]
+async fn explicit_session_binding_and_retirement_are_published_over_socket() {
+    let socket_path = common::unique_path("session_binding", ".sock");
+    let path = Path::new(socket_path);
+    let _ = fs::remove_file(path).await;
+    let (event_tx, event_rx) = mpsc::channel::<DaemonEvent>(32);
+    let event_tx_test = event_tx.clone();
+    let (sway_cmd_tx, _sway_cmd_rx) = mpsc::channel::<SwayCommand>(32);
+    let listener_path = socket_path.to_string();
+    let listener = tokio::spawn(async move {
+        start_daemon_ipc(&listener_path, event_tx).await
+    });
+    let daemon = tokio::spawn(async move {
+        run_daemon_loops(true, Config::default(), socket_path, event_rx, sway_cmd_tx).await
+    });
+    wait_for_socket(socket_path).await;
+
+    let send = |message: AgentIPCMessage| async move {
+        let mut stream = UnixStream::connect(socket_path).await.unwrap();
+        let wire = serde_json::to_string(&message).unwrap() + "\n";
+        stream.write_all(wire.as_bytes()).await.unwrap();
+    };
+    send(AgentIPCMessage::Register {
+        id: None,
+        params: RegisterParams {
+            agent_id: AgentId("window".into()),
+            agent_type: "test".into(),
+            project_id: ProjectId("p".into()),
+            pid: 10,
+            app_id: "agent.window".into(),
+            parent_agent_id: None,
+        },
+    })
+    .await;
+    send(AgentIPCMessage::RegisterOpenCodeSession {
+        id: None,
+        params: RegisterParams {
+            agent_id: AgentId("session".into()),
+            agent_type: "opencode".into(),
+            project_id: ProjectId("p".into()),
+            pid: 11,
+            app_id: "opencode".into(),
+            parent_agent_id: None,
+        },
+    })
+    .await;
+    wait_for_listed(socket_path, "session").await;
+    event_tx_test
+        .send(DaemonEvent::Sway(SwayEvent::WindowCreated {
+            con_id: 44,
+            app_id: "agent.window".into(),
+            pid: Some(10),
+        }))
+        .await
+        .unwrap();
+    let mut sub = UnixStream::connect(socket_path).await.unwrap();
+    sub.write_all(b"{\"method\":\"daemon.subscribe_diff\"}\n")
+        .await
+        .unwrap();
+    let (reader, _) = sub.into_split();
+    let mut lines = BufReader::new(reader).lines();
+    let snapshot = timeout(Duration::from_secs(2), lines.next_line())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(snapshot.contains("\"snapshot\":true"));
+    assert!(snapshot.contains("\"session\""));
+
+    send(AgentIPCMessage::BindWindow {
+        params: BindWindowParams {
+            session_agent_id: AgentId("session".into()),
+            window_agent_id: Some(AgentId("window".into())),
+        },
+    })
+    .await;
+    let bound = timeout(Duration::from_secs(2), lines.next_line())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(bound.contains("\"hosting_window_agent_id\":\"window\""));
+
+    send(AgentIPCMessage::Retire {
+        params: RetireAgentParams {
+            agent_id: AgentId("session".into()),
+        },
+    })
+    .await;
+    let retired = timeout(Duration::from_secs(2), lines.next_line())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(retired.contains("\"session\""));
+    assert!(retired.contains("\"snapshot\":false"));
+
+    listener.abort();
+    daemon.abort();
+    let _ = fs::remove_file(path).await;
 }
 
 #[tokio::test]

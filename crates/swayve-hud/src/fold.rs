@@ -28,6 +28,8 @@ mod tests {
             app_id: "alacritty".to_string(),
             mark: format!("mark_{id}"),
             status,
+            kind: crate::types::AgentKind::Window,
+            hosting_window_agent_id: None,
         }
     }
 
