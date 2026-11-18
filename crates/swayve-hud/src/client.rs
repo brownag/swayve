@@ -91,23 +91,27 @@ pub fn render_hud<W: Write>(agents: &HashMap<String, AgentWindow>, out: &mut W) 
 
     writeln!(
         out,
-        "{:<24} {:<16} {:<16} {:<16} MARK",
-        "STATUS", "ID", "APP_ID", "PROJECT"
+        "{:<24} {:<16} {:<16} {:<16} {:<24} MARK",
+        "STATUS", "ID", "APP_ID", "PROJECT", "HOST WINDOW"
     )?;
     writeln!(
         out,
-        "{:<24} {:<16} {:<16} {:<16} ----",
-        "------", "--", "------", "-------"
+        "{:<24} {:<16} {:<16} {:<16} {:<24} ----",
+        "------", "--", "------", "-------", "-----------"
     )?;
 
     for agent in sorted_agents {
         writeln!(
             out,
-            "{:<24} {:<16} {:<16} {:<16} {}",
+            "{:<24} {:<16} {:<16} {:<16} {:<24} {}",
             agent.status.to_string(),
             agent.id,
             agent.app_id,
             agent.project,
+            agent
+                .hosting_window_agent_id
+                .as_ref()
+                .map_or("unassociated", |id| id.as_str()),
             agent.mark
         )?;
     }
@@ -300,7 +304,7 @@ mod tests {
     }
 
     #[test]
-    fn test_render_hud_sorted_agents() {
+    fn test_render_hud_sorted_agents_and_hosting_windows() {
         let mut map = HashMap::new();
         map.insert(
             "agent-z".to_string(),
@@ -312,8 +316,8 @@ mod tests {
                 app_id: "foot".to_string(),
                 mark: "mark_z".to_string(),
                 status: AgentStatus::Completed,
-                kind: crate::types::AgentKind::Window,
-                hosting_window_agent_id: None,
+                kind: swayve_types::AgentKind::Window,
+                hosting_window_agent_id: Some(AgentId("window-z".to_string())),
             },
         );
         map.insert(
@@ -326,7 +330,35 @@ mod tests {
                 app_id: "ghostty".to_string(),
                 mark: "mark_a".to_string(),
                 status: AgentStatus::Thinking,
-                kind: crate::types::AgentKind::Window,
+                kind: swayve_types::AgentKind::Window,
+                hosting_window_agent_id: Some(AgentId("window-a".to_string())),
+            },
+        );
+        map.insert(
+            "agent-b".to_string(),
+            AgentWindow {
+                id: AgentId("agent-b".to_string()),
+                project: ProjectId("proj-a".to_string()),
+                parent_id: Some(AgentId("parent-only".to_string())),
+                container_id: None,
+                app_id: "opencode".to_string(),
+                mark: "mark_b".to_string(),
+                status: AgentStatus::Thinking,
+                kind: swayve_types::AgentKind::OpenCodeSession,
+                hosting_window_agent_id: Some(AgentId("window-a".to_string())),
+            },
+        );
+        map.insert(
+            "agent-c".to_string(),
+            AgentWindow {
+                id: AgentId("agent-c".to_string()),
+                project: ProjectId("proj-a".to_string()),
+                parent_id: Some(AgentId("parent-only".to_string())),
+                container_id: None,
+                app_id: "opencode".to_string(),
+                mark: "mark_c".to_string(),
+                status: AgentStatus::Thinking,
+                kind: swayve_types::AgentKind::OpenCodeSession,
                 hosting_window_agent_id: None,
             },
         );
@@ -341,11 +373,20 @@ mod tests {
         assert!(output.contains("ID"));
         assert!(output.contains("APP_ID"));
         assert!(output.contains("PROJECT"));
+        assert!(output.contains("HOST WINDOW"));
         assert!(output.contains("MARK"));
+        assert!(output.contains("agent-a") && output.contains("window-a"));
+        assert!(output.contains("agent-b") && output.contains("window-a"));
+        assert!(output.contains("agent-z") && output.contains("window-z"));
+        assert!(output.contains("agent-c") && output.contains("unassociated"));
+        assert!(!output.contains("parent-only"));
 
         let idx_a = output.find("agent-a").unwrap();
+        let idx_b = output.find("agent-b").unwrap();
+        let idx_c = output.find("agent-c").unwrap();
         let idx_z = output.find("agent-z").unwrap();
         assert!(idx_a < idx_z, "agent-a should be rendered before agent-z");
+        assert!(idx_a < idx_b && idx_b < idx_c && idx_c < idx_z);
     }
 
     #[test]
