@@ -2,6 +2,37 @@
 
 Last researched: 2026-11-17
 
+## Lifecycle Status Investigation (2026-11-17)
+
+### Conclusion
+
+The evidence leans toward an OpenCode plugin event/subscription or payload-extraction mismatch, rather than a general inability of the running Swayve daemon to apply status updates. This is not proven: the live run established plugin loading and agent registration, but did not trace lifecycle events into plugin callbacks or prove whether status IPC writes completed.
+
+### Evidence
+
+- `.opencode/plugins/swayve.ts:5-14` subscribes to `session.created`, four `session.execution.*` events, and three `session.tool.*` events. At lines 42-44 it extracts the session ID from `event.properties.info.id`, falling back to `event.properties.sessionID`; events without either are skipped. Registration is sent only for `session.created` (lines 46-59).
+- The official API describes a typed event stream and the public V2 event schema includes session creation and execution/tool events, but the schema pages are not pinned to OpenCode v2.3.0. In particular, `session.created` is not part of the documented `Session.Event.Durable` set even though it appears in the broader event union. Official server-plugin docs state that unknown event subscription types are ignored with a server-log warning. Therefore, the current public docs do not establish that every subscribed event is emitted to plugins in v2.3.0 or confirm the plugin's payload extraction paths for that version. Sources: [OpenCode V2 API event schema](https://opencode.ai/docs/api#schema-OpenCodeEvent), [server plugin events](https://opencode.ai/docs/build/plugins/server#events).
+- Swayve's daemon parses newline-delimited IPC and forwards valid messages to its event loop; malformed UTF-8/JSON and rate-limited lines are logged and skipped (`crates/swayve/src/daemon.rs:513-558`). For a parsed `agent.update_status`, it calls `state.update_status`, then broadcasts state (`daemon.rs:596-620`). The Swayve status enum accepts `thinking`, `executing_tool`, `completed`, `idle`, and the serialized failed-status form (`crates/swayve-types/src/lib.rs:79-89,170-176`).
+- An update for an unregistered agent is not applied: `update_status` returns `None` for an unknown ID (`crates/swayve/src/daemon.rs:324-339`). The daemon logs receipt before checking that result (`daemon.rs:596-603`), so a “status update” log line alone would not prove state changed.
+- `swayve status --watch` is a state subscriber, not a raw IPC/event log. It consumes snapshots by default and consumes the diff stream with `--diff`, rendering a refreshed dashboard either way (`crates/swayve/src/cli.rs:765-817`). The diff subscription sends an initial snapshot and later agent-state changes (`crates/swayve/src/daemon.rs:64-146`). It does not reveal whether the plugin received OpenCode events or attempted socket writes.
+- The approved repeat read-only run with `swayve status --watch --diff` still displayed only the registered agent as Idle. OpenCode's local log showed the project plugin being loaded, but the default log output did not include the session lifecycle events. The log is not version-pinned event-schema evidence.
+- Plugin `send()` is best-effort and suppresses socket errors; it neither awaits nor logs connection/write completion (`.opencode/plugins/swayve.ts:21-30`). Thus absence of daemon status changes cannot distinguish “no matching OpenCode event,” “event skipped due to payload extraction,” and “socket delivery failed.”
+
+### How to distinguish the causes
+
+1. Trace the actual OpenCode event `type` and properties delivered to this plugin in v2.3.0. If callbacks show no relevant events, investigate the subscribed names/version contract; if they show events without the expected session ID path, investigate payload extraction.
+2. Trace each attempted status IPC send and its socket connection/write result. A successful write establishes plugin emission, but not daemon application.
+3. Check daemon logs during the same run. A parsed `Agent <id> status update` confirms an update reached the daemon loop; verify that ID was registered first and compare the following state/diff because unknown IDs are silently unapplied.
+4. If the daemon's agent state changes but the subscriber does not reflect it, investigate subscriber delivery/rendering. The current watcher output alone cannot establish IPC arrival.
+
+### Unknowns
+
+- Whether each lifecycle event is emitted to server plugins by OpenCode v2.3.0 and its exact event-property shape.
+- Whether the v2.3.0 server logged an unknown-subscription warning.
+- Whether callbacks received lifecycle events that were skipped by the current ID extraction.
+- Whether the daemon received status IPC before registration, under a mismatched ID, or not at all.
+- Whether the plugin's socket connection and write completed during the smoke run.
+
 ## Verification Record (2026-11-17)
 
 - OpenCode v2.3.0 is installed in the current workspace environment. `SWAYSOCK` is set and `swaymsg -t get_version` reports Sway 1.9; the Swayve daemon reports active status.
