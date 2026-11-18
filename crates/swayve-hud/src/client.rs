@@ -368,7 +368,7 @@ mod tests {
 
         let output = String::from_utf8(buf).unwrap();
         assert!(output.starts_with("\x1b[2J\x1b[H"));
-        assert!(output.contains("=== Swayve HUD (Live Agents: 2) ==="));
+        assert!(output.contains("=== Swayve HUD (Live Agents: 4) ==="));
         assert!(output.contains("STATUS"));
         assert!(output.contains("ID"));
         assert!(output.contains("APP_ID"));
