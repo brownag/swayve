@@ -1,5 +1,36 @@
 # OpenCode Integration Research
 
+## OpenCode v2.3.0 Lifecycle Contract (2026-11-17)
+
+### Conclusion
+
+The installed v2.3.0 runtime supports server-plugin event subscriptions and the requested lifecycle event names, but the Swayve plugin has a payload-shape mismatch: it looks for `event.properties.info.id` / `event.properties.sessionID`, whereas v2.3.0's public event contract carries these identifiers under `event.data`. Consequently the current plugin skips every event from the requested set because `sessionID` is undefined. Event-name availability is confirmed; actual runtime delivery to this particular plugin still needs one observable run to confirm.
+
+### Findings
+
+- The installed binary reports `opencode v2.3.0` (`opencode --version`). The matching first-party source is tag [`v2.3.0`](https://github.com/anomalyco/opencode/tree/v2.3.0), commit `a6b15d33daf6ab7d35569f6d711fdb630b9f04e7`. The workspace under examination is `/home/andrew/workspace/swayve`.
+- In that tag, `packages/plugin/src/promise/event.ts:4-10` defines `EventType` as `OpenCodeEvent` excluding only `server.connected`; `subscribe` accepts typed `SubscribeOptions` and returns an `AsyncIterable`. The adapter in `packages/plugin/src/promise/adapter.ts:331-341` forwards the requested types to `host.event.subscribe`, encodes each event, and applies the abort signal. This confirms `ctx.event.subscribe({ types, signal })` is the intended API.
+- The tagged generated API types explicitly include all eight requested names in the union (`packages/client/src/promise/generated/types.ts:4398-4418,4435-4441`): `session.created`, all four `session.execution.*` events, and `session.tool.called/success/failed`. Thus there is no type-level unknown-name mismatch in v2.3.0.
+- Event payloads use `data`, not `properties`. `session.created` has `data.sessionID`, `data.location`, and optional `data.parentID` (`packages/client/src/promise/generated/types.ts:2375-2395`). Execution events use `data.sessionID`; failed adds `error`, interrupted adds `reason` (`:1318-1355`). Tool called, success, and failed all use `data.sessionID` (`:1562-1577`, `:2146-2180`). There is no `data.info.id` shape in these declarations. The Swayve plugin's extraction at `.opencode/plugins/swayve.ts:42-44` instead reads `event.properties`; it therefore cannot find IDs for these typed events and `:45` immediately continues when no ID is found. This is a concrete plugin mismatch, not merely uncertainty about the event names.
+- `session.created` carries location under `data.location` (and an event-level optional `location`), not `data.directory` or a `Session.Info` object. `data.parentID` is available when present. Consequently the current `session.directory` workspace fallback in `.opencode/plugins/swayve.ts:50` is not supported by this event shape; the `Location.Ref`/`Location.Info` path should be checked before selecting a workspace root.
+- The core bus routes session events using `event.data.sessionID` and special-cases creation using `event.data.location` (`packages/core/src/bus.ts:220-232`), corroborating that this is the actual internal event convention, not only a generated schema artifact.
+- Server-plugin documentation confirms the same API and that unknown type names are ignored with a server-log warning; it does not imply these valid names are missing: [Server plugin API — Events](https://opencode.ai/docs/build/plugins/server#events). The currently published docs are not a release-pinned substitute for the v2.3.0 tag.
+- Callback logging: the server-plugin docs' event example calls `console.log(event.type)` and the setup example calls `console.log`/`console.error` ([Server plugin API — Lifecycle/Events](https://opencode.ai/docs/build/plugins/server#events)), so console logging is a supported practical diagnostic path. The promise adapter does not expose a separate callback stdout/stderr capture API (`packages/plugin/src/promise/adapter.ts:331-341`). The binary bundles app code and has no separately installed declaration files; source inspection does not establish where OpenCode routes those console messages in this invocation. Swayve's own `send()` suppresses socket errors at `.opencode/plugins/swayve.ts:21-30`, so add temporary callback event type/data logging plus attempted-send/connect/write logging (or capture process stderr/log sink) to observe end-to-end delivery.
+
+### Minimum remaining runtime observation
+
+Run a controlled lifecycle action in v2.3.0 and capture one plugin callback record containing `event.type` and the event's top-level keys/`data` keys, plus confirmation that the event was yielded; capture the actual stdout/stderr or OpenCode log destination for that record. This proves runtime delivery versus a source-contract-only conclusion. Do not infer event absence from the current plugin: its wrong ID path guarantees it skips the declared shapes before sending status.
+
+### Exact source references
+
+- Installed version: `opencode --version` → `opencode v2.3.0`.
+- First-party tag/commit: https://github.com/anomalyco/opencode/tree/v2.3.0 (tag resolves to `a6b15d33daf6ab7d35569f6d711fdb630b9f04e7`).
+- Plugin event API: `packages/plugin/src/promise/event.ts:4-10`; adapter: `packages/plugin/src/promise/adapter.ts:331-341`; context declaration: `packages/plugin/src/promise/plugin.ts:27-36`.
+- Event type/payload declarations: `packages/client/src/promise/generated/types.ts:1318-1355,1562-1577,2146-2180,2375-2395,4398-4418,4435-4441`.
+- Runtime event routing: `packages/core/src/bus.ts:220-232`.
+- Current Swayve handler and best-effort send: `.opencode/plugins/swayve.ts:21-30,42-60`.
+- Official docs: https://opencode.ai/docs/build/plugins/server#events (Events; Lifecycle; Context).
+
 Last researched: 2026-11-17
 
 ## Lifecycle Status Investigation (2026-11-17)
