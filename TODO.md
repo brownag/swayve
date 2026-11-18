@@ -38,3 +38,22 @@ Validate the Swayve OpenCode plugin against the installed OpenCode v2.3.0 runtim
 - The existing focused OpenCode mock-socket suite passed 4/4 and `make all` passed after Orchestration 36; see `planning/STATE_36.md`.
 - Initial default-model attempt returned OpenCode Models `Insufficient balance` before reading the README. The session was nevertheless registered (`opencode-1-54955`, project `swayve`, app ID `agent.opencode-1-54955`, observed idle); the user authorized retrying with `openai/gpt-6-luna`. No provider or authentication settings will be changed.
 - Investigation found that `swayve status --watch --json` is not JSON/event history: watch mode calls the dashboard subscriber and repeatedly clears/renders status snapshots. A second approved read-only turn observed through `swayve status --watch --diff` still showed only Idle. OpenCode's default local log confirms the plugin file loads but does not include the subscribed session lifecycle events; no plugin status updates appeared in the Swayve delta output. This points to a likely mismatch between the plugin's mocked event names/payload assumptions and the installed runtime, but does not yet prove the exact cause. No implementation changes made; further runtime event tracing or a scoped plugin fix needs a follow-up approved plan.
+
+## Approved Follow-up: OpenCode v2.3.2 Event Payload Fix
+
+### Goal
+Fix the OpenCode plugin's lifecycle extraction to use the observed v2.3.2 `event.data` payload, cover it with mock-socket tests, and document the tested contract without requiring another live model turn.
+
+### Tasks
+- [ ] Read `event.data.sessionID` for registration and lifecycle status events.
+- [ ] Derive the project basename from `session.created`'s `event.data.location.directory`, falling back to the plugin load directory.
+- [ ] Preserve current status mapping, best-effort socket behavior, cleanup, and unsupported parent mapping.
+- [ ] Update mock events/assertions to use the observed v2.3.2 `data` payload shape; cover registration, lifecycle statuses, missing identity/location fallback, duplicate creation, cleanup, and unavailable socket behavior.
+- [ ] Update the OpenCode README to state the tested v2.3.2 payload contract without claiming broader compatibility.
+- [ ] Run `node --experimental-strip-types --test integrations/opencode/sidecar.test.mjs` and `git diff --check`.
+
+### Notes
+- The follow-up planning choice is tracked separately from implementation. Existing unrelated modification to `planning/RESEARCH_OPENCODE_INTEGRATION.md` must remain untouched and unstaged.
+- Scope is limited to `.opencode/plugins/swayve.ts`, `integrations/opencode/sidecar.test.mjs`, and `integrations/opencode/README.md`, plus this plan.
+- No second live model turn is required or authorized by this follow-up. The prior v2.3.2 probe observed IDs under `data.sessionID` and successful status-message writes; it did not prove daemon state application.
+- Keep parent-session mapping unsupported; do not change daemon/Rust code, dependencies, root Makefile, provider/auth configuration, or other integrations. No remote Git operations.
