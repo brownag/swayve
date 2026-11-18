@@ -8,10 +8,10 @@ Validate the Swayve OpenCode plugin against the installed OpenCode v2.3.0 runtim
 ### 1. Prepare the smoke test
 - [x] Confirm branch `feat/opencode-integration1`, inspect `git status`, and preserve any unexpected changes.
 - [x] Confirm OpenCode v2.3.0, Sway, the Swayve daemon, and the active socket path.
-- [ ] Start `swayve status --watch --json` as the live observer.
+- [x] Start `swayve status --watch --json` as the live observer.
 
 ### 2. Run and verify the live smoke test
-- [ ] From the repository root, run `opencode run --standalone "Read the first heading in README.md and report it. This is read-only; do not create or modify files."`
+- [ ] From the repository root, run `opencode run --standalone --model openai/gpt-6-luna "Read the first heading in README.md and report it. This is read-only; do not create or modify files."`
 - [ ] Verify OpenCode loads `.opencode/plugins/swayve.ts` and Swayve receives a registration with the session ID, `agent_type=opencode`, workspace-basename project ID, plugin PID, and `app_id=agent.<session_id>`.
 - [ ] Observe the resulting lifecycle statuses (`thinking`, `executing_tool`, `thinking`, and terminal status); record what actually appears without inferring missing events. Do not implement parent-ID mapping.
 - [ ] Stop the status observer, remove any temporary output, and confirm the repository has no unintended changes.
@@ -33,3 +33,4 @@ Validate the Swayve OpenCode plugin against the installed OpenCode v2.3.0 runtim
 - Keep Swayve integrations thin per ADR 0009. Do not change daemon/Rust code, other integrations, the root Makefile, or dependencies.
 - Planning artifacts are tracked. The approved root TODO and its final archive use separate planning-only commits; implementation commits remain separate. No push, pull request, or other remote action is authorized.
 - The existing focused OpenCode mock-socket suite passed 4/4 and `make all` passed after Orchestration 36; see `planning/STATE_36.md`.
+- Initial default-model attempt returned OpenCode Models `Insufficient balance` before reading the README. The session was nevertheless registered (`opencode-1-54955`, project `swayve`, app ID `agent.opencode-1-54955`, observed idle); the user authorized retrying with `openai/gpt-6-luna`. No provider or authentication settings will be changed.
