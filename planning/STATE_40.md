@@ -63,3 +63,4 @@ Target branch: `feat/opencode-integration1`
 - **Tests:** `cargo test -p swayve-types` — 6 passed; `cargo test -p swayve` — 92 passed, 2 ignored, integration/golden tests passed; `git diff --check` passed.
 - **Deviation:** Fixture-only updates in `crates/swayve-hud/src/{client.rs,fold.rs}` were added to scope before implementation because `AgentWindow` literals needed new fields. No CLI fixtures required edits.
 - **Commit:** `ca2b3e2` (`feat(daemon): add explicit session window binding`); planning artifacts and the pre-existing research-note change were kept outside it.
+- **Planning commit:** `2b0a1d1` (`docs(planning): record session window binding decision`).
