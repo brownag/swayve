@@ -1,25 +1,22 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-17
-Source State: STATE_35.md; Magic Wand audit focused on OpenCode integration, Claude/Antigravity integrations, and official OpenCode plugin docs (`planning/RESEARCH_OPENCODE_INTEGRATION.md`); execution plan 36 drafted on `feat/opencode-integration1`.
+Source State: STATE_36.md (Orchestration 36 completed; post-wave Magic Wand re-rank, OpenCode v2.3.0 and Swayve runtime available; official API confirms `Session.Info.parentID`; see `planning/RESEARCH_OPENCODE_INTEGRATION.md`).
 
 ## Circled Goal (Active)
 
-**[G85]** A tested OpenCode server plugin registers OpenCode sessions with Swayve and maps session/tool lifecycle events to Swayve statuses over the existing Unix socket contract.
-  - Why now: OpenCode's documented server plugin API supports event subscriptions and cleanup, enabling an integration through the existing protocol without a separate wrapper or daemon changes.
-  - Exit criteria: plugin sends correct register and status IPC lines; focused tests cover lifecycle mapping, socket delivery, and missing/unavailable Swayve configuration; the integration is verified against a supported OpenCode API version.
-  - First action: inspect the official event schemas/types and resolve stable session identity, project/PID/window identity, and child-session semantics before choosing mappings.
+**[G89]** The OpenCode Swayve plugin is smoke-tested against the installed OpenCode v2.3.0 runtime and active Swayve daemon.
+  - Why now: this is the highest-leverage remaining check of the integration boundary; a live test validates plugin loading and the event payload assumptions behind subsequent hierarchy work. Both OpenCode and Swayve are available in the current environment.
+  - Exit criteria: plugin loads without errors; a real OpenCode session produces the expected Swayve registration and lifecycle status updates, with observed event/session fields recorded.
+  - First action: run the documented manual smoke test against OpenCode v2.3.0 and capture the resulting Swayve-visible identity/status behavior.
 
 ## Sequenced Goals (Dependency DAG)
 
-- **[G86]** OpenCode agent identity, project/window identity, and child-session relationships have explicit, tested mappings to Swayve.
-  - Depends on: G85
-- **[G87]** OpenCode integration installation, configuration, and supported-version requirements are documented.
-  - Depends on: G85
+- **[G90]** OpenCode child sessions preserve the documented `parentID` relationship as Swayve `parent_agent_id`, with tests for root and child registration.
+  - Depends on: G89
 
 ## Independent Backlog
 
-- **[G83]** `cargo audit` is clean for `Cargo.lock`. `tokio` moved from 1.53.1 to 1.53.3 (lockfile only), which clears RUSTSEC-2026-0386 (`AsyncFd` constructors; swayve makes no direct `AsyncFd` call) (`cfab81d`; Orchestration 32; `make all` serial exit 0, zero warnings).
 ## Deferred
 
 - **[G84]** Decisions from Orchestrations 25–30 that outlive their plans are recorded as ADRs: the single argv helper and bare-splice rule (`expand_terminal_args`, G80), the pure spawn plan (G60, G64), and the hook env contract and test seam (G74). The existing ADR 0006 already covers the env names. Found during the 2026-11-08 audit.
@@ -33,6 +30,8 @@ Source State: STATE_35.md; Magic Wand audit focused on OpenCode integration, Cla
 - **[G78]** `src/daemon.rs` tests move out of the 1365-line file.
   - Trigger: the next change to `daemon.rs` that needs more room. Size alone is not a defect.
   - Note: G79 and G81 both edit `daemon.rs`. If either adds more than a few hundred lines, reconsider G78 first.
+- **[G91]** The standalone OpenCode integration test is added to the root `make test` gate.
+  - Trigger: the repository adds CI or decides to aggregate all integration-specific test commands in `make test`.
 
 ## Blocked / Pruned
 
@@ -41,8 +40,8 @@ Source State: STATE_35.md; Magic Wand audit focused on OpenCode integration, Cla
   - Reason: ADR 0004 rejected the envelope, and none of the four methods has a code hit in `src/` or `tests/`. If a client later needs one, open a new goal for that method.
 - **[G88]** Optional OpenCode-native actions such as Swayve focus requests are evaluated and implemented only where supported behavior is clear.
   - Status: Deferred
-  - Reason: prioritize lifecycle/status parity; reconsider after the base plugin is verified against OpenCode's event/API contract.
-  - Trigger: base OpenCode plugin has shipped and a concrete focus action is requested.
+  - Reason: lifecycle reporting is delivered; there is no current focus-action use case.
+  - Trigger: a concrete OpenCode-to-Swayve focus use case is requested.
 - **[G71]** Name the spawn plan as a pure function extracted from the CLI arm (review candidate 5).
   - Status: Pruned
   - Reason: already delivered. G60 (Orchestration 25) moved the plan into the pure `spawn_plan`, and G64 (Orchestration 26) gave it a request struct.
@@ -52,9 +51,14 @@ Source State: STATE_35.md; Magic Wand audit focused on OpenCode integration, Cla
 - **[G11]** Adopt the JSON-RPC 2.0 envelope from the design doc.
   - Status: Pruned
   - Reason: ADR 0004 rejected it; the newline-delimited JSON protocol is in use.
+- **[G92]** Remove the `MODULE_TYPELESS_PACKAGE_JSON` warning from the OpenCode test run.
+  - Status: Pruned
+  - Reason: warning is non-functional and cleanup would add scope or environment-specific configuration without improving test validity.
 
 ## Completed
 
+- **[G85]** The project-local OpenCode plugin registers sessions and reports lifecycle statuses over the existing Swayve socket contract. `make all` passed; focused OpenCode tests cover registration, status mapping, identity fallback, best-effort failure, and cleanup (Orchestration 36; commits `86d45c4`, `5c74946`).
+- **[G87]** OpenCode integration setup, socket configuration, API verification caveat, independent test command, and manual smoke checklist are documented in `integrations/opencode/README.md` (Orchestration 36; `5c74946`).
 - **[G53]** The HUD consumes `daemon.subscribe_diff` and folds the stream (`crates/swayve-hud`, `swayve hud`; Orchestration 35). Built with `swayve-types`, bounded exponential backoff reconnect, and in-place ANSI rendering.
 - **[G25]** The Antigravity sidecar ships against the documented socket contract (`7f7fbcb`; Orchestration 33). `sidecar.mjs` emits only `agent.register`, `agent.update_status` and `daemon.focus`, supports Antigravity `hook <Event>` mode (`stdout` JSON contract) and `ANTIGRAVITY_*` env fallbacks. Targeted `node --test` 13/13; live `make daemon-dry` log confirmed the register and hook lines.
 - **[G15]** An Antigravity sidecar integration exists in `integrations/antigravity/` (`7f7fbcb`; Orchestration 33). Same work as G25.

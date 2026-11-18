@@ -4,6 +4,8 @@ Last researched: 2026-11-17
 
 ## Verification Record (2026-11-17)
 
+- OpenCode v2.3.0 is installed in the current workspace environment. `SWAYSOCK` is set and `swaymsg -t get_version` reports Sway 1.9; the Swayve daemon reports active status.
+- The official OpenCode v2 API documents `Session.Info.parentID` as the parent session identifier. This is sufficient schema evidence to investigate mapping it to Swayve `parent_agent_id`; confirm that `session.created` supplies it in the live plugin event before relying on it. Sources: [OpenCode v2 session API](https://dev.opencode.ai/v2/docs/api/session/v2-session-get), [OpenCode API](https://opencode.ai/docs/api).
 - First-party server plugin docs confirm `Plugin.define({ id, setup(ctx) })`, `ctx.event.subscribe({ types, signal })` as an async iterable, and cleanup via `AbortController.abort()`. Server plugins do not receive `server.connected`.
 - Current public event schema names verified for the integration: `session.created`, `session.execution.started`, `session.execution.succeeded`, `session.execution.failed`, `session.execution.interrupted`, `session.tool.called`, `session.tool.success`, and `session.tool.failed`. Event payloads carry session identity in their properties; creation carries session info including `id` and `directory`. Session `directory` is the workspace source when present.
 - OpenCode docs do not specify a supported release pin. API verification date is 2026-11-17; no release version is asserted.
