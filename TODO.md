@@ -6,8 +6,8 @@ Validate the Swayve OpenCode plugin against the installed OpenCode v2.3.0 runtim
 ## Tasks
 
 ### 1. Prepare the smoke test
-- [ ] Confirm branch `feat/opencode-integration1`, inspect `git status`, and preserve any unexpected changes.
-- [ ] Confirm OpenCode v2.3.0, Sway, the Swayve daemon, and the active socket path.
+- [x] Confirm branch `feat/opencode-integration1`, inspect `git status`, and preserve any unexpected changes.
+- [x] Confirm OpenCode v2.3.0, Sway, the Swayve daemon, and the active socket path.
 - [ ] Start `swayve status --watch --json` as the live observer.
 
 ### 2. Run and verify the live smoke test
