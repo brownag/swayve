@@ -1,21 +1,29 @@
 # Project Goals (`planning/GOALS.md`)
 
-Last Updated: 2026-11-17
-Source State: STATE_38.md plus OpenCode v2.3.0 source research (the plugin loads, but the live trace did not capture callbacks; first-party v2.3.0 types confirm the payload mismatch; see `planning/RESEARCH_OPENCODE_INTEGRATION.md`).
+Last Updated: 2026-11-18
+Source State: STATE_39.md and the OpenCode session↔window association investigation request (including the missing pre-existing first-tab session observation).
 
 ## Circled Goal (Active)
 
-**[G89]** OpenCode v2.3.0 lifecycle reporting is proven live, then the plugin maps the verified `event.data` payloads to Swayve registration/status messages.
-  - Why now: first-party v2.3.0 source confirms all subscribed event names and a concrete `event.properties` versus `event.data` mismatch; the previous live run did not capture callbacks or socket writes. Proof-first sequencing distinguishes a usable runtime path from source-only assumptions before the permanent fix.
-  - Exit criteria: a temporary file-backed probe captures actual lifecycle callbacks, redacted session correlation, socket connect/write outcomes, and resulting daemon state during one read-only `openai/gpt-6-luna` turn; only after positive evidence, permanent handler/tests/docs use the v2.3.0 `data` shape, with workspace derived from `data.location.directory` and a tested fallback.
-  - First action: run a controlled read-only turn with temporary instrumentation writing sanitized event/session and socket outcome records to `.development/opencode-trace.jsonl`; remove probe/output before the permanent implementation phase.
+**[G93]** Every project-scoped OpenCode session returned by enumeration, including sessions that predate plugin initialization, receives lifecycle reporting and is associated with its correct Sway window agent when a verified identity is available; missing or ambiguous identity never causes a guessed association, and sessions are retired only on authoritative evidence.
+  - Why now: the HUD has shown a window agent alongside separate session agents, and an already-running first-tab conversation was absent while sessions created later were reported. Correct session discovery and window association are one user-visible gap; project-directory equality alone is not evidence that sessions share a window.
+  - Exit criteria: establish whether OpenCode emits `session.created` for pre-existing sessions and whether setup or another event can discover them; enumerate project-scoped sessions without treating shared project directory as window identity; verify a stable window/session identity contract without assuming plugin PID, server PID, session ID, or app ID are interchangeable; tests cover pre-existing and newly created sessions across multiple tabs and windows, correct independent association, lifecycle updates, missing/ambiguous identity without false attachment, and safe retirement based on authoritative evidence; document behavior and limitations.
+  - First action: read-only investigation of OpenCode's plugin setup/session discovery/event lifecycle and Sway's window `app_id`/PID identity paths, then identify observable evidence needed to validate the mapping.
 
 ## Sequenced Goals (Dependency DAG)
 
+- **[G89]** The OpenCode lifecycle-to-daemon contract is validated, with any further live probe separately authorized and daemon state distinguished from successful socket writes.
+  - Depends on: G93
+  - Note: Orchestration 39 was inconclusive about daemon application; `STATE_39.md` says not to run another model turn without a separately approved plan. Do not treat another provider-backed turn as authorized by this goal inventory.
+
 - **[G90]** OpenCode child sessions preserve the documented `parentID` relationship as Swayve `parent_agent_id`, with tests for root and child registration.
-  - Depends on: G89
+  - Depends on: G93, G89
 
 ## Independent Backlog
+
+- **[G91]** The standalone OpenCode integration test is added to the root `make test` gate.
+  - Depends on: none
+  - Trigger in current inventory: the repository adds CI or decides to aggregate all integration-specific test commands in `make test`.
 
 ## Deferred
 
@@ -30,8 +38,6 @@ Source State: STATE_38.md plus OpenCode v2.3.0 source research (the plugin loads
 - **[G78]** `src/daemon.rs` tests move out of the 1365-line file.
   - Trigger: the next change to `daemon.rs` that needs more room. Size alone is not a defect.
   - Note: G79 and G81 both edit `daemon.rs`. If either adds more than a few hundred lines, reconsider G78 first.
-- **[G91]** The standalone OpenCode integration test is added to the root `make test` gate.
-  - Trigger: the repository adds CI or decides to aggregate all integration-specific test commands in `make test`.
 
 ## Blocked / Pruned
 
