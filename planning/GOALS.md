@@ -1,14 +1,14 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-17
-Source State: STATE_37.md (Orchestration 37 live smoke run did not trace plugin lifecycle callbacks or confirm socket writes; see `planning/RESEARCH_OPENCODE_INTEGRATION.md`).
+Source State: STATE_38.md plus OpenCode v2.3.0 source research (the plugin loads, but the live trace did not capture callbacks; first-party v2.3.0 types confirm the payload mismatch; see `planning/RESEARCH_OPENCODE_INTEGRATION.md`).
 
 ## Circled Goal (Active)
 
-**[G89]** OpenCode v2.3.0 lifecycle events and status IPC are traced end-to-end through the Swayve plugin and daemon.
-  - Why now: the live run confirmed plugin loading and agent registration but not lifecycle callbacks or socket writes. This trace isolates the unresolved boundary before plugin changes or downstream hierarchy work.
-  - Exit criteria: record actual callback event types/properties and session-ID extraction, attempted IPC sends and connection/write results, and corresponding daemon state changes; identify the failing boundary or confirm lifecycle reporting works.
-  - First action: add focused, temporary diagnostics for plugin callback receipt, session-ID extraction, and socket send outcomes, then run the controlled smoke test.
+**[G89]** OpenCode v2.3.0 lifecycle reporting is proven live, then the plugin maps the verified `event.data` payloads to Swayve registration/status messages.
+  - Why now: first-party v2.3.0 source confirms all subscribed event names and a concrete `event.properties` versus `event.data` mismatch; the previous live run did not capture callbacks or socket writes. Proof-first sequencing distinguishes a usable runtime path from source-only assumptions before the permanent fix.
+  - Exit criteria: a temporary file-backed probe captures actual lifecycle callbacks, redacted session correlation, socket connect/write outcomes, and resulting daemon state during one read-only `openai/gpt-6-luna` turn; only after positive evidence, permanent handler/tests/docs use the v2.3.0 `data` shape, with workspace derived from `data.location.directory` and a tested fallback.
+  - First action: run a controlled read-only turn with temporary instrumentation writing sanitized event/session and socket outcome records to `.development/opencode-trace.jsonl`; remove probe/output before the permanent implementation phase.
 
 ## Sequenced Goals (Dependency DAG)
 
