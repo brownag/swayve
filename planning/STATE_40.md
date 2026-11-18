@@ -20,8 +20,8 @@ Target branch: `feat/opencode-integration1`
 | 1 | 40.1.1 | done | — |
 | 1 | 40.1.2 | done; D10 approved | — |
 | 2 | 40.2.1 | done; `ca2b3e2` | — |
-| 3 | 40.3.1 | ready for micro-plan | — |
-| 3 | 40.3.2 | ready for micro-plan; D10 forbids heuristic matching | — |
+| 3 | 40.3.1 | verified in worktree; commits `4759224`, `74f66ad`; pending integration | detached worktree |
+| 3 | 40.3.2 | blocked pending user direction on acceptable bind interaction | separate worktree |
 | 4 | 40.4.1 | blocked pending implementation and user-assisted validation only | — |
 
 ## Task Reports
@@ -64,3 +64,11 @@ Target branch: `feat/opencode-integration1`
 - **Deviation:** Fixture-only updates in `crates/swayve-hud/src/{client.rs,fold.rs}` were added to scope before implementation because `AgentWindow` literals needed new fields. No CLI fixtures required edits.
 - **Commit:** `ca2b3e2` (`feat(daemon): add explicit session window binding`); planning artifacts and the pre-existing research-note change were kept outside it.
 - **Planning commit:** `2b0a1d1` (`docs(planning): record session window binding decision`).
+
+### 40.3.1 — Show Session-to-Window Association in HUD
+
+- **Status:** Verified in detached worktree; implementation commit `4759224`, test-fixture follow-up `74f66ad`; pending integration to `feat/opencode-integration1`.
+- **Files:** `crates/swayve-hud/src/client.rs` renders the explicit `hosting_window_agent_id`; `fold.rs` has fixture-only type-path correction.
+- **Tests:** `cargo test -p swayve-hud` — 12 unit and 5 integration tests passed; `git diff --check` passed.
+- **Deviations:** Fixture-path correction and update of the association test's total count were authorized after targeted verification exposed compile/assertion errors. No behavior was changed beyond committed HUD rendering.
+- **Commits:** `4759224` (`feat(hud): show session window associations`); `74f66ad` (`test(hud): fix association test fixtures`).
