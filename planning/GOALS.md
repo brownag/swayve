@@ -1,14 +1,14 @@
 # Project Goals (`planning/GOALS.md`)
 
 Last Updated: 2026-11-17
-Source State: STATE_36.md (Orchestration 36 completed; post-wave Magic Wand re-rank, OpenCode v2.3.0 and Swayve runtime available; official API confirms `Session.Info.parentID`; see `planning/RESEARCH_OPENCODE_INTEGRATION.md`).
+Source State: STATE_37.md (Orchestration 37 live smoke run did not trace plugin lifecycle callbacks or confirm socket writes; see `planning/RESEARCH_OPENCODE_INTEGRATION.md`).
 
 ## Circled Goal (Active)
 
-**[G89]** The OpenCode Swayve plugin is smoke-tested against the installed OpenCode v2.3.0 runtime and active Swayve daemon.
-  - Why now: this is the highest-leverage remaining check of the integration boundary; a live test validates plugin loading and the event payload assumptions behind subsequent hierarchy work. Both OpenCode and Swayve are available in the current environment.
-  - Exit criteria: plugin loads without errors; a real OpenCode session produces the expected Swayve registration and lifecycle status updates, with observed event/session fields recorded.
-  - First action: run the documented manual smoke test against OpenCode v2.3.0 and capture the resulting Swayve-visible identity/status behavior.
+**[G89]** OpenCode v2.3.0 lifecycle events and status IPC are traced end-to-end through the Swayve plugin and daemon.
+  - Why now: the live run confirmed plugin loading and agent registration but not lifecycle callbacks or socket writes. This trace isolates the unresolved boundary before plugin changes or downstream hierarchy work.
+  - Exit criteria: record actual callback event types/properties and session-ID extraction, attempted IPC sends and connection/write results, and corresponding daemon state changes; identify the failing boundary or confirm lifecycle reporting works.
+  - First action: add focused, temporary diagnostics for plugin callback receipt, session-ID extraction, and socket send outcomes, then run the controlled smoke test.
 
 ## Sequenced Goals (Dependency DAG)
 
