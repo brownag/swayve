@@ -13,7 +13,9 @@ Validate the Swayve OpenCode plugin against the installed OpenCode v2.3.0 runtim
 ### 2. Run and verify the live smoke test
 - [ ] From the repository root, run `opencode run --standalone --model openai/gpt-6-luna "Read the first heading in README.md and report it. This is read-only; do not create or modify files."`
 - [ ] Verify OpenCode loads `.opencode/plugins/swayve.ts` and Swayve receives a registration with the session ID, `agent_type=opencode`, workspace-basename project ID, plugin PID, and `app_id=agent.<session_id>`.
-- [ ] Observe the resulting lifecycle statuses (`thinking`, `executing_tool`, `thinking`, and terminal status); record what actually appears without inferring missing events. Do not implement parent-ID mapping.
+- [ ] Investigate why the Swayve dashboard showed only `Idle` during the successful live turn; inspect read-only OpenCode logs/event timing and the live Swayve protocol/dashboard behavior before considering code changes.
+- [ ] If a focused plugin defect is identified, make only the minimal approved fix and add/update regression coverage; if the issue is observer latency/refresh behavior, document that instead of changing lifecycle code.
+- [ ] Repeat the harmless live turn only if needed to verify a diagnosis/fix; observe the resulting lifecycle statuses (`thinking`, `executing_tool`, `thinking`, and terminal status) and record what actually appears without inferring missing events. Do not implement parent-ID mapping.
 - [ ] Stop the status observer, remove any temporary output, and confirm the repository has no unintended changes.
 
 ### 3. Make focused fixes only if the smoke test finds a defect
@@ -29,6 +31,7 @@ Validate the Swayve OpenCode plugin against the installed OpenCode v2.3.0 runtim
 ## Notes
 - Branch: `feat/opencode-integration1`; do not switch branches.
 - A single harmless model turn is authorized and may incur provider usage. Do not change provider/auth settings, write files, or expose secrets.
+- Any repeat provider-backed turn must be limited to verifying the lifecycle diagnosis/fix; ask before additional runs if the investigation requires broader usage.
 - Parent-session mapping remains out of scope; record any observed `parentID` evidence for a future goal only.
 - Keep Swayve integrations thin per ADR 0009. Do not change daemon/Rust code, other integrations, the root Makefile, or dependencies.
 - Planning artifacts are tracked. The approved root TODO and its final archive use separate planning-only commits; implementation commits remain separate. No push, pull request, or other remote action is authorized.
