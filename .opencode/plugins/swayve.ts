@@ -39,13 +39,13 @@ export default Plugin.define({
     void (async () => {
       try {
         for await (const event of ctx.event.subscribe({ types: eventTypes, signal: controller.signal })) {
-          const session = "properties" in event ? event.properties?.info : undefined
-          const sessionID = session?.id ?? ("properties" in event ? event.properties?.sessionID : undefined)
+          const session = "data" in event ? event.data : undefined
+          const sessionID = session?.sessionID
           if (!sessionID) continue
 
           if (event.type === "session.created" && !registered.has(sessionID)) {
             registered.add(sessionID)
-            const workspace = session.directory || ctx.location.directory
+            const workspace = session.location?.directory || ctx.location.directory
             send({
               method: "agent.register",
               params: {

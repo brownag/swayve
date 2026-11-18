@@ -15,20 +15,21 @@ Set `SWAYVE_SOCKET` to the active Swayve socket if the default is not correct.
 Otherwise, the plugin uses `$XDG_RUNTIME_DIR/swayve/swayve.sock` when
 `XDG_RUNTIME_DIR` is set. Start Swayve before OpenCode to receive updates.
 
-Session ID is used as the Swayve agent ID and in `agent.<session_id>`.
-`project_id` is the basename of the event session directory, falling back to
-the plugin load directory when session directory metadata is absent. The
+The plugin reads the session ID from `event.data.sessionID` and uses it as the
+Swayve agent ID and in `agent.<session_id>`. For `session.created`,
+`project_id` is the basename of `event.data.location.directory`, falling back
+to the plugin load directory when location metadata is absent. The
 reported PID is the plugin process PID. Parent-session mapping is unsupported
 and unverified; `parent_agent_id` is always null.
 
 ## API support
 
-The event names and payload fields used here were verified against the
-first-party OpenCode plugin documentation and public event schema on
-2026-11-17 (see `planning/RESEARCH_OPENCODE_INTEGRATION.md`). OpenCode does not
-specify a supported release pin, so this integration does not claim compatibility
-with a particular release. Recheck the documented plugin and event API if
-OpenCode changes its plugin interface.
+The lifecycle payload mapping was observed in a live OpenCode v2.3.2 plugin
+run and is pinned by mock-socket tests. This is evidence for v2.3.2 only; no
+compatibility claim is made for other releases. OpenCode does not specify a
+supported release pin. Recheck the plugin and event API when upgrading
+OpenCode. See `planning/RESEARCH_OPENCODE_INTEGRATION.md` for source notes and
+the sanitized probe record in `planning/STATE_39.md`.
 
 ## Tests
 

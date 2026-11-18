@@ -20,10 +20,9 @@ const pluginUrl = new URL("../../.opencode/plugins/swayve.ts", import.meta.url).
 const { default: plugin } = await import(pluginUrl);
 
 function event(type, sessionID = "session-1", directory) {
-  const info = directory === undefined
-    ? { id: sessionID }
-    : { id: sessionID, directory };
-  return { type, properties: { info } };
+  const data = { sessionID };
+  if (directory !== undefined) data.location = { directory };
+  return { type, data };
 }
 
 function eventStream() {
@@ -113,7 +112,7 @@ function startPlugin(stream, location = "/workspace/plugin") {
   return cleanup;
 }
 
-test("registers sessions with event workspace identity and maps lifecycle statuses", async () => {
+test("registers sessions from v2.3.2 data payload and maps lifecycle statuses", async () => {
   await mockSocket(async ({ socketPath, lines }) => {
     process.env.SWAYVE_SOCKET = socketPath;
     const stream = eventStream();
@@ -156,7 +155,7 @@ test("falls back to plugin location and ignores unidentified/duplicate creation"
     const stream = eventStream();
     const cleanup = startPlugin(stream, "/workspace/fallback-project");
     try {
-      stream.push({ type: "session.created", properties: {} });
+      stream.push({ type: "session.created", data: {} });
       stream.push(event("session.created", "fallback-id"));
       stream.push(event("session.created", "fallback-id"));
       await flush(lines, 1);
