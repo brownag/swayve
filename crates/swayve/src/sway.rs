@@ -29,7 +29,10 @@ impl SwayCommand {
                 format!("[con_mark=\"{}\"] focus", mark)
             }
             SwayCommand::MoveToWorkspace { con_id, workspace } => {
-                format!("[con_id=\"{}\"] move container to workspace {}", con_id, workspace)
+                format!(
+                    "[con_id=\"{}\"] move container to workspace {}",
+                    con_id, workspace
+                )
             }
             SwayCommand::ApplyLayout { workspace, layout } => {
                 format!("[workspace=\"{}\"] layout {}", workspace, layout)
@@ -37,8 +40,14 @@ impl SwayCommand {
             SwayCommand::SplitHorizontal { parent_mark } => {
                 format!("[con_mark=\"{}\"] focus, split horizontal", parent_mark)
             }
-            SwayCommand::MoveToContainer { con_id, target_mark } => {
-                format!("[con_id=\"{}\"] move container to mark \"{}\"", con_id, target_mark)
+            SwayCommand::MoveToContainer {
+                con_id,
+                target_mark,
+            } => {
+                format!(
+                    "[con_id=\"{}\"] move container to mark \"{}\"",
+                    con_id, target_mark
+                )
             }
             SwayCommand::SetLayoutTabbed { mark } => {
                 format!("[con_mark=\"{}\"] layout tabbed", mark)
@@ -54,7 +63,10 @@ pub struct SwayManager {
 
 impl SwayManager {
     pub fn new(dry_run: bool, command_rx: mpsc::Receiver<SwayCommand>) -> Self {
-        Self { dry_run, command_rx }
+        Self {
+            dry_run,
+            command_rx,
+        }
     }
 
     pub async fn run_executor(mut self) -> Result<()> {
@@ -66,7 +78,9 @@ impl SwayManager {
             if env::var("SWAYSOCK").is_err() {
                 anyhow::bail!("SWAYSOCK environment variable not set, and dry-run is disabled.");
             }
-            let conn = Connection::new().await.context("Failed to connect to Sway IPC socket")?;
+            let conn = Connection::new()
+                .await
+                .context("Failed to connect to Sway IPC socket")?;
             Some(conn)
         };
 
@@ -76,7 +90,10 @@ impl SwayManager {
             if let Some(conn) = &mut connection {
                 println!("[sway] Executing: {}", command_str);
                 if let Err(e) = conn.run_command(&command_str).await {
-                    eprintln!("[sway] Command execution failed for '{}': {:?}", command_str, e);
+                    eprintln!(
+                        "[sway] Command execution failed for '{}': {:?}",
+                        command_str, e
+                    );
                 }
             } else {
                 println!("[sway] [DRY-RUN] Would execute: {}", command_str);
@@ -89,22 +106,29 @@ impl SwayManager {
 
 #[derive(Debug, Clone)]
 pub enum SwayEvent {
-    WindowCreated { con_id: i64, app_id: String, pid: Option<i32> },
-    WindowDestroyed { con_id: i64 },
-    WindowFocused { con_id: i64 },
+    WindowCreated {
+        con_id: i64,
+        app_id: String,
+        pid: Option<i32>,
+    },
+    WindowDestroyed {
+        con_id: i64,
+    },
+    WindowFocused {
+        con_id: i64,
+    },
 }
 
-pub async fn run_event_listener(
-    dry_run: bool,
-    event_tx: mpsc::Sender<SwayEvent>,
-) -> Result<()> {
+pub async fn run_event_listener(dry_run: bool, event_tx: mpsc::Sender<SwayEvent>) -> Result<()> {
     if dry_run {
         println!("[sway] Event listener disabled in DRY-RUN mode.");
         return Ok(());
     }
 
     if env::var("SWAYSOCK").is_err() {
-        anyhow::bail!("SWAYSOCK environment variable not set. Event listener requires Sway running.");
+        anyhow::bail!(
+            "SWAYSOCK environment variable not set. Event listener requires Sway running."
+        );
     }
 
     let subs = [EventType::Window];
@@ -125,7 +149,11 @@ pub async fn run_event_listener(
                     let app_id = win_event.container.app_id.clone().unwrap_or_default();
                     let pid = win_event.container.pid;
                     let _ = event_tx
-                        .send(SwayEvent::WindowCreated { con_id, app_id, pid })
+                        .send(SwayEvent::WindowCreated {
+                            con_id,
+                            app_id,
+                            pid,
+                        })
                         .await;
                 }
                 WindowChange::Close => {
@@ -151,13 +179,54 @@ mod tests {
     #[test]
     fn renders_every_variant() {
         let s = |c: SwayCommand| c.to_command_string();
-        assert_eq!(s(SwayCommand::MarkWindow { con_id: 7, mark: "m".into() }), "[con_id=\"7\"] mark --add \"m\"");
-        assert_eq!(s(SwayCommand::SetBorderColor { mark: "m".into(), hex_color: "#fff".into() }), "[con_mark=\"m\"] border pixel 3");
-        assert_eq!(s(SwayCommand::FocusWindow { mark: "m".into() }), "[con_mark=\"m\"] focus");
-        assert_eq!(s(SwayCommand::MoveToWorkspace { con_id: 7, workspace: "w".into() }), "[con_id=\"7\"] move container to workspace w");
-        assert_eq!(s(SwayCommand::ApplyLayout { workspace: "w".into(), layout: "l".into() }), "[workspace=\"w\"] layout l");
-        assert_eq!(s(SwayCommand::SplitHorizontal { parent_mark: "p".into() }), "[con_mark=\"p\"] focus, split horizontal");
-        assert_eq!(s(SwayCommand::MoveToContainer { con_id: 7, target_mark: "t".into() }), "[con_id=\"7\"] move container to mark \"t\"");
-        assert_eq!(s(SwayCommand::SetLayoutTabbed { mark: "m".into() }), "[con_mark=\"m\"] layout tabbed");
+        assert_eq!(
+            s(SwayCommand::MarkWindow {
+                con_id: 7,
+                mark: "m".into()
+            }),
+            "[con_id=\"7\"] mark --add \"m\""
+        );
+        assert_eq!(
+            s(SwayCommand::SetBorderColor {
+                mark: "m".into(),
+                hex_color: "#fff".into()
+            }),
+            "[con_mark=\"m\"] border pixel 3"
+        );
+        assert_eq!(
+            s(SwayCommand::FocusWindow { mark: "m".into() }),
+            "[con_mark=\"m\"] focus"
+        );
+        assert_eq!(
+            s(SwayCommand::MoveToWorkspace {
+                con_id: 7,
+                workspace: "w".into()
+            }),
+            "[con_id=\"7\"] move container to workspace w"
+        );
+        assert_eq!(
+            s(SwayCommand::ApplyLayout {
+                workspace: "w".into(),
+                layout: "l".into()
+            }),
+            "[workspace=\"w\"] layout l"
+        );
+        assert_eq!(
+            s(SwayCommand::SplitHorizontal {
+                parent_mark: "p".into()
+            }),
+            "[con_mark=\"p\"] focus, split horizontal"
+        );
+        assert_eq!(
+            s(SwayCommand::MoveToContainer {
+                con_id: 7,
+                target_mark: "t".into()
+            }),
+            "[con_id=\"7\"] move container to mark \"t\""
+        );
+        assert_eq!(
+            s(SwayCommand::SetLayoutTabbed { mark: "m".into() }),
+            "[con_mark=\"m\"] layout tabbed"
+        );
     }
 }

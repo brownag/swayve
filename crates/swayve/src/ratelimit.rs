@@ -16,7 +16,10 @@ pub struct IpcLimits {
 
 impl Default for IpcLimits {
     fn default() -> Self {
-        Self { lines_per_sec: IPC_LINES_PER_SEC, burst: IPC_BURST }
+        Self {
+            lines_per_sec: IPC_LINES_PER_SEC,
+            burst: IPC_BURST,
+        }
     }
 }
 
@@ -30,7 +33,12 @@ pub struct RateLimiter {
 impl RateLimiter {
     /// Starts with a full bucket.
     pub fn new(refill_per_sec: f64, capacity: f64, now: Instant) -> Self {
-        Self { capacity, refill_per_sec, tokens: capacity, last: now }
+        Self {
+            capacity,
+            refill_per_sec,
+            tokens: capacity,
+            last: now,
+        }
     }
 
     /// Takes one token if one is available. Returns `false` when the bucket is empty.

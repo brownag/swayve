@@ -77,7 +77,15 @@ Ensure you have the Rust toolchain installed:
 cargo build --release
 ```
 
-### 2. Configure Sway
+### 2. Install Agent Hooks
+Agents report their status (thinking, executing tool, idle) through their own lifecycle hooks. Install them once per machine:
+```bash
+make install-hooks              # Claude Code: merges into ~/.claude/settings.json
+make install-antigravity-hooks  # Antigravity: merges into ~/.gemini/config/hooks.json
+```
+Both merges keep your existing hooks. Re-run after upgrading swayve. `swayve spawn` warns when the hooks for the agent are missing.
+
+### 3. Configure Sway
 Place the following in your Sway configuration (typically `~/.config/sway/config` or `~/.config/sway/config.d/50-agent-viewer.conf`):
 
 ```sway
@@ -111,7 +119,7 @@ bindsym $mod+Shift+o exec swayve panel toggle
 exec_always --no-startup-id swayve daemon
 ```
 
-### 3. CLI Command Reference
+### 4. CLI Command Reference
 
 * **Start the Daemon:**
   ```bash
@@ -220,7 +228,11 @@ The repository is organized as a Cargo virtual workspace under `crates/`:
   1. Ensure your terminal app ID matches the expected patterns (`for_window [app_id="^agent\..*"]`).
   2. Verify that the agent successfully registers with `swayve spawn` and has an active mark assigned (verify via `swaymsg -t get_tree | grep mark_`).
 
-### 3. Verification of agent app IDs
+### 3. Agent status never changes after spawn
+* **Symptoms**: `swayve spawn` prints `Swayve hooks not found in ... settings`, or the agent stays on `thinking` and never goes idle.
+* **Solution**: Run `make install-hooks` (Claude) or `make install-antigravity-hooks` (Antigravity), then start a new agent session. Hooks load only when a session starts.
+
+### 4. Verification of agent app IDs
 * **Symptoms**: Sway layout rules are not applying to spawned terminals.
 * **Solution**: Run `swaymsg -t get_tree` while the agent terminal is active and inspect the container's `app_id` attribute. Ensure the template arguments in `~/.config/swayve/config.toml` correctly target the emulator's corresponding application flag.
 

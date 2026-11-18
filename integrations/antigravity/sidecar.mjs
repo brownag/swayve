@@ -24,7 +24,7 @@ function normalizeParentId(parentAgentId) {
 
 export function hookPayload(event) {
   if (event === "PreToolUse") return JSON.stringify({ decision: "allow" });
-  if (event === "Stop") return JSON.stringify({ decision: "allow_stop" });
+  if (event === "Stop") return "{}";
   return "{}";
 }
 

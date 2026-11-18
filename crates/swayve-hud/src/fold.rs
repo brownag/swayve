@@ -134,8 +134,14 @@ mod tests {
     #[test]
     fn test_fold_diff_snapshot_clears_preexisting_entries() {
         let mut map = HashMap::new();
-        map.insert("old-1".to_string(), helper_agent_window("old-1", AgentStatus::Completed));
-        map.insert("old-2".to_string(), helper_agent_window("old-2", AgentStatus::Idle));
+        map.insert(
+            "old-1".to_string(),
+            helper_agent_window("old-1", AgentStatus::Completed),
+        );
+        map.insert(
+            "old-2".to_string(),
+            helper_agent_window("old-2", AgentStatus::Idle),
+        );
         assert_eq!(map.len(), 2);
 
         // Snapshot with new agent "new-1"

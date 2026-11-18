@@ -9,8 +9,8 @@ use std::thread;
 use std::time::Duration;
 
 use swayve_hud::client::{
-    connect_and_subscribe, process_stream, render_offline, run_client_with_options, ClientOptions,
-    SUBSCRIBE_DIFF_MSG,
+    ClientOptions, SUBSCRIBE_DIFF_MSG, connect_and_subscribe, process_stream, render_offline,
+    run_client_with_options,
 };
 use swayve_hud::types::{AgentStatus, AgentWindow};
 
@@ -86,14 +86,10 @@ fn test_mock_daemon_handshake_and_frames() {
     let mut map = HashMap::new();
     let mut observed_states = Vec::new();
 
-    let frames_processed = process_stream(
-        BufReader::new(client_stream),
-        &mut map,
-        |current_map| {
-            observed_states.push(current_map.clone());
-            Ok(())
-        },
-    )
+    let frames_processed = process_stream(BufReader::new(client_stream), &mut map, |current_map| {
+        observed_states.push(current_map.clone());
+        Ok(())
+    })
     .expect("stream processing failed");
 
     assert_eq!(frames_processed, 3);
@@ -102,10 +98,7 @@ fn test_mock_daemon_handshake_and_frames() {
     // State after snapshot
     assert_eq!(observed_states[0].len(), 1);
     assert!(observed_states[0].contains_key("agent-1"));
-    assert_eq!(
-        observed_states[0]["agent-1"].status,
-        AgentStatus::Thinking
-    );
+    assert_eq!(observed_states[0]["agent-1"].status, AgentStatus::Thinking);
 
     // State after upsert
     assert_eq!(observed_states[1].len(), 2);
@@ -169,8 +162,7 @@ fn test_disconnect_and_reconnect_recovery() {
         reset_backoff_on_frame: true,
     };
 
-    let history: Arc<Mutex<Vec<HashMap<String, AgentWindow>>>> =
-        Arc::new(Mutex::new(Vec::new()));
+    let history: Arc<Mutex<Vec<HashMap<String, AgentWindow>>>> = Arc::new(Mutex::new(Vec::new()));
     let history_clone = Arc::clone(&history);
 
     let client_res = run_client_with_options(
@@ -198,10 +190,7 @@ fn test_disconnect_and_reconnect_recovery() {
 
     // Initial connection saw agent-old
     assert!(updates[0].contains_key("agent-old"));
-    assert_eq!(
-        updates[0]["agent-old"].status,
-        AgentStatus::ExecutingTool
-    );
+    assert_eq!(updates[0]["agent-old"].status, AgentStatus::ExecutingTool);
 
     // After reconnect and fresh snapshot, map cleared and has agent-new
     let final_state = updates.last().unwrap();
@@ -239,8 +228,7 @@ fn test_disconnect_renders_offline_state() {
         reset_backoff_on_frame: true,
     };
 
-    let updates: Arc<Mutex<Vec<HashMap<String, AgentWindow>>>> =
-        Arc::new(Mutex::new(Vec::new()));
+    let updates: Arc<Mutex<Vec<HashMap<String, AgentWindow>>>> = Arc::new(Mutex::new(Vec::new()));
     let offline_output: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
 
     let updates_clone = Arc::clone(&updates);
@@ -268,7 +256,8 @@ fn test_disconnect_renders_offline_state() {
         "expected an update containing agent-old"
     );
 
-    let output = String::from_utf8_lossy(&offline_output.lock().expect("lock poisoned")).into_owned();
+    let output =
+        String::from_utf8_lossy(&offline_output.lock().expect("lock poisoned")).into_owned();
     assert!(output.contains("daemon unreachable"));
     let last_render = output
         .rsplit("\x1b[2J\x1b[H")
@@ -303,11 +292,19 @@ fn test_output_closed_stops_client() {
     let result = run_client_with_options(
         temp_socket.path(),
         &options,
-        |_| Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "closed")),
+        |_| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "closed",
+            ))
+        },
         || Ok(()),
     );
 
-    assert!(result.is_err(), "a closed output must stop the client, not retry");
+    assert!(
+        result.is_err(),
+        "a closed output must stop the client, not retry"
+    );
     server_handle.join().expect("server thread failed");
 }
 
@@ -342,15 +339,12 @@ fn test_non_json_lines_ignored_by_mock_stream() {
     let mut map = HashMap::new();
     let mut update_count = 0;
 
-    let frames_processed = process_stream(
-        BufReader::new(client_stream),
-        &mut map,
-        |_current_map| {
+    let frames_processed =
+        process_stream(BufReader::new(client_stream), &mut map, |_current_map| {
             update_count += 1;
             Ok(())
-        },
-    )
-    .expect("stream processing failed");
+        })
+        .expect("stream processing failed");
 
     assert_eq!(frames_processed, 2);
     assert_eq!(update_count, 2);

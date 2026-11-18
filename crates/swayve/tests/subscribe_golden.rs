@@ -3,9 +3,11 @@ mod common;
 
 use std::time::Duration;
 use swayve::config::Config;
-use swayve::daemon::{run_daemon_loops, start_daemon_ipc, DaemonEvent};
+use swayve::daemon::{DaemonEvent, run_daemon_loops, start_daemon_ipc};
 use swayve::sway::SwayCommand;
-use swayve::types::{AgentId, AgentIPCMessage, AgentStatus, ProjectId, RegisterParams, UpdateStatusParams};
+use swayve::types::{
+    AgentIPCMessage, AgentId, AgentStatus, ProjectId, RegisterParams, UpdateStatusParams,
+};
 use tokio::fs;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
@@ -29,7 +31,10 @@ async fn wait_for_socket(path: &str) {
 async fn subscribe_first_line(path: &str) -> String {
     let mut stream = UnixStream::connect(path).await.expect("connect subscriber");
     let payload = serde_json::to_string(&AgentIPCMessage::SubscribeStatus).unwrap() + "\n";
-    stream.write_all(payload.as_bytes()).await.expect("send subscribe");
+    stream
+        .write_all(payload.as_bytes())
+        .await
+        .expect("send subscribe");
     stream.flush().await.unwrap();
     let mut lines = BufReader::new(stream).lines();
     timeout(Duration::from_secs(2), lines.next_line())
@@ -54,7 +59,9 @@ async fn test_subscribe_full_list_golden_bytes() {
     });
     wait_for_socket(socket_path).await;
 
-    let mut client = UnixStream::connect(socket_path).await.expect("connect client");
+    let mut client = UnixStream::connect(socket_path)
+        .await
+        .expect("connect client");
     let mut msgs = Vec::new();
     for (id, pid) in [("golden-a", 41001), ("golden-b", 41002)] {
         msgs.push(AgentIPCMessage::Register {
@@ -77,14 +84,20 @@ async fn test_subscribe_full_list_golden_bytes() {
     });
     for m in &msgs {
         let line = serde_json::to_string(m).unwrap() + "\n";
-        client.write_all(line.as_bytes()).await.expect("send message");
+        client
+            .write_all(line.as_bytes())
+            .await
+            .expect("send message");
     }
     client.flush().await.unwrap();
 
     // Cross-connection ordering is not guaranteed: probe until the state has settled.
     let mut settled = false;
     for _ in 0..200 {
-        if subscribe_first_line(socket_path).await.contains("awaiting_human_input") {
+        if subscribe_first_line(socket_path)
+            .await
+            .contains("awaiting_human_input")
+        {
             settled = true;
             break;
         }
@@ -93,8 +106,14 @@ async fn test_subscribe_full_list_golden_bytes() {
     assert!(settled, "daemon state never reached the expected status");
 
     let line = subscribe_first_line(socket_path).await;
-    assert!(!line.starts_with('{'), "first line must be a bare array, got: {line}");
-    assert!(line.starts_with('['), "first line must be a JSON array, got: {line}");
+    assert!(
+        !line.starts_with('{'),
+        "first line must be a bare array, got: {line}"
+    );
+    assert!(
+        line.starts_with('['),
+        "first line must be a JSON array, got: {line}"
+    );
 
     // `agents` is a HashMap, so element order varies per process; each ordering is byte-exact.
     let golden_ab = format!("[{AGENT_A},{AGENT_B}]");

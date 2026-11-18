@@ -1,63 +1,51 @@
-.PHONY: help all build check test clean reload run daemon daemon-dry hud
+.PHONY: help all build check test clean reload run daemon daemon-dry hud install-user install-hooks install-antigravity-hooks
 
-# Default target: display help instructions
-help:
-	@echo "=========================================================================="
-	@echo "                         swayve Development Makefile"
-	@echo "=========================================================================="
-	@echo "Available targets:"
-	@echo "  all       : Run check, test, and build the release binaries"
-	@echo "  build     : Compile the release workspace executables"
-	@echo "  check     : Run cargo check and clippy across the workspace (warnings denied)"
-	@echo "  test      : Run Rust workspace, Pi, Antigravity, and Claude hook tests"
-	@echo "  clean     : Clean compile artifacts"
-	@echo "  run       : Run the debug swayve CLI binary"
-	@echo "  daemon    : Run the live background daemon (requires SWAYSOCK)"
-	@echo "  daemon-dry: Run the daemon in dry-run mode (logs commands, offline safe)"
-	@echo "  hud       : Run the live terminal HUD (swayve-hud)"
-	@echo "  reload    : Reload Sway compositor configuration"
-	@echo "  help      : Show this help message"
-	@echo "=========================================================================="
+.DEFAULT_GOAL := help
 
-# Build everything
-all: check test build
+INSTALL_ROOT ?= $(HOME)/.local
 
-# Compile release binaries
-build:
+help: ## Show this help message
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / { printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+
+all: check test build ## Run check, test, and build the release binaries
+
+build: ## Compile the release workspace executables
 	cargo build --workspace --release
 
-# Compilation checks
-check:
+check: ## Run cargo check and clippy across the workspace (warnings denied)
 	cargo check --workspace
 	cargo clippy --workspace --all-targets -- -D warnings
 
-# Run tests
-test:
+test: ## Run Rust workspace, Pi, Antigravity, and Claude hook tests
 	cargo test --workspace
 	cd integrations/pi && npm test
 	cd integrations/antigravity && node --test sidecar.test.mjs
 	bash integrations/claude/test-hooks.sh
 
-# Clean artifacts
-clean:
+clean: ## Clean compile artifacts
 	cargo clean
 
-# Run debug version of the CLI
-run:
+run: ## Run the debug swayve CLI binary
 	cargo run -p swayve -- --help
 
-# Run the live background daemon (requires running Sway)
-daemon:
+daemon: ## Run the live background daemon (requires SWAYSOCK)
 	cargo run -p swayve -- daemon
 
-# Run the daemon in dry-run mode for logging/mock testing
-daemon-dry:
+daemon-dry: ## Run the daemon in dry-run mode (logs commands, offline safe)
 	cargo run -p swayve -- --dry-run daemon
 
-# Run the live terminal HUD
-hud:
+hud: ## Run the live terminal HUD (swayve-hud)
 	cargo run -p swayve-hud
 
-# Reload Sway configuration rules
-reload:
+install-user: ## Install swayve and swayve-hud to ~/.local/bin (no sudo; override INSTALL_ROOT)
+	cargo install --locked --path crates/swayve --root "$(INSTALL_ROOT)"
+	cargo install --locked --path crates/swayve-hud --root "$(INSTALL_ROOT)"
+
+install-hooks: ## Merge Swayve status hooks into ~/.claude/settings.json (see integrations/claude/README.md)
+	integrations/claude/install-hooks.sh --global
+
+install-antigravity-hooks: ## Merge Swayve sidecar hooks into ~/.gemini/config/hooks.json
+	integrations/antigravity/install-hooks.sh
+
+reload: ## Reload Sway compositor configuration
 	swaymsg reload
