@@ -20,7 +20,7 @@ Target branch: `feat/opencode-integration1`
 | 1 | 40.1.1 | done | — |
 | 1 | 40.1.2 | done; D10 approved | — |
 | 2 | 40.2.1 | done; `ca2b3e2` | — |
-| 3 | 40.3.1 | verified in worktree; commits `4759224`, `74f66ad`; pending integration | detached worktree |
+| 3 | 40.3.1 | done; integrated as `4f7ee9c`, `674cd58` | primary branch |
 | 3 | 40.3.2 | blocked pending user direction on acceptable bind interaction | separate worktree |
 | 4 | 40.4.1 | blocked pending implementation and user-assisted validation only | — |
 
@@ -67,8 +67,9 @@ Target branch: `feat/opencode-integration1`
 
 ### 40.3.1 — Show Session-to-Window Association in HUD
 
-- **Status:** Verified in detached worktree; implementation commit `4759224`, test-fixture follow-up `74f66ad`; pending integration to `feat/opencode-integration1`.
+- **Status:** Verified and integrated to `feat/opencode-integration1` as `4f7ee9c` (rendering) and `674cd58` (fixture correction).
 - **Files:** `crates/swayve-hud/src/client.rs` renders the explicit `hosting_window_agent_id`; `fold.rs` has fixture-only type-path correction.
 - **Tests:** `cargo test -p swayve-hud` — 12 unit and 5 integration tests passed; `git diff --check` passed.
 - **Deviations:** Fixture-path correction and update of the association test's total count were authorized after targeted verification exposed compile/assertion errors. No behavior was changed beyond committed HUD rendering.
-- **Commits:** `4759224` (`feat(hud): show session window associations`); `74f66ad` (`test(hud): fix association test fixtures`).
+- **Worktree commits:** `4759224` (`feat(hud): show session window associations`); `74f66ad` (`test(hud): fix association test fixtures`).
+- **Integrated commit IDs:** `4f7ee9c`, `674cd58`.
