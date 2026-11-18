@@ -16,8 +16,14 @@ Target branch: `feat/opencode-integration1`
 
 | Wave | Task | Status | Worker / Session |
 |---|---|---|---|
-| 1 | 38.1.1 | pending | — |
+| 1 | 38.1.1 | blocked | ses_e135adc52ffe5JUQqvCc5Nm8N3 |
 
 ## Task Reports
 
-_(No tasks executed yet.)_
+### 38.1.1 — Trace OpenCode v2.3.0 Lifecycle Status
+
+- **Status:** blocked before model turn; OpenCode returned `Insufficient balance. This request is pay-as-you-go, billed to OpenCode Models credits.`
+- **Runtime:** branch `feat/opencode-integration1`; OpenCode 2.3.0; Sway 1.9; active Swayve socket `/run/user/1000/swayve/swayve.sock`.
+- **Evidence:** approved `opencode run --standalone` command failed before reading README or invoking plugin lifecycle callbacks. No event, extraction, IPC-write, or daemon-application conclusions are supported. Daemon observer ended after the shell tool's one-second limit and yielded no usable observation.
+- **Cleanup:** temporary plugin diagnostics and observer output removed; no implementation changes; focused test not run. Verified plugin contains no added diagnostics and `git diff --check` passes.
+- **Remaining:** repeat live trace after credits are available, with a persistent/concurrent daemon observer. No code commit; preserve untracked Orchestration 37 files.
